@@ -28,6 +28,7 @@ import com.voxcommander.app.data.local.db.VoxDatabase
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
+import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
 import com.voxcommander.app.domain.engine.google.GoogleSttEngine
 import com.voxcommander.app.domain.engine.vosk.VoskSttEngine
@@ -46,6 +47,7 @@ import java.io.FileOutputStream
 class MainActivity : ComponentActivity() {
 
     private lateinit var settingsManager: SettingsManager
+    private lateinit var appStateManager: AppStateManager
     private lateinit var modelDownloader: ModelDownloader
     private lateinit var languageManager: LanguageManager
     private var pendingModelLanguage: String? = null
@@ -80,6 +82,7 @@ class MainActivity : ComponentActivity() {
             val path = it.path ?: it.toString()
             pendingModelLanguage?.let { lang ->
                 settingsManager.saveCustomVoskModelPath(lang, path)
+                settingsManager.setVoiceModelReady(true)
                 Toast.makeText(this, "Custom Vosk model path saved", Toast.LENGTH_SHORT).show()
                 updateVoiceEngine()
             }
@@ -92,6 +95,7 @@ class MainActivity : ComponentActivity() {
         uri?.let {
             copyUriToInternal(it, WHISPER_CUSTOM_MODEL_FILENAME)?.let { path ->
                 settingsManager.saveCustomWhisperModelPath(path)
+                settingsManager.setVoiceModelReady(true)
                 Toast.makeText(this, "Custom Whisper model saved", Toast.LENGTH_SHORT).show()
                 updateVoiceEngine()
             }
@@ -126,7 +130,7 @@ class MainActivity : ComponentActivity() {
                         val modelId = lastDownloadedWhisperModelId ?: settingsManager.getSelectedWhisperModelId()
                         modelDownloader.verifyWhisperModel(modelId) { success ->
                             if (success) {
-                                settingsManager.setModelDownloaded(modelId, true)
+                                appStateManager.onWhisperDownloadComplete(modelId)
                                 showSuccessMessage("Whisper Model $modelId ready!")
                                 runOnUiThread {
                                     updateVoiceEngine()
@@ -138,7 +142,7 @@ class MainActivity : ComponentActivity() {
                         val modelName = lastDownloadedVoskModelName ?: ""
                         modelDownloader.unzipVoskModel(modelName) { success ->
                             if (success) {
-                                settingsManager.setModelDownloaded(modelName, true)
+                                appStateManager.onVoskDownloadComplete(modelName)
                                 showSuccessMessage("Vosk Model $modelName ready!")
                                 runOnUiThread {
                                     updateVoiceEngine()
@@ -157,6 +161,7 @@ class MainActivity : ComponentActivity() {
         Logger.log("MainActivity: onCreate called")
 
         settingsManager = SettingsManager(this)
+        appStateManager = AppStateManager.getInstance(settingsManager, this)
         modelDownloader = ModelDownloader(this)
         languageManager = LanguageManager(this)
         languageManager.loadLanguage(settingsManager.getLanguage())
@@ -218,6 +223,7 @@ class MainActivity : ComponentActivity() {
                         MainScreen(
                             languageManager = languageManager,
                             settingsManager = settingsManager,
+                            appStateManager = appStateManager,
                             fastMapDao = fastMapDao,
                             viewModel = mainViewModel,
                             onDownloadVoskModel = { lang, url, name ->

@@ -39,7 +39,7 @@ fun ModelsSettingsTab(
     onVoiceLanguageSelected: (String) -> Unit,
     whisperModels: List<WhisperModelInfo>,
     selectedWhisperModel: WhisperModelInfo?,
-    onWhisperModelSelected: (WhisperModelInfo) -> Unit,
+    onWhisperModelSelected: (WhisperModelInfo, Boolean) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
     voskGroups: List<VoskLanguageGroup>,
     selectedVoskModel: VoskModelInfo?,
@@ -48,7 +48,7 @@ fun ModelsSettingsTab(
     isOffline: Boolean,
     voskError: String?,
     onRetryConnection: suspend () -> Unit,
-    onVoskModelSelected: (VoskModelInfo, String) -> Unit,
+    onVoskModelSelected: (VoskModelInfo, Boolean, String) -> Unit,
     onSelectCustomVoskModel: () -> Unit,
     downloadProgress: Float?,
     downloadingItem: Any? = null,
@@ -247,7 +247,7 @@ fun ModelsSettingsTab(
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
                 downloadedColor = downloadedColor,
-                onModelSelected = onWhisperModelSelected,
+                onModelSelected = { model, isDownloaded -> onWhisperModelSelected(model, isDownloaded) },
                 onSelectCustomModel = onSelectCustomWhisperModel,
                 onCancelDownload = onCancelDownload,
                 onDeleteRequest = onDeleteRequest, 
@@ -279,7 +279,7 @@ fun ModelsSettingsTab(
                 downloadingItem = downloadingItem,
                 downloadedColor = downloadedColor,
                 onRetryConnection = { scope.launch { onRetryConnection() } },
-                onModelSelected = onVoskModelSelected,
+                onModelSelected = { model, isDownloaded, code -> onVoskModelSelected(model, isDownloaded, code) },
                 onSelectCustomModel = onSelectCustomVoskModel,
                 onCancelDownload = onCancelDownload,
                 onDeleteRequest = onDeleteRequest, 
@@ -397,7 +397,7 @@ fun WhisperSettingsSection(
     downloadProgress: Float?,
     downloadingItem: Any? = null,
     downloadedColor: Color,
-    onModelSelected: (WhisperModelInfo) -> Unit,
+    onModelSelected: (WhisperModelInfo, Boolean) -> Unit,
     onSelectCustomModel: () -> Unit,
     onCancelDownload: () -> Unit,
     onDeleteRequest: (Any) -> Unit, 
@@ -422,11 +422,11 @@ fun WhisperSettingsSection(
             remember(model.id, refreshTrigger) { settingsManager.isModelDownloaded(model.id) }
         },
         onDeviceLabel = languageManager.getString("on_device_label"),
-        onItemSelected = { if (it != null) onModelSelected(it) },
+        onItemSelected = { model, isDownloaded -> onModelSelected(model, isDownloaded) },
         onExpandedChange = { showWhisperSheet = it },
         onDownloadRequest = { model ->
             if (!settingsManager.isModelDownloaded(model.id) && settingsManager.getCustomWhisperModelPath() == null) {
-                onModelSelected(model)
+                onModelSelected(model, false)
             }
         },
         onDeleteRequest = onDeleteRequest, 
@@ -451,15 +451,15 @@ fun WhisperSettingsSection(
                     remember(model.id, refreshTrigger) { settingsManager.isModelDownloaded(model.id) }
                 },
                 onDeviceLabel = languageManager.getString("on_device_label"),
-                onItemSelected = {
-                    if (it != null) {
-                        onModelSelected(it)
+                onItemSelected = { model, isDownloaded ->
+                    if (model != null) {
+                        onModelSelected(model, isDownloaded)
                         showWhisperSheet = false
                     }
                 },
                 onDownloadRequest = { model ->
                     if (!settingsManager.isModelDownloaded(model.id) && settingsManager.getCustomWhisperModelPath() == null) {
-                        onModelSelected(model)
+                        onModelSelected(model, false)
                     }
                 },
                 onDeleteRequest = onDeleteRequest, 
@@ -620,7 +620,7 @@ fun VoskSettingsSection(
     downloadingItem: Any? = null,
     downloadedColor: Color,
     onRetryConnection: suspend () -> Unit,
-    onModelSelected: (VoskModelInfo, String) -> Unit,
+    onModelSelected: (VoskModelInfo, Boolean, String) -> Unit,
     onSelectCustomModel: () -> Unit,
     onCancelDownload: () -> Unit,
     onDeleteRequest: (Any) -> Unit, 
@@ -677,17 +677,17 @@ fun VoskSettingsSection(
             remember(model.name, refreshTrigger) { settingsManager.isModelDownloaded(model.name) }
         },
         onDeviceLabel = languageManager.getString("on_device_label"),
-        onItemSelected = { model ->
+        onItemSelected = { model, isDownloaded ->
             val group = voskGroups.find { it.models.contains(model) }
             val code = if (group?.language?.contains("Romanian") == true) "ro" else "en"
-            onModelSelected(model, code)
+            onModelSelected(model, isDownloaded, code)
         },
         onExpandedChange = { showVoskSheet = it },
         onDownloadRequest = { model ->
             if (!settingsManager.isModelDownloaded(model.name) && settingsManager.getCustomVoskModelPath(voiceLanguage) == null) {
                 val group = voskGroups.find { it.models.contains(model) }
                 val code = if (group?.language?.contains("Romanian") == true) "ro" else "en"
-                onModelSelected(model, code)
+                onModelSelected(model, false, code)
             }
         },
         onDeleteRequest = onDeleteRequest, 
@@ -711,17 +711,17 @@ fun VoskSettingsSection(
                     remember(model.name, refreshTrigger) { settingsManager.isModelDownloaded(model.name) }
                 },
                 onDeviceLabel = languageManager.getString("on_device_label"),
-                onItemSelected = { model ->
+                onItemSelected = { model, isDownloaded ->
                     val group = voskGroups.find { it.models.contains(model) }
                     val code = if (group?.language?.contains("Romanian") == true) "ro" else "en"
-                    onModelSelected(model, code)
+                    onModelSelected(model, isDownloaded, code)
                     showVoskSheet = false
                 },
                 onDownloadRequest = { model ->
                     if (!settingsManager.isModelDownloaded(model.name) && settingsManager.getCustomVoskModelPath(voiceLanguage) == null) {
                         val group = voskGroups.find { it.models.contains(model) }
                         val code = if (group?.language?.contains("Romanian") == true) "ro" else "en"
-                        onModelSelected(model, code)
+                        onModelSelected(model, false, code)
                     }
                 },
                 onDeleteRequest = onDeleteRequest, 

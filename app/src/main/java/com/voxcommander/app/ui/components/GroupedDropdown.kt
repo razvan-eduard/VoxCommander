@@ -34,7 +34,7 @@ fun <T> GroupedDropdownContent(
     itemLabel: (T) -> String,
     isDownloaded: @Composable (T) -> Boolean, // UPDATED TO @Composable
     onDeviceLabel: String,
-    onItemSelected: (T) -> Unit,
+    onItemSelected: (T, Boolean) -> Unit, // Include downloaded state
     onDownloadRequest: ((T) -> Unit)? = null,
     onDeleteRequest: ((T) -> Unit)? = null,
     onCancelDownload: (() -> Unit)? = null,
@@ -77,7 +77,7 @@ fun <T> GroupedDropdownContent(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onItemSelected(item) },
+                            .clickable { onItemSelected(item, downloaded) },
                         shape = RoundedCornerShape(8.dp),
                         color = if (downloaded) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
@@ -168,7 +168,7 @@ fun <T> GroupedDropdownMenu(
     itemLabel: (T) -> String,
     isDownloaded: @Composable (T) -> Boolean, // UPDATED TO @Composable
     onDeviceLabel: String,
-    onItemSelected: (T) -> Unit,
+    onItemSelected: (T, Boolean) -> Unit, // Include downloaded state
     onDownloadRequest: ((T) -> Unit)? = null,
     onDeleteRequest: ((T) -> Unit)? = null,
     onCancelDownload: (() -> Unit)? = null,

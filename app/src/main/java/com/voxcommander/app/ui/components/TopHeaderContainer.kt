@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.screens.rules.RulesManagerContent
 import com.voxcommander.app.ui.screens.settings.SettingsContent
 
@@ -24,6 +25,7 @@ fun TopHeaderContainer(
     mode: TopHeaderMode,
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
+    appStateManager: AppStateManager,
     fastMapDao: FastMapDao,
     onDismissRequest: () -> Unit,
     onDownloadVoskModel: (String, String, String) -> Unit,
@@ -32,7 +34,7 @@ fun TopHeaderContainer(
     onSelectCustomWhisperModel: () -> Unit,
     onDeleteUnusedModels: () -> Unit,
     onCancelDownload: () -> Unit,
-    onRefreshMain: () -> Unit, // ADDED PARAMETER
+    onRefreshMain: () -> Unit,
     downloadProgress: Float?,
     selectionSuccessMessage: String?,
     googleSttAvailable: Boolean,
@@ -56,6 +58,7 @@ fun TopHeaderContainer(
                     SettingsContent(
                         languageManager = languageManager,
                         settingsManager = settingsManager,
+                        appStateManager = appStateManager,
                         onSaveAndClose = onDismissRequest,
                         onDownloadVoskModel = onDownloadVoskModel,
                         onDownloadWhisperModel = onDownloadWhisperModel,
@@ -63,7 +66,7 @@ fun TopHeaderContainer(
                         onSelectCustomWhisperModel = onSelectCustomWhisperModel,
                         onDeleteUnusedModels = onDeleteUnusedModels,
                         onCancelDownload = onCancelDownload,
-                        onRefreshMain = onRefreshMain, // PASSED DOWN
+                        onRefreshMain = onRefreshMain,
                         downloadProgress = downloadProgress,
                         selectionSuccessMessage = selectionSuccessMessage,
                         googleSttAvailable = googleSttAvailable,

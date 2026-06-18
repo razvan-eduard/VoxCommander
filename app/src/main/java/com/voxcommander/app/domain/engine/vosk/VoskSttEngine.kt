@@ -33,7 +33,21 @@ class VoskSttEngine(
                 }
 
                 val rootDir = context.getExternalFilesDir(null)
-                val modelDir = rootDir?.listFiles()?.find { it.isDirectory && it.name.startsWith(MODEL_DIR_PREFIX) && it.name.contains(langCode, ignoreCase = true) }
+                
+                // TIER 1: Specific selected model
+                val selectedModelName = settingsManager.getSelectedVoskModelName()
+                val specificModelDir = if (!selectedModelName.isNullOrBlank()) {
+                    File(rootDir, selectedModelName)
+                } else null
+
+                val modelDir = if (specificModelDir?.exists() == true) {
+                    specificModelDir
+                } else {
+                    // TIER 2: Fallback to any model for this language
+                    rootDir?.listFiles()?.find { 
+                        it.isDirectory && it.name.startsWith(MODEL_DIR_PREFIX) && it.name.contains(langCode, ignoreCase = true) 
+                    }
+                }
                 
                 if (modelDir != null && modelDir.exists()) {
                     val actualPath = findModelDir(modelDir)?.absolutePath ?: modelDir.absolutePath

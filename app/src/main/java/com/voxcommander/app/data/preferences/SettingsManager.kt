@@ -100,6 +100,14 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getString(KEY_SELECTED_WHISPER_MODEL_ID, DEFAULT_WHISPER_MODEL) ?: DEFAULT_WHISPER_MODEL
     }
 
+    fun saveSelectedVoskModelName(modelName: String) {
+        sharedPreferences.edit().putString(KEY_SELECTED_VOSK_MODEL_NAME, modelName).apply()
+    }
+
+    fun getSelectedVoskModelName(): String? {
+        return sharedPreferences.getString(KEY_SELECTED_VOSK_MODEL_NAME, null)
+    }
+
     // Wake word settings
     fun saveWakeWord(wakeWord: String) {
         sharedPreferences.edit().putString(KEY_WAKE_WORD, wakeWord).apply()
@@ -194,6 +202,27 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getBoolean(KEY_VULKAN_INCOMPATIBLE, false)
     }
 
+    /**
+     * VOICE MODEL READY FLAG: Set by dropdown when model is selected.
+     * This is the source of truth for MainScreen - dropdown knows if model exists.
+     */
+    fun setVoiceModelReady(ready: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_VOICE_MODEL_READY, ready).apply()
+    }
+
+    fun isVoiceModelReady(): Boolean {
+        return sharedPreferences.getBoolean(KEY_VOICE_MODEL_READY, false)
+    }
+
+    /**
+     * UNIFIED CHECK: Checks if the currently selected picklist item is ready on device.
+     * This makes the UI model-agnostic.
+     * Simplified to just check the flag set by dropdown.
+     */
+    fun isCurrentVoiceModelReady(context: android.content.Context): Boolean {
+        return isVoiceModelReady()
+    }
+
     companion object {
         private const val PREFS_NAME = Strings.Preferences.PREFS_NAME
         private const val DEFAULT_LANGUAGE = Strings.Preferences.DEFAULT_LANGUAGE
@@ -210,6 +239,7 @@ class SettingsManager(context: Context) {
         private const val KEY_CUSTOM_VOSK_MODEL_PATH = Strings.Preferences.KEY_CUSTOM_VOSK_MODEL_PATH
         private const val KEY_CUSTOM_WHISPER_MODEL_PATH = Strings.Preferences.KEY_CUSTOM_WHISPER_MODEL_PATH
         private const val KEY_SELECTED_WHISPER_MODEL_ID = Strings.Preferences.KEY_SELECTED_WHISPER_MODEL_ID
+        private const val KEY_SELECTED_VOSK_MODEL_NAME = Strings.Preferences.KEY_SELECTED_VOSK_MODEL_NAME
         private const val KEY_MODEL_DOWNLOADED_PREFIX = Strings.Preferences.KEY_MODEL_DOWNLOADED_PREFIX
         private const val KEY_VULKAN_INCOMPATIBLE = Strings.Preferences.KEY_VULKAN_INCOMPATIBLE
         private const val KEY_WAKE_WORD = Strings.Preferences.KEY_WAKE_WORD
@@ -221,5 +251,6 @@ class SettingsManager(context: Context) {
         private const val KEY_DEFAULT_OFFLINE_FALLBACK_MODEL = "default_offline_fallback_model"
         private const val KEY_LOG_LEVEL = "log_level"
         private const val KEY_VERBOSE_LOGGING_ENABLED = Strings.Preferences.KEY_VERBOSE_LOGGING
+        private const val KEY_VOICE_MODEL_READY = "voice_model_ready"
     }
 }
