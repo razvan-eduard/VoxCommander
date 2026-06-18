@@ -3,113 +3,169 @@
 #include <android/log.h>
 #include "whisper.h"
 
-static whisper_context* g_ctx = nullptr;
+#define LOG_TAG "LibWhisper"
 
 extern "C"
-JNIEXPORT jstring JNICALL
-Java_com_voxcommander_app_domain_engine_whisper_WhisperNative_getVersion(
-        JNIEnv *env,
-        jobject /* this */) {
-
-    std::string version = whisper_print_system_info();
-
-    return env->NewStringUTF(version.c_str());
-}
-
-extern "C"
-JNIEXPORT jboolean JNICALL
-Java_com_voxcommander_app_domain_engine_whisper_WhisperNative_loadModel(
+JNIEXPORT jlong JNICALL
+Java_com_whispercpp_whisper_WhisperLib_00024Companion_initContext(
         JNIEnv* env,
-        jobject,
-        jstring modelPath) {
+        jobject /* this */,
+        jstring modelPath,
+        jboolean useGpu) {
 
     const char* path = env->GetStringUTFChars(modelPath, nullptr);
 
     whisper_context_params params = whisper_context_default_params();
+    params.use_gpu = useGpu; // CRITICAL FIX: Respect the flag from Kotlin
 
-    g_ctx = whisper_init_from_file_with_params(path, params);
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Initializing context with path: %s, useGpu: %d", path, useGpu);
+
+    whisper_context* ctx = whisper_init_from_file_with_params(path, params);
 
     env->ReleaseStringUTFChars(modelPath, path);
 
-    if (g_ctx != nullptr) {
-        std::string sys_info = whisper_print_system_info();
-        __android_log_print(ANDROID_LOG_DEBUG, "WhisperNative", "System info: %s", sys_info.c_str());
+    if (ctx != nullptr) {
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Context created successfully");
+    } else {
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Failed to create context");
     }
 
-    return g_ctx != nullptr;
+    return reinterpret_cast<jlong>(ctx);
 }
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_voxcommander_app_domain_engine_whisper_WhisperNative_freeModel(
+Java_com_whispercpp_whisper_WhisperLib_00024Companion_freeContext(
         JNIEnv* env,
-        jobject) {
+        jobject /* this */,
+        jlong contextPtr) {
 
-    if (g_ctx != nullptr) {
-        whisper_free(g_ctx);
-        g_ctx = nullptr;
+    whisper_context* ctx = reinterpret_cast<whisper_context*>(contextPtr);
+    if (ctx != nullptr) {
+        whisper_free(ctx);
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Context freed");
     }
 }
 
 extern "C"
-JNIEXPORT jstring JNICALL
-Java_com_voxcommander_app_domain_engine_whisper_WhisperNative_transcribe(
+JNIEXPORT void JNICALL
+Java_com_whispercpp_whisper_WhisperLib_00024Companion_fullTranscribe(
         JNIEnv* env,
-        jobject,
+        jobject /* this */,
+        jlong contextPtr,
+        jint numThreads,
         jfloatArray audioData) {
 
-    __android_log_print(ANDROID_LOG_DEBUG, "WhisperNative", "transcribe called");
+    whisper_context* ctx = reinterpret_cast<whisper_context*>(contextPtr);
 
-    if (g_ctx == nullptr) {
-        __android_log_print(ANDROID_LOG_ERROR, "WhisperNative", "Model not loaded");
-        return env->NewStringUTF("Error: Model not loaded");
+    if (ctx == nullptr) {
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Context is null in fullTranscribe");
+        return;
     }
 
     jfloat* audio = env->GetFloatArrayElements(audioData, nullptr);
     jsize length = env->GetArrayLength(audioData);
 
-    __android_log_print(ANDROID_LOG_DEBUG, "WhisperNative", "Audio length: %d", length);
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Transcribing with %d threads, audio length: %d", numThreads, length);
 
     whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
     params.print_progress = false;
     params.print_special = false;
     params.print_realtime = false;
-    
-    // Aggressive optimization for speed (commands)
-    params.language = "en";  // Set language explicitly
-    params.n_threads = 8;    // Use more threads (8 cores on modern phones)
-    params.temperature = 0.0f;  // Lower temperature for more deterministic results
-    params.max_len = 128;    // Much shorter max length for commands (was 224)
-    params.token_timestamps = false;  // Disable token timestamps for speed
-    params.single_segment = true;  // Treat as single segment for short audio
-    params.no_timestamps = true;  // Disable timestamps for speed
+    params.n_threads = numThreads;
+    // Auto-detect language or use model default to avoid "en" override issues
+    params.language = nullptr;
+    params.temperature = 0.0f;
+    params.max_len = 224;
+    params.token_timestamps = false;
+    params.single_segment = true;
+    params.no_timestamps = true;
 
-    __android_log_print(ANDROID_LOG_DEBUG, "WhisperNative", "Calling whisper_full with language=%s, n_threads=%d", params.language, params.n_threads);
-
-    int result = whisper_full(g_ctx, params, audio, length);
-
-    __android_log_print(ANDROID_LOG_DEBUG, "WhisperNative", "whisper_full returned: %d", result);
+    int result = whisper_full(ctx, params, audio, length);
 
     env->ReleaseFloatArrayElements(audioData, audio, 0);
 
     if (result != 0) {
-        __android_log_print(ANDROID_LOG_ERROR, "WhisperNative", "Transcription failed with code: %d", result);
-        return env->NewStringUTF("Error: Transcription failed");
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Transcription failed with code: %d", result);
+    } else {
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Transcription completed successfully");
+    }
+}
+
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_whispercpp_whisper_WhisperLib_00024Companion_getTextSegmentCount(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong contextPtr) {
+
+    whisper_context* ctx = reinterpret_cast<whisper_context*>(contextPtr);
+    if (ctx == nullptr) {
+        return 0;
     }
 
-    int n = whisper_full_n_segments(g_ctx);
-    __android_log_print(ANDROID_LOG_DEBUG, "WhisperNative", "Segments: %d", n);
+    return whisper_full_n_segments(ctx);
+}
 
-    std::string text;
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_whispercpp_whisper_WhisperLib_00024Companion_getTextSegment(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong contextPtr,
+        jint index) {
 
-    for (int i = 0; i < n; ++i) {
-        const char* segment = whisper_full_get_segment_text(g_ctx, i);
-        if (segment) {
-            text += segment;
-        }
+    whisper_context* ctx = reinterpret_cast<whisper_context*>(contextPtr);
+    if (ctx == nullptr) {
+        return env->NewStringUTF("");
     }
 
-    __android_log_print(ANDROID_LOG_DEBUG, "WhisperNative", "Result: %s", text.c_str());
+    const char* segment = whisper_full_get_segment_text(ctx, index);
+    if (segment == nullptr) {
+        return env->NewStringUTF("");
+    }
 
-    return env->NewStringUTF(text.c_str());
+    return env->NewStringUTF(segment);
+}
+
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_com_whispercpp_whisper_WhisperLib_00024Companion_getTextSegmentT0(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong contextPtr,
+        jint index) {
+
+    whisper_context* ctx = reinterpret_cast<whisper_context*>(contextPtr);
+    if (ctx == nullptr) {
+        return 0;
+    }
+
+    return whisper_full_get_segment_t0(ctx, index);
+}
+
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_com_whispercpp_whisper_WhisperLib_00024Companion_getTextSegmentT1(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong contextPtr,
+        jint index) {
+
+    whisper_context* ctx = reinterpret_cast<whisper_context*>(contextPtr);
+    if (ctx == nullptr) {
+        return 0;
+    }
+
+    return whisper_full_get_segment_t1(ctx, index);
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_whispercpp_whisper_WhisperLib_00024Companion_getSystemInfo(
+        JNIEnv* env,
+        jobject /* this */) {
+
+    std::string info = whisper_print_system_info();
+    return env->NewStringUTF(info.c_str());
 }
