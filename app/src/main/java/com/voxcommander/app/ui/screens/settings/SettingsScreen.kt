@@ -27,6 +27,8 @@ import com.voxcommander.app.service.WakeWordService
 import com.voxcommander.app.domain.engine.vosk.VoskModelInfo
 import com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry
 import com.voxcommander.app.domain.engine.whisper.WhisperModelInfo
+import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -34,6 +36,7 @@ import kotlinx.coroutines.launch
 fun SettingsContent(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
+    appStateManager: AppStateManager,
     onSaveAndClose: () -> Unit,
     onDownloadVoskModel: (String, String, String) -> Unit,
     onDownloadWhisperModel: (String, String) -> Unit,
@@ -41,7 +44,7 @@ fun SettingsContent(
     onSelectCustomWhisperModel: () -> Unit,
     onDeleteUnusedModels: () -> Unit,
     onCancelDownload: () -> Unit = {},
-    onRefreshMain: () -> Unit = {}, 
+    onRefreshMain: () -> Unit = {},
     downloadProgress: Float? = null,
     selectionSuccessMessage: String? = null,
     googleSttAvailable: Boolean = true,
@@ -209,9 +212,25 @@ fun SettingsContent(
                             languageManager = languageManager,
                             settingsManager = settingsManager,
                             voiceProcessor = voiceProcessor,
-                            onProcessorSelected = { 
+                            onProcessorSelected = {
                                 voiceProcessor = it
-                                settingsManager.saveVoiceProcessor(it)
+                                appStateManager.setVoiceProcessor(it)
+                                // Re-evaluate model ready flag based on new processor
+                                when (it) {
+                                    Strings.Processors.WHISPER_CPP,
+                                    Strings.Processors.WHISPER_VULKAN,
+                                    Strings.Processors.WHISPER_NEON -> {
+                                        val modelId = appStateManager.selectedWhisperModelId.value
+                                        appStateManager.setVoiceModelReady(settingsManager.isModelDownloaded(modelId) || appStateManager.customWhisperModelPath.value != null)
+                                    }
+                                    Strings.Processors.VOSK -> {
+                                        val modelName = appStateManager.selectedVoskModelName.value
+                                        val lang = appStateManager.voiceLanguage.value
+                                        val customPath = appStateManager.customVoskModelPaths.value[lang]
+                                        appStateManager.setVoiceModelReady(settingsManager.isModelDownloaded(modelName ?: "") || !customPath.isNullOrBlank())
+                                    }
+                                    else -> appStateManager.setVoiceModelReady(true) // Remote models always ready
+                                }
                                 updateVoiceEngine()
                                 onRefreshMain()
                                 refreshTrigger++
@@ -219,22 +238,23 @@ fun SettingsContent(
                             hasApiKey = !(settingsManager.getApiKey().isNullOrBlank()),
                             googleSttAvailable = googleSttAvailable,
                             voiceLanguage = voiceLanguage,
-                            onVoiceLanguageSelected = { 
+                            onVoiceLanguageSelected = {
                                 voiceLanguage = it
-                                settingsManager.saveVoiceLanguage(it)
+                                appStateManager.setVoiceLanguage(it)
                                 updateVoiceEngine()
                                 onRefreshMain()
                                 refreshTrigger++
                             },
                             whisperModels = WhisperModelRegistry.models,
                             selectedWhisperModel = WhisperModelRegistry.models.find { it.id == selectedWhisperId } ?: WhisperModelRegistry.models.firstOrNull(),
-                            onWhisperModelSelected = { model ->
+                            onWhisperModelSelected = { model, isDownloaded ->
                                 selectedWhisperId = model.id
-                                settingsManager.saveSelectedWhisperModelId(model.id)
+                                appStateManager.setSelectedWhisperModelId(model.id)
+                                appStateManager.setVoiceModelReady(isDownloaded || appStateManager.customWhisperModelPath.value != null)
                                 updateVoiceEngine()
                                 onRefreshMain()
                                 refreshTrigger++
-                                if (!settingsManager.isModelDownloaded(model.id) && settingsManager.getCustomWhisperModelPath() == null) {
+                                if (!isDownloaded && appStateManager.customWhisperModelPath.value == null) {
                                     downloadingItemState = model
                                     pendingWhisperModel = model
                                     showDownloadDialog = true
@@ -248,15 +268,18 @@ fun SettingsContent(
                             isOffline = isVoskOffline,
                             voskError = voskError,
                             onRetryConnection = { loadVoskModels(true) },
-                            onVoskModelSelected = { model, langCode ->
+                            onVoskModelSelected = { model, isDownloaded, langCode ->
                                 voiceLanguage = langCode
-                                settingsManager.saveVoiceLanguage(langCode)
+                                appStateManager.setVoiceLanguage(langCode)
                                 selectedVoskModel = model
                                 selectedVoskModelName = model.name
+                                appStateManager.setSelectedVoskModelName(model.name)
+                                val customPath = appStateManager.customVoskModelPaths.value[langCode]
+                                appStateManager.setVoiceModelReady(isDownloaded || !customPath.isNullOrBlank())
                                 updateVoiceEngine()
                                 onRefreshMain()
                                 refreshTrigger++
-                                if (!settingsManager.isModelDownloaded(model.name) && settingsManager.getCustomVoskModelPath(langCode) == null) {
+                                if (!isDownloaded && customPath == null) {
                                     downloadingItemState = model
                                     pendingVoskModel = langCode to model
                                     showDownloadDialog = true
@@ -399,12 +422,15 @@ fun SettingsContent(
                 if (isDeletingDefaultFallback) {
                     settingsManager.clearDefaultOfflineFallback()
                 }
-                
+
                 if (isDeletingActiveWakeWord && isServiceRunning) {
                     WakeWordService.stopService(context)
                 }
-                
+
                 settingsManager.setModelDownloaded(modelId, false)
+                if (appStateManager.selectedWhisperModelId.value == modelId || appStateManager.selectedVoskModelName.value == modelId) {
+                    appStateManager.setVoiceModelReady(false)
+                }
                 onRefreshMain()
                 refreshTrigger++
             }

@@ -94,7 +94,7 @@ fun ServiceSettingsTab(
             // REFRESH: Re-evaluate downloaded state when refreshTrigger changes
             isDownloaded = { model -> settingsManager.isModelDownloaded(model.name) },
             onDeviceLabel = languageManager.getString("on_device_label"),
-            onItemSelected = { onWakeWordModelSelected(it) },
+            onItemSelected = { model, isDownloaded -> onWakeWordModelSelected(model) },
             onExpandedChange = { showModelSheet = it },
             onDownloadRequest = onDownloadRequest,
             onDeleteRequest = onDeleteRequest,
@@ -118,8 +118,8 @@ fun ServiceSettingsTab(
                     // REFRESH: Re-evaluate downloaded state when refreshTrigger changes
                     isDownloaded = { model -> settingsManager.isModelDownloaded(model.name) },
                     onDeviceLabel = languageManager.getString("on_device_label"),
-                    onItemSelected = {
-                        onWakeWordModelSelected(it)
+                    onItemSelected = { model, isDownloaded ->
+                        onWakeWordModelSelected(model)
                         showModelSheet = false
                     },
                     onDownloadRequest = onDownloadRequest,

@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -19,6 +20,9 @@ import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
+import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.ui.components.MicrophoneButton
+import com.voxcommander.app.ui.components.ModelNotPresentMessage
 import com.voxcommander.app.ui.components.TopHeaderContainer
 import com.voxcommander.app.ui.components.TopHeaderMode
 import com.voxcommander.app.ui.viewmodels.MainViewModel
@@ -30,6 +34,7 @@ import java.io.File
 fun MainScreen(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
+    appStateManager: AppStateManager,
     fastMapDao: FastMapDao,
     viewModel: MainViewModel,
     onDownloadVoskModel: (String, String, String) -> Unit,
@@ -47,40 +52,6 @@ fun MainScreen(
     val isProcessing by viewModel.isProcessing.collectAsState()
     val transcription by viewModel.transcription.collectAsState()
     val isListening by VoiceManager.isListeningFlow.collectAsState()
-    
-    // --- REFRESH TRIGGER FOR MAIN MIC SAFEGUARD ---
-    var micRefreshTrigger by remember { mutableIntStateOf(0) }
-
-    // CHECK IF ACTIVE MODEL IS ON DEVICE (REACTIVE)
-    val isModelOnDevice by remember(micRefreshTrigger, isListening) {
-        derivedStateOf {
-            val voiceProcessor = settingsManager.getVoiceProcessor()
-            val voiceLanguage = settingsManager.getVoiceLanguage()
-            
-            when (voiceProcessor) {
-                Strings.Processors.WHISPER_CPP,
-                Strings.Processors.WHISPER_VULKAN,
-                Strings.Processors.WHISPER_NEON -> {
-                    val selectedModelId = settingsManager.getSelectedWhisperModelId()
-                    settingsManager.isModelDownloaded(selectedModelId)
-                }
-                Strings.Processors.VOSK -> {
-                    val customPath = settingsManager.getCustomVoskModelPath(voiceLanguage)
-                    if (!customPath.isNullOrBlank()) {
-                        File(customPath).exists()
-                    } else {
-                        val filesDir = File("/storage/emulated/0/Android/data/com.voxcommander.app/files")
-                        if (filesDir.exists()) {
-                            filesDir.listFiles()?.any { 
-                                it.isDirectory && it.name.startsWith("vosk-model-") && it.name.contains(voiceLanguage, ignoreCase = true) 
-                            } ?: false
-                        } else false
-                    }
-                }
-                else -> true 
-            }
-        }
-    }
 
     var currentHeaderMode by remember { mutableStateOf(TopHeaderMode.NONE) }
     
@@ -127,38 +98,23 @@ fun MainScreen(
 
                 // Microphone Button
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Button(
-                        onClick = { 
+                    MicrophoneButton(
+                        languageManager = languageManager,
+                        appStateManager = appStateManager,
+                        isProcessing = isProcessing,
+                        onClick = {
                             if (isProcessing) {
                                 viewModel.stopVoiceCommand()
                             } else {
                                 viewModel.processVoiceCommand(settingsManager.getVoiceLanguage(), settingsManager.getVoiceProcessor())
                             }
-                        },
-                        modifier = Modifier.size(150.dp),
-                        shape = MaterialTheme.shapes.extraLarge,
-                        enabled = isModelOnDevice, 
-                        colors = if (isProcessing) ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) 
-                             else if (!isModelOnDevice) ButtonDefaults.buttonColors(containerColor = Color.Gray)
-                             else ButtonDefaults.buttonColors()
-                    ) {
-                        Icon(
-                            Icons.Default.Mic,
-                            contentDescription = languageManager.getString("content_desc_record"),
-                            modifier = Modifier.size(80.dp),
-                            tint = if (isModelOnDevice) Color.White else Color.LightGray
-                        )
-                    }
-                    
-                    if (!isModelOnDevice) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = languageManager.getString("model_not_present"),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        }
+                    )
+
+                    ModelNotPresentMessage(
+                        languageManager = languageManager,
+                        appStateManager = appStateManager
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -197,6 +153,7 @@ fun MainScreen(
             mode = currentHeaderMode,
             languageManager = languageManager,
             settingsManager = settingsManager,
+            appStateManager = appStateManager,
             fastMapDao = fastMapDao,
             onDismissRequest = { currentHeaderMode = TopHeaderMode.NONE },
             onDownloadVoskModel = onDownloadVoskModel,
@@ -205,7 +162,7 @@ fun MainScreen(
             onSelectCustomWhisperModel = onSelectCustomWhisperModel,
             onDeleteUnusedModels = onDeleteUnusedModels,
             onCancelDownload = onCancelDownload,
-            onRefreshMain = { micRefreshTrigger++ }, // REFRESH MIC STATE
+            onRefreshMain = { /* AppStateManager handles state updates automatically */ },
             downloadProgress = downloadProgress,
             selectionSuccessMessage = selectionSuccessMessage,
             googleSttAvailable = googleSttAvailable,

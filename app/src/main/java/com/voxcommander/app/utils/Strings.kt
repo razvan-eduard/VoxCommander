@@ -39,6 +39,7 @@ object Strings {
         const val KEY_CUSTOM_VOSK_MODEL_PATH = "custom_vosk_model_path"
         const val KEY_CUSTOM_WHISPER_MODEL_PATH = "custom_whisper_model_path"
         const val KEY_SELECTED_WHISPER_MODEL_ID = "selected_whisper_model_id"
+        const val KEY_SELECTED_VOSK_MODEL_NAME = "selected_vosk_model_name"
         const val KEY_MODEL_DOWNLOADED_PREFIX = "model_downloaded_"
         const val KEY_VULKAN_INCOMPATIBLE = "vulkan_incompatible"
         const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
