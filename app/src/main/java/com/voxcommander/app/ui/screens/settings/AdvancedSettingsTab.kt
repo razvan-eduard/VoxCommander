@@ -1,0 +1,136 @@
+package com.voxcommander.app.ui.screens.settings
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.utils.Logger
+import com.voxcommander.app.utils.LogLevel
+import com.voxcommander.app.utils.LoggingFlags
+
+object AdvancedSettingsTabConfig {
+    const val SHOW_SAVE_BUTTON = true
+}
+
+@Composable
+fun AdvancedSettingsTab(
+    languageManager: LanguageManager,
+    settingsManager: SettingsManager,
+    onVerboseLoggingChange: (Boolean) -> Unit = {}
+) {
+    val context = LocalContext.current
+
+    // Manage own state with logging flags
+    var loggingFlags by remember {
+        mutableStateOf(
+            LoggingFlags.fromLogLevel(
+                when (settingsManager.getLogLevel()) {
+                    "NONE" -> LogLevel.NONE
+                    "TOAST_ONLY" -> LogLevel.TOAST_ONLY
+                    "LOGCAT_ONLY" -> LogLevel.LOGCAT_ONLY
+                    else -> LogLevel.TOAST_AND_LOGCAT
+                }
+            )
+        )
+    }
+    var verboseLoggingEnabled by remember {
+        mutableStateOf(settingsManager.isVerboseLoggingEnabled())
+    }
+
+    // Reset verbose logging when logcat is not enabled
+    LaunchedEffect(loggingFlags) {
+        if (!loggingFlags.logcatEnabled) {
+            verboseLoggingEnabled = false
+            settingsManager.saveVerboseLoggingEnabled(false)
+            Logger.setVerboseLoggingEnabled(false)
+        }
+    }
+
+    // Notify parent when verbose logging changes
+    LaunchedEffect(verboseLoggingEnabled) {
+        onVerboseLoggingChange(verboseLoggingEnabled)
+    }
+
+    // Initialize Logger
+    LaunchedEffect(Unit) {
+        Logger.initialize(context, LoggingFlags.toLogLevel(loggingFlags))
+        Logger.setLoggingFlags(loggingFlags)
+        Logger.setVerboseLoggingEnabled(verboseLoggingEnabled)
+    }
+
+    Text(text = languageManager.getString("advanced_settings_section"), style = MaterialTheme.typography.titleMedium)
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    // Logging Level Checkboxes
+    Text(text = languageManager.getString("logging_level"), style = MaterialTheme.typography.labelLarge)
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    // Toast checkbox
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Toast")
+        Checkbox(
+            checked = loggingFlags.toastEnabled,
+            onCheckedChange = { enabled ->
+                loggingFlags = loggingFlags.copy(toastEnabled = enabled)
+                val newLogLevel = LoggingFlags.toLogLevel(loggingFlags)
+                settingsManager.saveLogLevel(newLogLevel.name)
+                Logger.setLoggingFlags(loggingFlags)
+            }
+        )
+    }
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    // Logcat checkbox
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Logcat")
+        Checkbox(
+            checked = loggingFlags.logcatEnabled,
+            onCheckedChange = { enabled ->
+                loggingFlags = loggingFlags.copy(logcatEnabled = enabled)
+                val newLogLevel = LoggingFlags.toLogLevel(loggingFlags)
+                settingsManager.saveLogLevel(newLogLevel.name)
+                Logger.setLoggingFlags(loggingFlags)
+            }
+        )
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Verbose Logging Switch
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            languageManager.getString("verbose_logging"),
+            color = if (loggingFlags.logcatEnabled) LocalContentColor.current else Color.Gray
+        )
+        Switch(
+            checked = verboseLoggingEnabled,
+            onCheckedChange = { enabled ->
+                verboseLoggingEnabled = enabled
+                settingsManager.saveVerboseLoggingEnabled(enabled)
+                Logger.setVerboseLoggingEnabled(enabled)
+            },
+            enabled = loggingFlags.logcatEnabled
+        )
+    }
+}

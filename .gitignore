@@ -1,0 +1,76 @@
+# =========================
+# Gradle & Build Directories
+# =========================
+.gradle/
+*/build/
+/build
+gradle-app.setting
+bin/
+gen/
+out/
+untitled.sh
+# Local configuration file (contains absolute paths)
+local.properties
+
+# =========================
+# IntelliJ IDEA / Android Studio
+# =========================
+.idea/
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+*.iml
+*.iws
+*.sh
+
+# =========================
+# OS-specific files
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+
+# =========================
+# NDK / C++ / Native
+# =========================
+.externalNativeBuild/
+.cxx/
+obj/
+*.so
+backup
+# =========================
+# Keystore & Security
+# =========================
+*.jks
+*.keystore
+google-services.json
+
+# =========================
+# Compiled App Files
+# =========================
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+
+# =========================
+# AI Models & Audio Cache
+# =========================
+# Ignoră modelele acustice grele pentru a nu bloca repo-ul
+*.bin
+*.pt
+*.zip
+*.bakcup
+/app/src/main/assets/models/
+
+# =========================
+# Configurații specifice proiectului
+# =========================
+app/src/main/cpp/whisper.cpp/
+WALKTHROUGH.md

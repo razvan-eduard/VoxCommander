@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Vox Commander</string>
+    <string name="processor_info_title">Voice Processors</string>
+    <string name="processor_info_whisper">• Whisper.cpp: Local, offline, fast processing</string>
+    <string name="processor_info_vosk">• Vosk: Legacy, offline, supports multiple languages</string>
+    <string name="processor_info_google">• Google: Native, requires internet, fast</string>
+    <string name="processor_info_whisper_api">• Whisper API: Cloud-based, requires API key, high accuracy</string>
+    <string name="model_info_title">Model Information</string>
+    <string name="whisper_models_title">Whisper Models:</string>
+    <string name="whisper_tiny">• Tiny: ~40MB, fastest, lower accuracy</string>
+    <string name="whisper_base">• Base: ~75MB, balanced speed/accuracy</string>
+    <string name="whisper_small">• Small: ~250MB, good accuracy</string>
+    <string name="whisper_medium">• Medium: ~770MB, high accuracy</string>
+    <string name="whisper_large">• Large: ~1.5GB, very high accuracy</string>
+    <string name="vosk_models_title">Vosk Models:</string>
+    <string name="vosk_small">• Small: ~50MB, faster, good for commands</string>
+    <string name="vosk_large">• Large: ~1GB+, slower, better accuracy</string>
+    <string name="vosk_language_specific">• Language-specific models available</string>
+    <string name="no_model_info">No model information available</string>
+    <string name="whisper_model_select">Select Whisper Model</string>
+    <string name="vosk_model_select">Select Vosk Model</string>
+    <string name="ok">OK</string>
+</resources>
