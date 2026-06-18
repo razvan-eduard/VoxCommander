@@ -5,7 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import com.voxcommander.app.data.local.FastMapRule
+import com.voxcommander.app.domain.intent.model.FastMapRule
 
 @Dao
 interface FastMapDao {

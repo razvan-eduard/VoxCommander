@@ -1,4 +1,4 @@
-package com.voxcommander.app.data.local
+package com.voxcommander.app.domain.intent.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

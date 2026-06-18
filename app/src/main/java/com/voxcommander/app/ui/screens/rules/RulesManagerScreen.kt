@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.local.dao.FastMapDao
-import com.voxcommander.app.data.local.FastMapRule
+import com.voxcommander.app.domain.intent.model.FastMapRule
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.intent.registry.IntentRegistry
 import com.voxcommander.app.domain.localization.LanguageManager

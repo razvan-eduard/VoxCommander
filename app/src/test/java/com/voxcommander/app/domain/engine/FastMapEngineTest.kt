@@ -1,7 +1,7 @@
 package com.voxcommander.app.domain.engine
 
 import com.voxcommander.app.data.local.dao.FastMapDao
-import com.voxcommander.app.data.local.FastMapRule
+import com.voxcommander.app.domain.intent.model.FastMapRule
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
 import io.mockk.coEvery
 import io.mockk.mockk
