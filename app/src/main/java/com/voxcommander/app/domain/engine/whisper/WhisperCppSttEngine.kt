@@ -106,8 +106,8 @@ class WhisperCppSttEngine(
         try {
             val floatAudio = pcm16ToFloat(audio)
 
-            // 1 thread for GPU, 4 for NEON
-            val threads = if (isUsingGpu) 1 else 4
+            // Conservative thread count for CPU (NEON)
+            val threads = if (isUsingGpu) 1 else 2
 
             Log.d(
                 TAG,

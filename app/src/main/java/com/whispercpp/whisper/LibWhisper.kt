@@ -1,6 +1,6 @@
 package com.whispercpp.whisper
 
-import android.os.Build
+import android.content.res.AssetManager
 import android.util.Log
 import kotlinx.coroutines.*
 import java.util.concurrent.Executors
@@ -17,31 +17,31 @@ class WhisperContext private constructor(private var ptr: Long) {
     )
 
     suspend fun transcribeData(data: FloatArray, threads: Int, printTimestamp: Boolean = true): String = withContext(scope.coroutineContext) {
-        require(ptr != 0L)
+        if (ptr == 0L) return@withContext "Error: Context released"
+        
         Log.d(LOG_TAG, "Transcribing with $threads threads")
         WhisperLib.fullTranscribe(ptr, threads, data)
+        
         val textCount = WhisperLib.getTextSegmentCount(ptr)
         return@withContext buildString {
             for (i in 0 until textCount) {
                 if (printTimestamp) {
-                    val textTimestamp = "[${toTimestamp(WhisperLib.getTextSegmentT0(ptr, i))} --> ${toTimestamp(WhisperLib.getTextSegmentT1(ptr, i))}]"
+                    val t0 = WhisperLib.getTextSegmentT0(ptr, i)
+                    val t1 = WhisperLib.getTextSegmentT1(ptr, i)
+                    val textTimestamp = "[${toTimestamp(t0)} --> ${toTimestamp(t1)}]"
                     val textSegment = WhisperLib.getTextSegment(ptr, i)
                     append("$textTimestamp: $textSegment\n")
                 } else {
                     append(WhisperLib.getTextSegment(ptr, i))
                 }
             }
-        }
+        }.trim()
     }
 
     fun release() {
-        runBlocking {
-            withContext(scope.coroutineContext) {
-                if (ptr != 0L) {
-                    WhisperLib.freeContext(ptr)
-                    ptr = 0
-                }
-            }
+        if (ptr != 0L) {
+            WhisperLib.freeContext(ptr)
+            ptr = 0
         }
     }
 
@@ -53,7 +53,7 @@ class WhisperContext private constructor(private var ptr: Long) {
         fun createContextFromFile(filePath: String, useGpu: Boolean): WhisperContext {
             val ptr = WhisperLib.initContext(filePath, useGpu)
             if (ptr == 0L) {
-                throw java.lang.RuntimeException("Couldn't create context with path $filePath")
+                throw java.lang.RuntimeException("Couldn't create context with path $filePath (GPU=$useGpu)")
             }
             return WhisperContext(ptr)
         }
@@ -62,7 +62,6 @@ class WhisperContext private constructor(private var ptr: Long) {
 
 /**
  * JNI BRIDGE: Low-level access to the compiled C++ code.
- * Aligned with symbols: Java_com_whispercpp_whisper_WhisperLib_00024Companion_...
  */
 class WhisperLib {
     companion object {
@@ -71,12 +70,18 @@ class WhisperLib {
         fun load(): Boolean {
             if (isLoaded) return true
             return try {
-                Log.d(LOG_TAG, "Loading native libraries...")
-                System.loadLibrary("ggml-base")
-                System.loadLibrary("ggml-vulkan")
-                System.loadLibrary("ggml-cpu")
+                Log.d(LOG_TAG, "Loading native libraries (libwhisper.so containing JNI)...")
+                
+                // Load dependencies first
+                System.loadLibrary("omp")
                 System.loadLibrary("ggml")
+                System.loadLibrary("ggml-base")
+                System.loadLibrary("ggml-cpu")
+                System.loadLibrary("ggml-vulkan")
+                
+                // Load the main library which now contains our JNI symbols
                 System.loadLibrary("whisper")
+                
                 isLoaded = true
                 Log.d(LOG_TAG, "Libraries loaded successfully")
                 true
@@ -88,7 +93,7 @@ class WhisperLib {
 
         fun isReady(): Boolean = isLoaded
 
-        // CRITICAL: NO @JvmStatic to match _00024Companion naming in our compiled libwhisper.so
+        // JNI Methods - Signature matching libwhisper.so (contains JNI Patch)
         external fun initContext(modelPath: String, useGpu: Boolean): Long
         external fun freeContext(contextPtr: Long)
         external fun fullTranscribe(contextPtr: Long, numThreads: Int, audioData: FloatArray)
