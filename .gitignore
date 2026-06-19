@@ -24,7 +24,6 @@ local.properties
 .idea/assetWizardSettings.xml
 *.iml
 *.iws
-*.sh
 
 # =========================
 # OS-specific files
@@ -43,6 +42,7 @@ Thumbs.db
 obj/
 *.so
 backup
+
 # =========================
 # Keystore & Security
 # =========================
@@ -62,7 +62,7 @@ google-services.json
 # =========================
 # AI Models & Audio Cache
 # =========================
-# Ignoră modelele acustice grele pentru a nu bloca repo-ul
+# Ignora modelele acustice grele pentru a nu bloca repo-ul
 *.bin
 *.pt
 *.zip
@@ -72,5 +72,4 @@ google-services.json
 # =========================
 # Configurații specifice proiectului
 # =========================
-app/src/main/cpp/whisper.cpp/
-WALKTHROUGH.md
+/build
