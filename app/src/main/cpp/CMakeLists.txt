@@ -3,23 +3,30 @@ project(whisper_android)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# --- CONFIGURARE VULKAN REALĂ (PENTRU ANDROID PE MAC) ---
-set(GGML_VULKAN ON CACHE BOOL "" FORCE)
+# --- CONFIGURARE VULKAN DINAMICĂ ---
+# Aceste variabile sunt acum trimise automat de scripts/check_whisper.sh
+if (VULKAN_HEADERS_DIR)
+    include_directories("${VULKAN_HEADERS_DIR}")
+endif()
 
-# Forțăm căile către headers
-include_directories("/opt/homebrew/opt/spirv-headers/include")
-include_directories("/opt/homebrew/opt/vulkan-headers/include")
+if (SPIRV_HEADERS_CMAKE_DIR)
+    set(SPIRV-Headers_DIR "${SPIRV_HEADERS_CMAKE_DIR}" CACHE PATH "" FORCE)
+endif()
 
-# Whisper 1.9.1 are nevoie de acest flag pentru a știi de SPIRV
-set(SPIRV-Headers_DIR "/opt/homebrew/opt/spirv-headers/share/cmake/SPIRV-Headers" CACHE PATH "" FORCE)
+if (VULKAN_GLSLC_EXECUTABLE)
+    set(Vulkan_GLSLC_EXECUTABLE "${VULKAN_GLSLC_EXECUTABLE}" CACHE FILEPATH "" FORCE)
+endif()
 
 # Configurații Whisper
+set(GGML_VULKAN ON CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
+# Adăugăm folderul oficial whisper.cpp
 add_subdirectory(whisper.cpp)
 
+# Biblioteca noastră JNI
 add_library(
     whisper_final 
     SHARED
@@ -37,7 +44,6 @@ target_include_directories(
 
 find_library(log-lib log)
 find_library(android-lib android)
-find_library(vulkan-lib vulkan)
 
 target_link_libraries(
     whisper_final
@@ -45,5 +51,4 @@ target_link_libraries(
     whisper
     ${log-lib}
     ${android-lib}
-    ${vulkan-lib}
 )
