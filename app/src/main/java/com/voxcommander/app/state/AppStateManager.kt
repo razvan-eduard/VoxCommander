@@ -4,12 +4,16 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.utils.Strings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Global voice state to coordinate between wake word service and command recognition.
@@ -19,8 +23,31 @@ enum class VoiceState {
     LISTENING_WAKEWORD, // Vosk is active (wake word detection)
     LISTENING_COMMAND,  // Whisper/Google is active (command recognition)
     PROCESSING,         // Engine is transcribing text
-    CLEANING            // Engine is releasing resources
+    CLEANING,            // Engine is releasing resources
+    BENCHMARKING        // Running synthetic speed tests
 }
+
+/**
+ * Result of a single benchmark run.
+ */
+data class BenchmarkResult(
+    val engine: String,
+    val model: String,
+    val inferenceTimeMs: Long,
+    val rtf: Float,
+    val isSuccess: Boolean,
+    val error: String? = null
+)
+
+/**
+ * Native library status for diagnostic view.
+ */
+data class NativeLibStatus(
+    val name: String,
+    val exists: Boolean,
+    val isActive: Boolean,
+    val description: String = ""
+)
 
 /**
  * Centralized State Hub for global application state.
@@ -112,9 +139,20 @@ class AppStateManager(
     private val _wakeWordEnabled = MutableStateFlow(settingsManager.isWakeWordEnabled())
     val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled.asStateFlow()
 
+    // --- BENCHMARK & DIAGNOSTIC STATE ---
+    private val _benchmarkResults = MutableStateFlow<List<BenchmarkResult>>(emptyList())
+    val benchmarkResults: StateFlow<List<BenchmarkResult>> = _benchmarkResults.asStateFlow()
+
+    private val _nativeLibsStatus = MutableStateFlow<List<NativeLibStatus>>(emptyList())
+    val nativeLibsStatus: StateFlow<List<NativeLibStatus>> = _nativeLibsStatus.asStateFlow()
+
+    private val _systemInfo = MutableStateFlow<String>("")
+    val systemInfo: StateFlow<String> = _systemInfo.asStateFlow()
+
     // Initialize with current SharedPreferences values
     init {
         loadCustomVoskPaths()
+        refreshNativeLibsStatus()
     }
 
     // State Update Methods
@@ -190,6 +228,52 @@ class AppStateManager(
         settingsManager.setModelDownloaded(modelName, true)
         setSelectedVoskModelName(modelName)
         setVoiceModelReady(true)
+    }
+
+    // --- DIAGNOSTIC HELPERS ---
+
+    fun refreshNativeLibsStatus() {
+        val libDir = context.applicationInfo.nativeLibraryDir
+        val dir = File(libDir)
+        
+        if (!dir.exists() || !dir.isDirectory) {
+            _nativeLibsStatus.value = listOf(NativeLibStatus("System Error", false, false, "Native directory not found"))
+            return
+        }
+
+        val soFiles = dir.listFiles { _, name -> name.endsWith(".so") } ?: emptyArray()
+        
+        val statusList = soFiles.map { file ->
+            val libName = file.name
+            // Determine if active based on system info or settings
+            val isActive = when {
+                libName == "libggml-vulkan.so" -> !settingsManager.isVulkanIncompatible()
+                else -> true // Assume other found libs are core/active if they exist
+            }
+            
+            NativeLibStatus(
+                name = libName,
+                exists = true,
+                isActive = isActive,
+                description = if (isActive) "Loaded & Active" else "Incompatible/Disabled"
+            )
+        }.sortedBy { it.name }
+
+        _nativeLibsStatus.value = statusList
+    }
+
+    fun updateBenchmarkResult(result: BenchmarkResult) {
+        val current = _benchmarkResults.value.toMutableList()
+        current.add(result)
+        _benchmarkResults.value = current
+    }
+
+    fun clearBenchmarkResults() {
+        _benchmarkResults.value = emptyList()
+    }
+
+    fun setSystemInfo(info: String) {
+        _systemInfo.value = info
     }
 
     // Helper to load all custom Vosk paths

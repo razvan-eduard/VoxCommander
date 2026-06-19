@@ -52,7 +52,7 @@ fun SettingsContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(pageCount = { 5 })
+    val pagerState = rememberPagerState(pageCount = { 6 })
 
     // --- 1. HOISTED REALTIME STATE ---
     var wakeWordEnabled by remember { mutableStateOf(settingsManager.isWakeWordEnabled()) }
@@ -172,7 +172,7 @@ fun SettingsContent(
                     modifier = Modifier.padding(bottom = 12.dp)
                 ) {
                     val tabs = listOf(
-                        "tab_general", "tab_models", "tab_service", "tab_advanced", "tab_verbose_logging"
+                        "tab_general", "tab_models", "tab_service", "tab_benchmark", "tab_advanced", "tab_verbose_logging"
                     )
                     
                     tabs.forEachIndexed { index, tabKey ->
@@ -209,183 +209,200 @@ fun SettingsContent(
         }
 
         Box(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(top = 16.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    when (page) {
-                        0 -> GeneralSettingsTab_Realtime(
-                            languageManager = languageManager,
-                            settingsManager = settingsManager,
-                            refreshTrigger = refreshTrigger
-                        )
-                        1 -> ModelsSettingsTab(
-                            languageManager = languageManager,
-                            settingsManager = settingsManager,
-                            voiceProcessor = voiceProcessor,
-                            onProcessorSelected = {
-                                voiceProcessor = it
-                                appStateManager.setVoiceProcessor(it)
-                                // Re-evaluate model ready flag based on new processor
-                                when (it) {
-                                    Strings.Processors.WHISPER_CPP,
-                                    Strings.Processors.WHISPER_VULKAN,
-                                    Strings.Processors.WHISPER_NEON -> {
-                                        val modelId = appStateManager.selectedWhisperModelId.value
-                                        appStateManager.setVoiceModelReady(settingsManager.isModelDownloaded(modelId) || appStateManager.customWhisperModelPath.value != null)
+            HorizontalPager(
+                state = pagerState, 
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1
+            ) { page ->
+                // FIX: Separăm paginile care au LazyColumn intern de cele care au nevoie de Column cu scroll
+                if (page == 3) {
+                    // Diagnostic Tab (Benchmark) are propriul LazyColumn
+                    BenchmarkSettingsTab(
+                        languageManager = languageManager,
+                        appStateManager = appStateManager
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 16.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        when (page) {
+                            0 -> GeneralSettingsTab_Realtime(
+                                languageManager = languageManager,
+                                settingsManager = settingsManager,
+                                refreshTrigger = refreshTrigger
+                            )
+                            1 -> ModelsSettingsTab(
+                                languageManager = languageManager,
+                                settingsManager = settingsManager,
+                                voiceProcessor = voiceProcessor,
+                                onProcessorSelected = {
+                                    voiceProcessor = it
+                                    appStateManager.setVoiceProcessor(it)
+                                    // Re-evaluate model ready flag based on new processor
+                                    when (it) {
+                                        Strings.Processors.WHISPER_CPP,
+                                        Strings.Processors.WHISPER_VULKAN,
+                                        Strings.Processors.WHISPER_NEON -> {
+                                            val modelId = appStateManager.selectedWhisperModelId.value
+                                            appStateManager.setVoiceModelReady(settingsManager.isModelDownloaded(modelId) || appStateManager.customWhisperModelPath.value != null)
+                                        }
+                                        Strings.Processors.VOSK -> {
+                                            val modelName = appStateManager.selectedVoskModelName.value
+                                            val lang = appStateManager.voiceLanguage.value
+                                            val customPath = appStateManager.customVoskModelPaths.value[lang]
+                                            appStateManager.setVoiceModelReady(settingsManager.isModelDownloaded(modelName ?: "") || !customPath.isNullOrBlank())
+                                        }
+                                        else -> appStateManager.setVoiceModelReady(true) // Remote models always ready
                                     }
-                                    Strings.Processors.VOSK -> {
-                                        val modelName = appStateManager.selectedVoskModelName.value
-                                        val lang = appStateManager.voiceLanguage.value
-                                        val customPath = appStateManager.customVoskModelPaths.value[lang]
-                                        appStateManager.setVoiceModelReady(settingsManager.isModelDownloaded(modelName ?: "") || !customPath.isNullOrBlank())
+                                    updateVoiceEngine()
+                                    onRefreshMain()
+                                    refreshTrigger++
+                                },
+                                hasApiKey = !(settingsManager.getApiKey().isNullOrBlank()),
+                                googleSttAvailable = googleSttAvailable,
+                                voiceLanguage = voiceLanguage,
+                                onVoiceLanguageSelected = {
+                                    voiceLanguage = it
+                                    appStateManager.setVoiceLanguage(it)
+                                    updateVoiceEngine()
+                                    onRefreshMain()
+                                    refreshTrigger++
+                                },
+                                whisperModels = WhisperModelRegistry.models,
+                                selectedWhisperModel = WhisperModelRegistry.models.find { it.id == selectedWhisperId } ?: WhisperModelRegistry.models.firstOrNull(),
+                                onWhisperModelSelected = { model, isDownloaded ->
+                                    selectedWhisperId = model.id
+                                    appStateManager.setSelectedWhisperModelId(model.id)
+                                    appStateManager.setVoiceModelReady(isDownloaded || appStateManager.customWhisperModelPath.value != null)
+                                    updateVoiceEngine()
+                                    onRefreshMain()
+                                    refreshTrigger++
+                                    if (!isDownloaded && appStateManager.customWhisperModelPath.value == null) {
+                                        downloadingItemState = model
+                                        pendingWhisperModel = model
+                                        showDownloadDialog = true
                                     }
-                                    else -> appStateManager.setVoiceModelReady(true) // Remote models always ready
-                                }
-                                updateVoiceEngine()
-                                onRefreshMain()
-                                refreshTrigger++
-                            },
-                            hasApiKey = !(settingsManager.getApiKey().isNullOrBlank()),
-                            googleSttAvailable = googleSttAvailable,
-                            voiceLanguage = voiceLanguage,
-                            onVoiceLanguageSelected = {
-                                voiceLanguage = it
-                                appStateManager.setVoiceLanguage(it)
-                                updateVoiceEngine()
-                                onRefreshMain()
-                                refreshTrigger++
-                            },
-                            whisperModels = WhisperModelRegistry.models,
-                            selectedWhisperModel = WhisperModelRegistry.models.find { it.id == selectedWhisperId } ?: WhisperModelRegistry.models.firstOrNull(),
-                            onWhisperModelSelected = { model, isDownloaded ->
-                                selectedWhisperId = model.id
-                                appStateManager.setSelectedWhisperModelId(model.id)
-                                appStateManager.setVoiceModelReady(isDownloaded || appStateManager.customWhisperModelPath.value != null)
-                                updateVoiceEngine()
-                                onRefreshMain()
-                                refreshTrigger++
-                                if (!isDownloaded && appStateManager.customWhisperModelPath.value == null) {
-                                    downloadingItemState = model
-                                    pendingWhisperModel = model
-                                    showDownloadDialog = true
-                                }
-                            },
-                            onSelectCustomWhisperModel = onSelectCustomWhisperModel,
-                            voskGroups = voskGroups,
-                            selectedVoskModel = selectedVoskModel,
-                            isVoskLoading = isVoskLoading,
-                            isVoskOffline = isVoskOffline,
-                            isOffline = isVoskOffline,
-                            voskError = voskError,
-                            onRetryConnection = { loadVoskModels(true) },
-                            onVoskModelSelected = { model, isDownloaded, langCode ->
-                                voiceLanguage = langCode
-                                appStateManager.setVoiceLanguage(langCode)
-                                selectedVoskModel = model
-                                selectedVoskModelName = model.name
-                                appStateManager.setSelectedVoskModelName(model.name)
-                                val customPath = appStateManager.customVoskModelPaths.value[langCode]
-                                appStateManager.setVoiceModelReady(isDownloaded || !customPath.isNullOrBlank())
-                                updateVoiceEngine()
-                                onRefreshMain()
-                                refreshTrigger++
-                                if (!isDownloaded && customPath == null) {
-                                    downloadingItemState = model
-                                    pendingVoskModel = langCode to model
-                                    showDownloadDialog = true
-                                }
-                            },
-                            onSelectCustomVoskModel = { onSelectCustomVoskModel(voiceLanguage) },
-                            downloadProgress = downloadProgress,
-                            downloadingItem = downloadingItemState,
-                            downloadedColor = downloadedColor,
-                            onCancelDownload = onCancelDownload,
-                            onCleanupRequest = { showCleanupDialog = true },
-                            onClearDefaultFallback = {
-                                settingsManager.clearDefaultOfflineFallback()
-                                refreshTrigger++
-                            },
-                            onDeleteRequest = { model ->
-                                val modelId = when(model) {
-                                    is WhisperModelInfo -> model.id
-                                    is VoskModelInfo -> model.name
-                                    else -> model.toString()
-                                }
-                                isDeletingDefaultFallback = (modelId == settingsManager.getDefaultOfflineFallbackModel())
-                                isDeletingActiveWakeWord = (modelId == settingsManager.getWakeWordModelPath())
-                                modelToDelete = model
-                                showDeleteConfirmDialog = true
-                            },
-                            refreshTrigger = refreshTrigger
-                        )
-                        2 -> ServiceSettingsTab(
-                            languageManager = languageManager,
-                            settingsManager = settingsManager,
-                            wakeWordEnabled = wakeWordEnabled,
-                            onWakeWordEnabledChange = { enabled ->
-                                wakeWordEnabled = enabled
-                                settingsManager.saveWakeWordEnabled(enabled)
-                                if (!enabled && isServiceRunning) {
-                                    WakeWordService.stopService(context)
-                                }
-                                refreshTrigger++
-                            },
-                            wakeWord = wakeWordState,
-                            onWakeWordChange = { 
-                                wakeWordState = it
-                                settingsManager.saveWakeWord(it)
-                                if (isServiceRunning) WakeWordService.stopService(context)
-                                refreshTrigger++
-                            },
-                            voskGroups = voskGroups,
-                            selectedWakeWordModel = voskGroups.flatMap { it.models }.find { it.name == settingsManager.getWakeWordModelPath() } ?: voskGroups.firstOrNull()?.models?.firstOrNull(),
-                            onWakeWordModelSelected = { model ->
-                                settingsManager.saveWakeWordModelPath(model.name)
-                                if (isServiceRunning) WakeWordService.stopService(context)
-                                refreshTrigger++
-                                if (!settingsManager.isModelDownloaded(model.name)) {
+                                },
+                                onSelectCustomWhisperModel = onSelectCustomWhisperModel,
+                                voskGroups = voskGroups,
+                                selectedVoskModel = selectedVoskModel,
+                                isVoskLoading = isVoskLoading,
+                                isVoskOffline = isVoskOffline,
+                                isOffline = isVoskOffline,
+                                voskError = voskError,
+                                onRetryConnection = { loadVoskModels(true) },
+                                onVoskModelSelected = { model, isDownloaded, langCode ->
+                                    voiceLanguage = langCode
+                                    appStateManager.setVoiceLanguage(langCode)
+                                    selectedVoskModel = model
+                                    selectedVoskModelName = model.name
+                                    appStateManager.setSelectedVoskModelName(model.name)
+                                    val customPath = appStateManager.customVoskModelPaths.value[langCode]
+                                    appStateManager.setVoiceModelReady(isDownloaded || !customPath.isNullOrBlank())
+                                    updateVoiceEngine()
+                                    onRefreshMain()
+                                    refreshTrigger++
+                                    if (!isDownloaded && customPath == null) {
+                                        downloadingItemState = model
+                                        pendingVoskModel = langCode to model
+                                        showDownloadDialog = true
+                                    }
+                                },
+                                onSelectCustomVoskModel = { onSelectCustomVoskModel(voiceLanguage) },
+                                downloadProgress = downloadProgress,
+                                downloadingItem = downloadingItemState,
+                                downloadedColor = downloadedColor,
+                                onCancelDownload = onCancelDownload,
+                                onCleanupRequest = { showCleanupDialog = true },
+                                onClearDefaultFallback = {
+                                    settingsManager.clearDefaultOfflineFallback()
+                                    refreshTrigger++
+                                },
+                                onDeleteRequest = { model ->
+                                    val modelId = when(model) {
+                                        is WhisperModelInfo -> model.id
+                                        is VoskModelInfo -> model.name
+                                        else -> model.toString()
+                                    }
+                                    isDeletingDefaultFallback = (modelId == settingsManager.getDefaultOfflineFallbackModel())
+                                    isDeletingActiveWakeWord = (modelId == settingsManager.getWakeWordModelPath())
+                                    modelToDelete = model
+                                    showDeleteConfirmDialog = true
+                                },
+                                refreshTrigger = refreshTrigger
+                            )
+                            2 -> ServiceSettingsTab(
+                                languageManager = languageManager,
+                                settingsManager = settingsManager,
+                                wakeWordEnabled = wakeWordEnabled,
+                                onWakeWordEnabledChange = { enabled ->
+                                    wakeWordEnabled = enabled
+                                    settingsManager.saveWakeWordEnabled(enabled)
+                                    if (!enabled && isServiceRunning) {
+                                        WakeWordService.stopService(context)
+                                    }
+                                    refreshTrigger++
+                                },
+                                wakeWord = wakeWordState,
+                                onWakeWordChange = { 
+                                    wakeWordState = it
+                                    settingsManager.saveWakeWord(it)
+                                    if (isServiceRunning) WakeWordService.stopService(context)
+                                    refreshTrigger++
+                                },
+                                voskGroups = voskGroups,
+                                selectedWakeWordModel = voskGroups.flatMap { it.models }.find { it.name == settingsManager.getWakeWordModelPath() } ?: voskGroups.firstOrNull()?.models?.firstOrNull(),
+                                onWakeWordModelSelected = { model ->
+                                    settingsManager.saveWakeWordModelPath(model.name)
+                                    if (isServiceRunning) WakeWordService.stopService(context)
+                                    refreshTrigger++
+                                    if (!settingsManager.isModelDownloaded(model.name)) {
+                                        downloadingItemState = model
+                                        pendingWakeWordModel = model
+                                        showDownloadDialog = true
+                                    }
+                                },
+                                isServiceRunning = isServiceRunning,
+                                onStartService = { WakeWordService.startService(context) },
+                                onStopService = { WakeWordService.stopService(context) },
+                                downloadedColor = downloadedColor,
+                                onDownloadRequest = { model ->
                                     downloadingItemState = model
                                     pendingWakeWordModel = model
                                     showDownloadDialog = true
+                                },
+                                onDeleteRequest = { model -> 
+                                    isDeletingDefaultFallback = (model.name == settingsManager.getDefaultOfflineFallbackModel())
+                                    isDeletingActiveWakeWord = true
+                                    modelToDelete = model
+                                    showDeleteConfirmDialog = true
+                                },
+                                onCancelDownload = onCancelDownload,
+                                downloadProgress = downloadProgress,
+                                downloadingItem = downloadingItemState,
+                                voiceLanguage = voiceLanguage,
+                                voiceProcessor = voiceProcessor,
+                                refreshTrigger = refreshTrigger
+                            )
+                            // Page 3 is handled above (Diagnostic Tab)
+                            4 -> AdvancedSettingsTab(
+                                languageManager = languageManager,
+                                settingsManager = settingsManager,
+                                onVerboseLoggingChange = { 
+                                    verboseLoggingEnabled = it
+                                    settingsManager.saveVerboseLoggingEnabled(it)
+                                    refreshTrigger++
                                 }
-                            },
-                            isServiceRunning = isServiceRunning,
-                            onStartService = { WakeWordService.startService(context) },
-                            onStopService = { WakeWordService.stopService(context) },
-                            downloadedColor = downloadedColor,
-                            onDownloadRequest = { model ->
-                                downloadingItemState = model
-                                pendingWakeWordModel = model
-                                showDownloadDialog = true
-                            },
-                            onDeleteRequest = { model -> 
-                                isDeletingDefaultFallback = (model.name == settingsManager.getDefaultOfflineFallbackModel())
-                                isDeletingActiveWakeWord = true
-                                modelToDelete = model
-                                showDeleteConfirmDialog = true
-                            },
-                            onCancelDownload = onCancelDownload,
-                            downloadProgress = downloadProgress,
-                            downloadingItem = downloadingItemState,
-                            voiceLanguage = voiceLanguage,
-                            voiceProcessor = voiceProcessor,
-                            refreshTrigger = refreshTrigger
-                        )
-                        3 -> AdvancedSettingsTab(
-                            languageManager = languageManager,
-                            settingsManager = settingsManager,
-                            onVerboseLoggingChange = { 
-                                verboseLoggingEnabled = it
-                                settingsManager.saveVerboseLoggingEnabled(it)
-                                refreshTrigger++
-                            }
-                        )
-                        4 -> VerboseLoggingTab(
-                            languageManager = languageManager,
-                            verboseLoggingEnabled = verboseLoggingEnabled
-                        )
+                            )
+                            5 -> VerboseLoggingTab(
+                                languageManager = languageManager,
+                                verboseLoggingEnabled = verboseLoggingEnabled
+                            )
+                        }
                     }
                 }
             }
