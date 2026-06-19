@@ -1,88 +1,110 @@
 #!/bin/bash
 set -e
 
-# Paths
-WHISPER_DIR="/Users/razvan/AndroidStudioProjects/whisper.cpp"
-# Jni source for useGpu
-JNI_SOURCE="$(cd "$(dirname "$0")/.." && pwd)/app/src/main/cpp/native-lib.cpp"
+# --- COLOR DEFINITIONS ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
+# --- PATH CONFIGURATION ---
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+WHISPER_DIR="$PROJECT_ROOT/app/src/main/cpp/whisper.cpp"
+JNI_SOURCE="$PROJECT_ROOT/app/src/main/cpp/native-lib.cpp"
 PROJECT_JNI_DIR="$PROJECT_ROOT/app/src/main/jniLibs/arm64-v8a"
 BUILD_DIR="build-android-hybrid"
+VERSION_FILE="$PROJECT_ROOT/scripts/.whisper_version"
 
-# Flags
+# --- ARGUMENT PARSING ---
 FORCE_REBUILD=false
-if [[ "$1" == "--force-rebuild" ]]; then FORCE_REBUILD=true; fi
+for arg in "$@"; do
+    case $(echo "$arg" | tr '[:upper:]' '[:lower:]') in
+        --force|--force-rebuild|-f) FORCE_REBUILD=true ;;
+    esac
+done
 
-# NDK path
-NDK_BASE="/Users/razvan/Library/Android/sdk/ndk"
-LATEST_NDK=$(ls -1 "$NDK_BASE" | sort -n | tail -1)
-NDK_PATH="$NDK_BASE/$LATEST_NDK"
+# --- DYNAMIC NDK DETECTION ---
+if [ -n "$ANDROID_NDK_HOME" ] && [ -d "$ANDROID_NDK_HOME" ]; then
+    NDK_PATH="$ANDROID_NDK_HOME"
+elif [ -n "$ANDROID_HOME" ] && [ -d "$ANDROID_HOME/ndk" ]; then
+    LATEST_NDK=$(ls -1 "$ANDROID_HOME/ndk" | sort -V | tail -1)
+    NDK_PATH="$ANDROID_HOME/ndk/$LATEST_NDK"
+else
+    USER_HOME=$(eval echo "~$USER")
+    NDK_BASE="$USER_HOME/Library/Android/sdk/ndk"
+    if [ -d "$NDK_BASE" ]; then
+        LATEST_NDK=$(ls -1 "$NDK_BASE" | sort -V | tail -1)
+        NDK_PATH="$NDK_BASE/$LATEST_NDK"
+    else
+        echo -e "${RED}❌ ERROR: Android NDK not found. Please set ANDROID_NDK_HOME.${NC}"
+        exit 1
+    fi
+fi
+
+# --- VERSION TRACKING ---
+CURRENT_VERSION=$(grep "project(\"whisper.cpp\" VERSION" "$WHISPER_DIR/CMakeLists.txt" | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+
+if [ -f "$VERSION_FILE" ]; then
+    OLD_VERSION=$(cat "$VERSION_FILE")
+else
+    OLD_VERSION="unknown"
+fi
+
+if [ "$CURRENT_VERSION" != "$OLD_VERSION" ] && [ "$OLD_VERSION" != "unknown" ]; then
+    echo -e "🆕 UPGRADE DETECTED: Whisper.cpp ${RED}$OLD_VERSION${NC} -> ${GREEN}$CURRENT_VERSION${NC}"
+    FORCE_REBUILD=true
+else
+    echo -e "ℹ️ Current Whisper.cpp version: ${GREEN}$CURRENT_VERSION${NC}"
+fi
+
+# --- PATH VALIDATION ---
+validate_path() {
+    if [ ! -e "$1" ]; then
+        echo -e "${RED}❌ ERROR: Critical path missing: $1${NC}"
+        exit 1
+    fi
+}
+
+echo "🔍 Validating components..."
+validate_path "$WHISPER_DIR"
+validate_path "$JNI_SOURCE"
+validate_path "$NDK_PATH"
 
 copy_results() {
-    echo "📦 Syncing HYBRID libraries..."
+    echo "📦 Syncing compiled libraries..."
     mkdir -p "$PROJECT_JNI_DIR"
-    find "$WHISPER_DIR/$BUILD_DIR" -name "*.so" -exec cp {} "$PROJECT_JNI_DIR/" \;
+    find . -name "libwhisper.so" -exec cp {} "$PROJECT_JNI_DIR/" \;
+    find . -name "libggml*.so" -exec cp {} "$PROJECT_JNI_DIR/" \;
 
-    # Runtime dependencies
     OMP_PATH=$(find "$NDK_PATH" -name "libomp.so" | grep "aarch64" | head -n 1)
     if [ -f "$OMP_PATH" ]; then
         cp "$OMP_PATH" "$PROJECT_JNI_DIR/"
     fi
+
+    echo "$CURRENT_VERSION" > "$VERSION_FILE"
 }
 
-# Check current build
-if [ -f "$PROJECT_JNI_DIR/libwhisper.so" ] && [ "$FORCE_REBUILD" = false ]; then
-    # 1. Checking companion symbol
-    if nm -D "$PROJECT_JNI_DIR/libwhisper.so" | grep -q "WhisperLib_00024Companion_initContext"; then
+# --- BUILD EXECUTION ---
+FULL_BUILD_PATH="$WHISPER_DIR/$BUILD_DIR"
 
-        # 2. Checking if sources are newer
-        SOURCE_NEWER=false
-        # Verificăm native-lib.cpp
-        if [ "$JNI_SOURCE" -nt "$PROJECT_JNI_DIR/libwhisper.so" ]; then
-            SOURCE_NEWER=true
-        fi
-
-        # Checking whisper.cpp
-        if [ "$(find "$WHISPER_DIR/src" -name "*.cpp" -newer "$PROJECT_JNI_DIR/libwhisper.so" | wc -l)" -gt 0 ]; then
-            SOURCE_NEWER=true
-        fi
-
-        if [ "$SOURCE_NEWER" = false ]; then
-            echo "🍏 Whisper is already compiled and up to date. Skipping build."
-            exit 0
-        fi
-    fi
+if [ "$FORCE_REBUILD" = true ]; then
+    echo -e "${RED}🔥 Force rebuild requested or upgrade detected. Cleaning build directory...${NC}"
+    rm -rf "${FULL_BUILD_PATH:?}"
 fi
 
-echo "🚀 Rebuilding libwhisper.so with JNI Patch (Vulkan + NEON)..."
+mkdir -p "$FULL_BUILD_PATH"
+cd "$FULL_BUILD_PATH"
 
-cd "$WHISPER_DIR"
-# CMake will take care of BUILD_DIR
-mkdir -p "$BUILD_DIR"
+# If CMakeCache.txt is missing, we must CONFIGURE before building
+if [ ! -f "CMakeCache.txt" ]; then
+    echo -e "⚙️ Configuring CMake for the first time or after clean..."
+    echo -e "🔹 Building with: ${BLUE}GGML_VULKAN=ON (HIBRID)${NC}"
 
-BREW_PREFIX=$(brew --prefix)
-VULKAN_INC="$BREW_PREFIX/include"
-SPIRV_DIR="$BREW_PREFIX/share/cmake/SPIRV-Headers"
+    cmake ../.. -DCMAKE_TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-33 -DCMAKE_BUILD_TYPE=Release
+fi
 
-COMMON_FLAGS="-O3 -march=armv8-a+simd+crypto -ffast-math -fno-finite-math-only -I$VULKAN_INC"
-
-cmake -B "$BUILD_DIR" \
-  -DCMAKE_TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake" \
-  -DANDROID_ABI=arm64-v8a \
-  -DANDROID_PLATFORM=android-33 \
-  -DGGML_VULKAN=OFF \
-  -DGGML_OPENMP=ON \
-  -DBUILD_SHARED_LIBS=ON \
-  -DWHISPER_BUILD_TESTS=OFF \
-  -DWHISPER_BUILD_EXAMPLES=OFF \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DSPIRV-Headers_DIR="$SPIRV_DIR" \
-  -DCMAKE_CXX_FLAGS="$COMMON_FLAGS" \
-  -DCMAKE_C_FLAGS="$COMMON_FLAGS" \
-  -DWHISPER_EXTRA_SOURCES="$JNI_SOURCE"
-
-cmake --build "$BUILD_DIR" --config Release -j 8
+echo -e "🚀 Initializing Whisper build (${GREEN}$CURRENT_VERSION${NC})..."
+cmake --build . --config Release -j 8
 
 copy_results
-echo "✅ Process complete. All pieces are synced."
+echo -e "${GREEN}✅ Build and synchronization complete.${NC}"

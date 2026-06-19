@@ -1,33 +1,50 @@
 cmake_minimum_required(VERSION 3.22)
-
 project(whisper_android)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# ENABLE Vulkan for Hybrid Engine
-set(GGML_VULKAN ON CACHE BOOL "" FORCE)
+# --- CONFIGURARE VULKAN AUTOMATĂ (Pentru v1.9.1) ---
+# Îi spunem lui CMake unde găsește headerele de pe Mac-ul tău
+set(Vulkan_INCLUDE_DIR "/opt/homebrew/include" CACHE PATH "" FORCE)
+set(SPIRV-Headers_DIR "/opt/homebrew/share/cmake/SPIRV-Headers" CACHE PATH "" FORCE)
 
-# Disable examples and tests
+# Forțăm includerea lor globală
+include_directories("${Vulkan_INCLUDE_DIR}")
+
+# Configurații Whisper oficiale
+set(GGML_VULKAN ON CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
-# Add whisper.cpp source
+# Adăugăm whisper.cpp oficial
 add_subdirectory(whisper.cpp)
 
-# Define our JNI Bridge Library
+# Biblioteca noastră JNI
 add_library(
-    whisper_jni
+    whisper_final 
     SHARED
-    whisper.cpp/examples/whisper.android/lib/src/main/jni/whisper/jni.c
+    native-lib.cpp
+)
+
+set_target_properties(whisper_final PROPERTIES OUTPUT_NAME "whisper")
+
+target_include_directories(
+    whisper_final
+    PRIVATE
+    whisper.cpp/include
+    whisper.cpp/ggml/include
 )
 
 find_library(log-lib log)
 find_library(android-lib android)
+find_library(vulkan-lib vulkan)
 
-# Link JNI bridge with Whisper core and Android libs
 target_link_libraries(
-    whisper_jni
+    whisper_final
+    PRIVATE
     whisper
     ${log-lib}
     ${android-lib}
+    ${vulkan-lib}
 )

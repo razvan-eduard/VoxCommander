@@ -42,6 +42,7 @@ Thumbs.db
 obj/
 *.so
 backup
+build-android-hybrid/
 
 # =========================
 # Keystore & Security
