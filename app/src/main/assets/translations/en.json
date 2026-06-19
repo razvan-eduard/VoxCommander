@@ -93,6 +93,7 @@
   "tab_models": "Models",
   "tab_service": "Service",
   "tab_advanced": "Advanced",
+  "tab_benchmark": "Diagnostic",
   "tab_verbose_logging": "Verbose Logging",
   "service_settings_section": "Service Settings",
   "wake_word_enabled": "Enable Wake Word",
