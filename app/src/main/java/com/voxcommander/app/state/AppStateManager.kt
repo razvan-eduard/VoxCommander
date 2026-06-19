@@ -1,25 +1,76 @@
 package com.voxcommander.app.state
 
 import android.content.Context
-import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxcommander.app.data.preferences.SettingsManager
-import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/**
+ * Global voice state to coordinate between wake word service and command recognition.
+ */
+enum class VoiceState {
+    IDLE,               // No one is listening
+    LISTENING_WAKEWORD, // Vosk is active (wake word detection)
+    LISTENING_COMMAND,  // Whisper/Google is active (command recognition)
+    PROCESSING,         // Engine is transcribing text
+    CLEANING            // Engine is releasing resources
+}
 
 /**
  * Centralized State Hub for global application state.
  * Observes SharedPreferences and exposes StateFlow for realtime state access.
- * All components can read/write state through this manager.
  */
 class AppStateManager(
     private val settingsManager: SettingsManager,
     private val context: Context
 ) : ViewModel() {
+
+    // --- FUNCTIONAL VOICE STATE (Merged from VoiceStateManager) ---
+    private val voiceMutex = Mutex()
+    
+    private val _voiceState = MutableStateFlow(VoiceState.IDLE)
+    val voiceState: StateFlow<VoiceState> = _voiceState.asStateFlow()
+
+    private val _wakeWordDetected = MutableStateFlow(false)
+    val wakeWordDetected: StateFlow<Boolean> = _wakeWordDetected.asStateFlow()
+
+    /**
+     * SECURE EXECUTION: Ensures only one component (Vosk or Whisper) 
+     * can touch the audio hardware or native memory at a time.
+     */
+    suspend fun <T> executeSecureVoiceAction(action: suspend () -> T): T {
+        return voiceMutex.withLock {
+            action()
+        }
+    }
+
+    fun setVoiceState(state: VoiceState) {
+        _voiceState.value = state
+    }
+
+    fun onWakeWordDetected() {
+        _wakeWordDetected.value = true
+    }
+
+    fun resetWakeWordDetection() {
+        _wakeWordDetected.value = false
+    }
+
+    fun canStartWakeWord(): Boolean {
+        return _voiceState.value == VoiceState.IDLE
+    }
+
+    fun canStartCommand(): Boolean {
+        return _voiceState.value == VoiceState.LISTENING_WAKEWORD
+    }
+
+    // --- PERSISTENT SETTINGS STATE ---
 
     // Voice Model Ready State
     private val _voiceModelReady = MutableStateFlow(settingsManager.isVoiceModelReady())

@@ -27,12 +27,8 @@ import androidx.room.Room
 import com.voxcommander.app.data.local.db.VoxDatabase
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.ModelDownloader
-import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
-import com.voxcommander.app.domain.engine.google.GoogleSttEngine
-import com.voxcommander.app.domain.engine.vosk.VoskSttEngine
-import com.voxcommander.app.domain.engine.whisper.WhisperSttEngine
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.ui.screens.main.MainScreen
@@ -44,6 +40,11 @@ import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileOutputStream
 
+/**
+ * MainActivity: Thin UI Container.
+ * Manages high-level Android lifecycle, permissions, and system intents.
+ * Business logic and functional state are delegated to AppStateManager and VoiceManager.
+ */
 class MainActivity : ComponentActivity() {
 
     private lateinit var settingsManager: SettingsManager
@@ -84,7 +85,6 @@ class MainActivity : ComponentActivity() {
                 settingsManager.saveCustomVoskModelPath(lang, path)
                 settingsManager.setVoiceModelReady(true)
                 Toast.makeText(this, "Custom Vosk model path saved", Toast.LENGTH_SHORT).show()
-                updateVoiceEngine()
             }
         }
     }
@@ -97,7 +97,6 @@ class MainActivity : ComponentActivity() {
                 settingsManager.saveCustomWhisperModelPath(path)
                 settingsManager.setVoiceModelReady(true)
                 Toast.makeText(this, "Custom Whisper model saved", Toast.LENGTH_SHORT).show()
-                updateVoiceEngine()
             }
         }
     }
@@ -108,12 +107,15 @@ class MainActivity : ComponentActivity() {
         if (result.resultCode == RESULT_OK) {
             val data = result.data
             val matches = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val textVorbit = matches?.firstOrNull() ?: ""
+            val recognizedText = matches?.firstOrNull() ?: ""
             
-            android.util.Log.d(Strings.Tags.VOX_COMMANDER, "Am auzit prin Intent: $textVorbit")
+            android.util.Log.d(Strings.Tags.VOX_COMMANDER, "Heard via Intent: $recognizedText")
             
             // Send result to VoiceManager
-            VoiceManager.handleIntentResult(textVorbit)
+            VoiceManager.handleIntentResult(recognizedText)
+        } else {
+            // Handle cancellation or error to stop the infinite recording state
+            VoiceManager.handleIntentResult("")
         }
     }
 
@@ -124,7 +126,6 @@ class MainActivity : ComponentActivity() {
                 _downloadProgress.value = null
                 progressJob?.cancel()
 
-                // Use lastDownloadType instead of current processor to handle cross-tab downloads
                 when (lastDownloadType) {
                     "whisper" -> {
                         val modelId = lastDownloadedWhisperModelId ?: settingsManager.getSelectedWhisperModelId()
@@ -132,9 +133,6 @@ class MainActivity : ComponentActivity() {
                             if (success) {
                                 appStateManager.onWhisperDownloadComplete(modelId)
                                 showSuccessMessage("Whisper Model $modelId ready!")
-                                runOnUiThread {
-                                    updateVoiceEngine()
-                                }
                             }
                         }
                     }
@@ -144,9 +142,6 @@ class MainActivity : ComponentActivity() {
                             if (success) {
                                 appStateManager.onVoskDownloadComplete(modelName)
                                 showSuccessMessage("Vosk Model $modelName ready!")
-                                runOnUiThread {
-                                    updateVoiceEngine()
-                                }
                             }
                         }
                     }
@@ -182,7 +177,17 @@ class MainActivity : ComponentActivity() {
         val fastMapDao = db.fastMapDao()
         val assistantEngine = FastMapEngine(fastMapDao)
 
-        updateVoiceEngine()
+        // Initialize VoiceManager with the Hub. It will reactively manage engines from here.
+        VoiceManager.init(
+            this,
+            null, // Engines are now managed internally by VoiceManager via observation
+            null,
+            null,
+            null,
+            { langCode -> startGoogleVoiceIntent(langCode) },
+            settingsManager,
+            appStateManager
+        )
 
         // Set offline fallback settings in VoiceManager
         VoiceManager.setOfflineFallbackSettings(
@@ -258,7 +263,7 @@ class MainActivity : ComponentActivity() {
                             downloadProgress = currentProgress,
                             selectionSuccessMessage = successMessage,
                             googleSttAvailable = googleSttAvailable,
-                            updateVoiceEngine = { updateVoiceEngine() }
+                            updateVoiceEngine = { /* Handled reactively by VoiceManager */ }
                         )
                     }
                 }
@@ -269,43 +274,9 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Logger.log("MainActivity: onDestroy called")
-        VoiceManager.release() // Release C++ memory
+        VoiceManager.release() // Release all native memory and resources
         unregisterReceiver(onDownloadComplete)
         progressJob?.cancel()
-    }
-
-    private fun updateVoiceEngine() {
-        val apiKey = settingsManager.getApiKey()
-        val voiceLang = settingsManager.getVoiceLanguage()
-        val processor = settingsManager.getVoiceProcessor()
-
-        Logger.log("MainActivity: Updating voice engine - processor: $processor, language: $voiceLang")
-
-        // Initialize all STT engines
-        val whisperCpp = WhisperCppSttEngine(
-            this, 
-            settingsManager, 
-            forceGpu = (processor == Strings.Processors.WHISPER_VULKAN),
-            onVulkanIncompatible = {
-                _showVulkanError.value = true
-                settingsManager.saveVoiceProcessor(Strings.Processors.WHISPER_NEON)
-            }
-        )
-        val whisperApi = if (!apiKey.isNullOrBlank()) WhisperSttEngine(apiKey) else null
-        val google = GoogleSttEngine(this)
-        val vosk = VoskSttEngine(this, settingsManager, voiceLang)
-
-        VoiceManager.init(
-            this,
-            whisperCpp,
-            whisperApi,
-            google,
-            vosk,
-            { langCode -> startGoogleVoiceIntent(langCode) },
-            settingsManager
-        )
-
-        Logger.log("MainActivity: Voice engine updated successfully")
     }
 
     private fun checkPermissions() {
@@ -399,13 +370,13 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, langCode)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Ascult comanda...")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Listening for command...")
         }
         
         try {
             speechLauncher.launch(intent)
         } catch (e: android.content.ActivityNotFoundException) {
-            Toast.makeText(this, "Aplicația Google nu este instalată pe acest dispozitiv!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Google App is not installed on this device!", Toast.LENGTH_SHORT).show()
         }
     }
 

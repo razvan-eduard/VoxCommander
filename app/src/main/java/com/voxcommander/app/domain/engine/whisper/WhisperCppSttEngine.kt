@@ -88,7 +88,7 @@ class WhisperCppSttEngine(
                 whisperContext = WhisperContext.createContextFromFile(modelPath, useGpu = false)
                 if (whisperContext != null) {
                     isUsingGpu = false
-                    Log.d(TAG, "SUCCESS: Whisper context initialized with NEON/CPU")
+                    Log.d(TAG, "SUCCESS: Whisper context initialized Hex NEON/CPU")
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "CRITICAL: NEON/CPU initialization failed", e)
@@ -132,9 +132,12 @@ class WhisperCppSttEngine(
         return floats
     }
 
-    fun release() {
+    override fun releaseHardware() {
         Log.d(TAG, "Releasing native context")
         whisperContext?.release()
+    }
+
+    override fun releaseResources() {
         whisperContext = null
     }
 }

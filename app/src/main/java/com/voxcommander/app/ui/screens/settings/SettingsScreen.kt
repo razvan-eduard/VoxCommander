@@ -95,9 +95,21 @@ fun SettingsContent(
         isVoskOffline = !result.isOnline
         voskError = result.errorMessage
         isVoskLoading = false
-        val currentGroup = result.groups.find { it.language.contains(voiceLanguage, ignoreCase = true) }
-        selectedVoskModel = currentGroup?.models?.firstOrNull() ?: result.groups.firstOrNull()?.models?.firstOrNull()
-        selectedVoskModelName = selectedVoskModel?.name ?: ""
+        
+        // Fix persistence: Try to find the model matching the saved name first
+        val savedModelName = settingsManager.getSelectedVoskModelName()
+        val allModels = result.groups.flatMap { it.models }
+        val previouslySelected = allModels.find { it.name == savedModelName }
+        
+        if (previouslySelected != null) {
+            selectedVoskModel = previouslySelected
+            selectedVoskModelName = previouslySelected.name
+        } else {
+            // Fallback to first model of the current language if none saved
+            val currentGroup = result.groups.find { it.language.contains(voiceLanguage, ignoreCase = true) }
+            selectedVoskModel = currentGroup?.models?.firstOrNull() ?: result.groups.firstOrNull()?.models?.firstOrNull()
+            selectedVoskModelName = selectedVoskModel?.name ?: ""
+        }
     }
 
     LaunchedEffect(Unit) {

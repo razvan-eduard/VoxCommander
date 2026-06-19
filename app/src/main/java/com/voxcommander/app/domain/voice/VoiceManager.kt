@@ -9,17 +9,18 @@ import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
 import com.voxcommander.app.domain.engine.google.GoogleSttEngine
 import com.voxcommander.app.domain.engine.vosk.VoskSttEngine
 import com.voxcommander.app.domain.engine.whisper.WhisperSttEngine
-import com.voxcommander.app.service.VoiceStateManager
+import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.state.VoiceState
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlin.math.sqrt
 
 /**
  * Singleton VoiceManager to handle real audio capture and STT lifecycle.
+ * Serializes access to native resources via AppStateManager's Mutex.
+ * Reactively manages engine instances based on AppStateManager settings.
  */
 object VoiceManager {
     private const val TAG = Strings.Tags.VOICE_MANAGER
@@ -32,6 +33,7 @@ object VoiceManager {
     private var context: Context? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var recordingJob: Job? = null
+    private var stateObservationJob: Job? = null
 
     @Volatile
     private var isListening = false
@@ -39,6 +41,7 @@ object VoiceManager {
     val isListeningFlow = _isListeningFlow.asStateFlow()
 
     private var settingsManager: SettingsManager? = null
+    private var appStateManager: AppStateManager? = null
 
     private val _volumeFlow = MutableStateFlow(0f)
     val volumeFlow: StateFlow<Float> = _volumeFlow.asStateFlow()
@@ -61,6 +64,8 @@ object VoiceManager {
     private const val SILENCE_THRESHOLD = 0.02f
     private const val SILENCE_TIMEOUT_MS = 2000L
 
+    private var googleResultCallback: ((String) -> Unit)? = null
+
     fun init(
         context: Context,
         whisperCpp: WhisperCppSttEngine?,
@@ -68,7 +73,8 @@ object VoiceManager {
         google: GoogleSttEngine?,
         vosk: VoskSttEngine?,
         launchGoogleIntent: (String) -> Unit,
-        settingsManager: SettingsManager
+        settingsManager: SettingsManager,
+        appStateManager: AppStateManager
     ) {
         this.context = context.applicationContext
         this.whisperCppEngine = whisperCpp
@@ -77,12 +83,65 @@ object VoiceManager {
         this.voskSttEngine = vosk
         this.launchGoogleIntentCallback = launchGoogleIntent
         this.settingsManager = settingsManager
+        this.appStateManager = appStateManager
         
         Log.d(TAG, "VoiceManager initialized")
+        
+        // Start reactive observation of processor changes
+        startProcessorObservation()
+    }
+
+    /**
+     * Reactively observes the AppStateManager. When the user changes the processor,
+     * this manager automatically cleans up and re-initializes engines.
+     */
+    private fun startProcessorObservation() {
+        stateObservationJob?.cancel()
+        val hub = appStateManager ?: return
+        
+        stateObservationJob = scope.launch {
+            hub.voiceProcessor.collectLatest { processor ->
+                Log.d(TAG, "Processor change detected: $processor. Updating engines...")
+                reinitializeEngines(processor)
+            }
+        }
+    }
+
+    private suspend fun reinitializeEngines(processor: String) = withContext(Dispatchers.Main) {
+        val hub = appStateManager ?: return@withContext
+        val settings = settingsManager ?: return@withContext
+        val ctx = context ?: return@withContext
+
+        // 1. Enter CLEANING state
+        hub.setVoiceState(VoiceState.CLEANING)
+        
+        // 2. RELEASE all current hardware and resources
+        release()
+        
+        // 3. RE-INITIALIZE based on new selection
+        val apiKey = settings.getApiKey()
+        val voiceLang = settings.getVoiceLanguage()
+        
+        whisperCppEngine = WhisperCppSttEngine(
+            ctx, 
+            settings, 
+            forceGpu = (processor == Strings.Processors.WHISPER_VULKAN)
+        )
+        
+        whisperApiEngine = if (!apiKey.isNullOrBlank()) WhisperSttEngine(apiKey) else null
+        googleSttEngine = GoogleSttEngine(ctx)
+        voskSttEngine = VoskSttEngine(ctx, settings, voiceLang)
+        
+        // 4. Return to IDLE state
+        hub.setVoiceState(VoiceState.IDLE)
+        Log.d(TAG, "Engines updated successfully for $processor")
     }
 
     fun handleIntentResult(text: String) {
-        // Logic for handling Google Voice result if needed
+        _isListeningFlow.value = false // Clear listening state for UI
+        googleResultCallback?.invoke(text)
+        googleResultCallback = null
+        appStateManager?.setVoiceState(VoiceState.IDLE)
     }
 
     fun setOfflineFallbackSettings(timeout: Int, model: String) {
@@ -91,10 +150,18 @@ object VoiceManager {
 
     fun release() {
         stopListening()
+        
+        // Use the new common release interface for all engines
         whisperCppEngine?.release()
         whisperCppEngine = null
+        
+        whisperApiEngine?.release()
         whisperApiEngine = null
+        
+        googleSttEngine?.release()
         googleSttEngine = null
+        
+        voskSttEngine?.release()
         voskSttEngine = null
     }
 
@@ -133,15 +200,18 @@ object VoiceManager {
     fun startListening(languageCode: String, processor: String, onResult: (String) -> Unit) {
         if (isListening) return
         
+        if (processor == Strings.Processors.GOOGLE) {
+            googleResultCallback = onResult
+            _isListeningFlow.value = true // Show listening state for UI
+            appStateManager?.setVoiceState(VoiceState.LISTENING_COMMAND)
+            launchGoogleIntentCallback?.invoke(languageCode)
+            return
+        }
+
         val engine = selectEngine(processor)
         if (engine == null) {
             Log.e(TAG, "No STT engine available")
             onResult("Error: No STT engine")
-            return
-        }
-
-        if (processor == Strings.Processors.GOOGLE) {
-            launchGoogleIntentCallback?.invoke(languageCode)
             return
         }
 
@@ -154,7 +224,7 @@ object VoiceManager {
         isListening = true
         _isListeningFlow.value = true
         _partialTranscriptionFlow.value = ""
-        VoiceStateManager.startCommandListening()
+        appStateManager?.setVoiceState(VoiceState.LISTENING_COMMAND)
 
         recordingJob = scope.launch(Dispatchers.IO) {
             try {
@@ -208,14 +278,17 @@ object VoiceManager {
                 audioRecord.stop()
                 audioRecord.release()
 
-                // Finalize STT - This part runs even if isListening was set to false by silence OR by manual stop
+                // Finalize STT
                 if (audioData.isNotEmpty()) {
                     withContext(Dispatchers.Main) { 
                         _partialTranscriptionFlow.value = "Transcribing..." 
                         _isListeningFlow.value = false // Close the "Talking" overlay
                     }
                     
-                    val result = engine.transcribe(audioData.toByteArray())
+                    // Secure access to native engine via AppStateManager's mutex
+                    val result = appStateManager?.executeSecureVoiceAction {
+                        engine.transcribe(audioData.toByteArray())
+                    } ?: "Error: Sync failed"
                     
                     withContext(Dispatchers.Main) { 
                         onResult(result) 
@@ -241,7 +314,7 @@ object VoiceManager {
         isListening = listening
         _isListeningFlow.value = listening
         if (!listening) {
-            VoiceStateManager.setIdle()
+            appStateManager?.setVoiceState(VoiceState.IDLE)
             _volumeFlow.value = 0f
         }
     }
@@ -249,7 +322,6 @@ object VoiceManager {
     fun stopListening() {
         Log.d(TAG, "Manual stop requested")
         // Setting isListening to false will break the loop gracefully 
-        // without canceling the job, allowing transcription to happen.
         isListening = false
     }
 

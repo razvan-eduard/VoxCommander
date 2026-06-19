@@ -105,6 +105,20 @@ class VoskSttEngine(
         return@withContext result
     }
 
+    override fun releaseHardware() {
+        try {
+            activeRecognizer?.close()
+            model?.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun releaseResources() {
+        activeRecognizer = null
+        model = null
+    }
+
     companion object {
         private const val DEFAULT_LANG = Strings.Vosk.DEFAULT_LANG
         private const val MODEL_DIR_PREFIX = "vosk-model-"
