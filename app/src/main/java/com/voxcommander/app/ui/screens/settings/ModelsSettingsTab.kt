@@ -27,6 +27,7 @@ object ModelsSettingsTabConfig {
     var isModelOnDevice: Boolean = true
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelsSettingsTab(
     languageManager: LanguageManager,
@@ -161,10 +162,8 @@ fun ModelsSettingsTab(
 
     HorizontalDivider()
 
-    // Voice Language Selection
-    Text(text = languageManager.getString("voice_language"), style = MaterialTheme.typography.labelLarge)
-    Box {
-        var languageExpanded by remember { mutableStateOf(false) }
+    // Voice Language Selection (Only visible for Google/API)
+    if (voiceProcessor == Strings.Processors.GOOGLE || voiceProcessor == Strings.Processors.WHISPER_API) {
         val languages = listOf(
             "ro" to languageManager.getString("voice_language_ro"),
             "en" to languageManager.getString("voice_language_en"),
@@ -205,23 +204,69 @@ fun ModelsSettingsTab(
             "lt" to languageManager.getString("voice_language_lt")
         )
 
-        OutlinedButton(onClick = { languageExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(languages.find { it.first == voiceLanguage }?.second ?: voiceLanguage)
-        }
-        DropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }, modifier = Modifier.fillMaxWidth()) {
-            languages.forEach { (code, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        onVoiceLanguageSelected(code)
-                        languageExpanded = false
-                    }
+        var showLanguageSheet by remember { mutableStateOf(false) }
+        val languageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+        val languageGroups = listOf(
+            DropdownGroup(
+                header = "EUROPEAN",
+                items = languages.filter { it.first in listOf("ro", "en", "de", "fr", "es", "it", "pt", "nl", "pl", "uk", "tr", "sv", "da", "fi", "no", "cs", "el", "hu", "bg", "sr", "hr", "sk", "sl", "et", "lv", "lt") }
+            ),
+            DropdownGroup(
+                header = "ASIAN",
+                items = languages.filter { it.first in listOf("zh", "ja", "ko", "hi", "th", "id", "vi", "ms") }
+            ),
+            DropdownGroup(
+                header = "MIDDLE EAST",
+                items = languages.filter { it.first in listOf("ar", "he") }
+            ),
+            DropdownGroup(
+                header = "OTHER",
+                items = languages.filter { it.first == "ru" }
+            )
+        )
+
+        val selectedLangPair = languages.find { it.first == voiceLanguage }
+
+        Text(text = languageManager.getString("voice_language"), style = MaterialTheme.typography.labelLarge)
+        
+        GroupedDropdownMenu(
+            selectedItem = selectedLangPair,
+            groups = languageGroups,
+            itemLabel = { it.second },
+            isDownloaded = { true }, // Remote languages are always ready
+            onDeviceLabel = "",
+            onItemSelected = { pair, _ -> 
+                onVoiceLanguageSelected(pair.first)
+            },
+            onExpandedChange = { showLanguageSheet = it },
+            languageManager = languageManager,
+            placeholder = languageManager.getString("voice_language")
+        )
+
+        if (showLanguageSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showLanguageSheet = false },
+                sheetState = languageSheetState,
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                GroupedDropdownContent(
+                    title = languageManager.getString("voice_language"),
+                    groups = languageGroups,
+                    itemLabel = { it.second },
+                    isDownloaded = { true },
+                    onDeviceLabel = "",
+                    onItemSelected = { pair, _ ->
+                        onVoiceLanguageSelected(pair.first)
+                        showLanguageSheet = false
+                    },
+                    languageManager = languageManager
                 )
             }
         }
+        
+        HorizontalDivider()
     }
-
-    HorizontalDivider()
 
     // Model Selection
     var showModelInfo by remember { mutableStateOf(false) }

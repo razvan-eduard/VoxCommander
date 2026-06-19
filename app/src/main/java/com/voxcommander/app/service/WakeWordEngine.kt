@@ -6,6 +6,8 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.state.VoiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,6 +22,7 @@ import java.io.File
 class WakeWordEngine(
     private val context: Context,
     private val settingsManager: SettingsManager,
+    private val appStateManager: AppStateManager,
     private val onWakeWordDetected: () -> Unit
 ) {
     private val TAG = "WakeWordEngine"
@@ -118,7 +121,7 @@ class WakeWordEngine(
 
             // Important: Change state FIRST to ensure loop is valid
             isListening = true
-            VoiceStateManager.startWakeWordListening()
+            appStateManager.setVoiceState(VoiceState.LISTENING_WAKEWORD)
 
             audioRecord?.startRecording()
             
@@ -155,7 +158,7 @@ class WakeWordEngine(
             audioRecord = null
         }
         
-        VoiceStateManager.setIdle()
+        appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
     /**
@@ -165,7 +168,7 @@ class WakeWordEngine(
         val buffer = ByteArray(bufferSize)
         val shortBuffer = ShortArray(bufferSize / 2)
 
-        while (isListening && VoiceStateManager.state.value == VoiceStateManager.VoiceState.LISTENING_WAKEWORD) {
+        while (isListening && appStateManager.voiceState.value == VoiceState.LISTENING_WAKEWORD) {
             try {
                 val currentAudioRecord = audioRecord
                 // CRITICAL STABILITY CHECK: Ensure AudioRecord is still valid and recording
@@ -198,15 +201,17 @@ class WakeWordEngine(
 
                     val currentRecognizer = recognizer
                     if (currentRecognizer != null) {
-                        // FIX: Catch Vosk-level exceptions to prevent SIGABRT
-                        try {
-                            if (currentRecognizer.acceptWaveForm(shortBuffer, bytesRead / 2)) {
-                                processResult(currentRecognizer.result)
-                            } else {
-                                processPartialResult(currentRecognizer.partialResult)
+                        // Secure execution via AppStateManager's mutex to prevent SIGSEGV
+                        appStateManager.executeSecureVoiceAction {
+                            try {
+                                if (currentRecognizer.acceptWaveForm(shortBuffer, bytesRead / 2)) {
+                                    processResult(currentRecognizer.result)
+                                } else {
+                                    processPartialResult(currentRecognizer.partialResult)
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Vosk recognizer error", e)
                             }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Vosk recognizer error", e)
                         }
                     }
                 } else if (bytesRead == AudioRecord.ERROR_INVALID_OPERATION || bytesRead == AudioRecord.ERROR_BAD_VALUE) {

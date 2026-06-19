@@ -12,6 +12,8 @@ import androidx.core.app.NotificationCompat
 import com.voxcommander.app.MainActivity
 import com.voxcommander.app.R
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.state.VoiceState
 import com.voxcommander.app.utils.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +32,7 @@ class WakeWordService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private lateinit var settingsManager: SettingsManager
+    private lateinit var appStateManager: AppStateManager
     private var wakeWordEngine: WakeWordEngine? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var notificationManager: NotificationManager? = null
@@ -42,6 +45,7 @@ class WakeWordService : Service() {
         Log.d(TAG, "WakeWordService created")
         Logger.log("WakeWordService created")
         settingsManager = SettingsManager(this)
+        appStateManager = AppStateManager.getInstance(settingsManager, this)
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
 
@@ -50,7 +54,7 @@ class WakeWordService : Service() {
         wakeLock?.acquire(10 * 60 * 1000L /*10 minutes*/)
 
         serviceScope.launch {
-            VoiceStateManager.state.collectLatest { state ->
+            appStateManager.voiceState.collectLatest { state ->
                 handleVoiceStateChange(state)
             }
         }
@@ -80,16 +84,16 @@ class WakeWordService : Service() {
         Logger.log("WakeWordService destroyed")
         stopWakeWordDetection()
         wakeLock?.release()
-        VoiceStateManager.setIdle()
+        appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
     private fun startWakeWordDetection() {
         Log.d(TAG, "Starting wake word detection")
         Logger.log("startWakeWordDetection called")
         
-        if (!VoiceStateManager.canStartWakeWord()) {
-            Log.w(TAG, "Cannot start wake word detection: current state is ${VoiceStateManager.state.value}")
-            Logger.log("Cannot start - not IDLE state: ${VoiceStateManager.state.value}")
+        if (!appStateManager.canStartWakeWord()) {
+            Log.w(TAG, "Cannot start wake word detection: current state is ${appStateManager.voiceState.value}")
+            Logger.log("Cannot start - not IDLE state: ${appStateManager.voiceState.value}")
             return
         }
 
@@ -126,7 +130,7 @@ class WakeWordService : Service() {
                 return@launch
             }
 
-            wakeWordEngine = WakeWordEngine(this@WakeWordService, settingsManager) {
+            wakeWordEngine = WakeWordEngine(this@WakeWordService, settingsManager, appStateManager) {
                 onWakeWordDetected()
             }
 
@@ -148,14 +152,14 @@ class WakeWordService : Service() {
         wakeWordEngine?.stopListening()
         wakeWordEngine?.release()
         wakeWordEngine = null
-        VoiceStateManager.setIdle()
+        appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
     private fun onWakeWordDetected() {
         Log.i(TAG, "Wake word detected!")
         Logger.log("Wake word detected!")
         
-        VoiceStateManager.onWakeWordDetected()
+        appStateManager.onWakeWordDetected()
         playHapticFeedback()
 
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -165,15 +169,15 @@ class WakeWordService : Service() {
         startActivity(intent)
     }
 
-    private fun handleVoiceStateChange(state: VoiceStateManager.VoiceState) {
+    private fun handleVoiceStateChange(state: VoiceState) {
         when (state) {
-            VoiceStateManager.VoiceState.IDLE -> {
+            VoiceState.IDLE -> {
                 if (wakeWordEngine != null) {
                     wakeWordEngine?.startListening()
                     updateNotification("Listening for '${settingsManager.getWakeWord()}'...")
                 }
             }
-            VoiceStateManager.VoiceState.LISTENING_COMMAND -> {
+            VoiceState.LISTENING_COMMAND -> {
                 wakeWordEngine?.stopListening()
                 updateNotification("Wake Word paused (App is listening)")
             }

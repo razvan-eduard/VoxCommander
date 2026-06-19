@@ -33,13 +33,20 @@ class GoogleSttEngine(private val context: Context) : SttEngine {
         return ""
     }
 
+    override fun releaseHardware() {
+        // No direct hardware usage as it uses system intent
+    }
+
+    override fun releaseResources() {
+        // No local resources to clear
+    }
+
     /**
      * This method is no longer used directly.
      * Intent-based speech is handled by MainActivity's speechLauncher.
      */
     fun startListening(langCode: String, onResult: (String) -> Unit) {
         Log.d(TAG, "startListening called - should use Intent-based approach via MainActivity")
-        // This is now handled by VoiceManager.startIntentListening() and MainActivity.startGoogleVoiceIntent()
     }
 
     fun stopListening() {

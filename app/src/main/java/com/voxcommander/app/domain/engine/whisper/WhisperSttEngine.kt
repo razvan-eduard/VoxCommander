@@ -45,6 +45,14 @@ class WhisperSttEngine(private val apiKey: String) : SttEngine {
         }
     }
 
+    override fun releaseHardware() {
+        // No hardware resources to release for API engine
+    }
+
+    override fun releaseResources() {
+        // API is persistent but doesn't hold large memory
+    }
+
     companion object {
         private const val BASE_URL = "https://api.openai.com/"
         private const val AUTH_PREFIX = "Bearer "
