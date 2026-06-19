@@ -93,7 +93,7 @@ if [ "$LATEST_STABLE_TAG" != "$CURRENT_HEAD_TAG" ] && [ "$LATEST_STABLE_TAG" != 
         fi
     else
         # Running in Android Studio / Non-interactive
-        log_warn "🆕 NOTE: New stable Whisper.cpp release $LATEST_STABLE_TAG is available."
+        log_warn "🆕 NOTE: New stable Whisper.cpp release $LATEST_STABLE_TAG is available. (You are on: $CURRENT_HEAD_TAG)"
         log_warn "💡 To upgrade, run this script manually from a terminal: ./scripts/check_whisper.sh --upgrade"
     fi
 fi
