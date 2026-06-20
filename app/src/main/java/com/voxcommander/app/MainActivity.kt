@@ -131,30 +131,62 @@ class MainActivity : ComponentActivity() {
                 _downloadProgress.value = null
                 progressJob?.cancel()
 
+                val downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                val query = DownloadManager.Query().setFilterById(id)
+                val cursor = downloadManager.query(query)
+                
+                var success = false
+                if (cursor.moveToFirst()) {
+                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                    if (statusIndex != -1) {
+                        val status = cursor.getInt(statusIndex)
+                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                            success = true
+                        }
+                    }
+                }
+                cursor.close()
+
+                if (!success) {
+                    Toast.makeText(this@MainActivity, "Download failed or cancelled", Toast.LENGTH_LONG).show()
+                    lastDownloadType = null
+                    return
+                }
+
                 when (lastDownloadType) {
                     "whisper" -> {
                         val modelId = lastDownloadedWhisperModelId ?: settingsManager.getSelectedWhisperModelId()
-                        modelDownloader.verifyWhisperModel(modelId) { success ->
-                            if (success) {
+                        modelDownloader.verifyWhisperModel(modelId) { verified ->
+                            if (verified) {
                                 appStateManager.onWhisperDownloadComplete(modelId)
                                 showSuccessMessage("Whisper Model $modelId ready!")
+                            } else {
+                                Toast.makeText(this@MainActivity, "Verification failed for Whisper $modelId", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
                     "vosk" -> {
                         val modelName = lastDownloadedVoskModelName ?: ""
-                        modelDownloader.unzipVoskModel(modelName) { success ->
-                            if (success) {
+                        modelDownloader.unzipVoskModel(modelName) { unzipped ->
+                            if (unzipped) {
                                 appStateManager.onVoskDownloadComplete(modelName)
                                 showSuccessMessage("Vosk Model $modelName ready!")
+                            } else {
+                                Toast.makeText(this@MainActivity, "Extraction failed for Vosk $modelName", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
                     "llama" -> {
                         val modelId = lastDownloadedLlamaModelId ?: settingsManager.getSelectedLlamaModelId()
-                        settingsManager.setModelDownloaded(modelId, true)
-                        refreshModelsTab()
-                        showSuccessMessage("Llama Model $modelId ready!")
+                        // Double check file exists
+                        val file = File(getExternalFilesDir(null), "llama-model-$modelId.bin")
+                        if (file.exists()) {
+                            settingsManager.setModelDownloaded(modelId, true)
+                            refreshModelsTab()
+                            showSuccessMessage("Llama Model $modelId ready!")
+                        } else {
+                            Toast.makeText(this@MainActivity, "File missing after Llama download", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
                 lastDownloadType = null
@@ -267,16 +299,18 @@ class MainActivity : ComponentActivity() {
                             onDownloadVoskModel = { lang, url, name ->
                                 lastDownloadedVoskModelName = name
                                 lastDownloadType = "vosk"
+                                // AUTO-SELECT
+                                appStateManager.setSelectedVoskModelName(name)
                                 val id = modelDownloader.downloadVoskModel(lang, url, name)
                                 startProgressTracking(id)
-                                Toast.makeText(this@MainActivity, languageManager.getString("vosk_download_started"), Toast.LENGTH_SHORT).show()
                             },
                             onDownloadWhisperModel = { modelId, url ->
                                 lastDownloadedWhisperModelId = modelId
                                 lastDownloadType = "whisper"
+                                // AUTO-SELECT
+                                appStateManager.setSelectedWhisperModelId(modelId)
                                 val id = modelDownloader.downloadWhisperModel(modelId, url)
                                 startProgressTracking(id)
-                                Toast.makeText(this@MainActivity, languageManager.getString("whisper_download_started"), Toast.LENGTH_SHORT).show()
                             },
                             onSelectCustomVoskModel = { lang ->
                                 pendingModelLanguage = lang
@@ -296,9 +330,10 @@ class MainActivity : ComponentActivity() {
                             onDownloadLlamaModel = { model ->
                                 lastDownloadedLlamaModelId = model.id
                                 lastDownloadType = "llama"
+                                // AUTO-SELECT
+                                appStateManager.setSelectedLlamaModelId(model.id)
                                 val id = modelDownloader.downloadLlamaModel(model.id, model.url)
                                 startProgressTracking(id)
-                                Toast.makeText(this@MainActivity, "Llama download started", Toast.LENGTH_SHORT).show()
                             },
                             onDeleteLlamaModel = { model ->
                                 settingsManager.setModelDownloaded(model.id, false)
@@ -391,6 +426,10 @@ class MainActivity : ComponentActivity() {
             }
             lastDownloadedWhisperModelId?.let { modelId ->
                 val modelFile = File(getExternalFilesDir(null), "whisper-model-$modelId.bin")
+                if (modelFile.exists()) modelFile.delete()
+            }
+            lastDownloadedLlamaModelId?.let { modelId ->
+                val modelFile = File(getExternalFilesDir(null), "llama-model-$modelId.bin")
                 if (modelFile.exists()) modelFile.delete()
             }
             

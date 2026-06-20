@@ -8,14 +8,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
 
 /**
  * Universal component for managing ANY engine model (Whisper, Vosk, Llama).
- * Handles: Dropdown selection, Download prompt, Delete confirmation, and Offline Fallback.
+ * Handles: Dropdown selection, Download logic, Delete confirmation, and Offline Fallback.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,7 +27,7 @@ fun <T> EngineModelSection(
     itemLabel: (T) -> String,
     modelIdProvider: (T) -> String,
     onItemSelected: (T, Boolean) -> Unit,
-    onDownloadRequest: (T) -> Unit,
+    onDownloadRequest: (T, Boolean) -> Unit, // Boolean: showPrompt
     onDeleteRequest: (T) -> Unit,
     onCancelDownload: () -> Unit,
     downloadProgress: Float?,
@@ -65,10 +64,22 @@ fun <T> EngineModelSection(
         },
         onDeviceLabel = languageManager.getString("on_device_label"),
         onItemSelected = { item, isDownloaded ->
-            onItemSelected(item, isDownloaded)
+            // Indirect selection (tapping the picklist): 
+            // If already downloaded, just select it.
+            // If NOT downloaded, we show the confirmation prompt.
+            if (isDownloaded) {
+                onItemSelected(item, true)
+            } else {
+                // Tapping a non-downloaded item in the main field should PROMPT
+                onDownloadRequest(item, true)
+            }
         },
         onExpandedChange = { showSheet = it },
-        onDownloadRequest = { onDownloadRequest(it) },
+        onDownloadRequest = { item ->
+            // DIRECT BUTTON CLICK: Start download immediately (NO PROMPT) and select it
+            onItemSelected(item, false)
+            onDownloadRequest(item, false) 
+        },
         onDeleteRequest = { onDeleteRequest(it) },
         onCancelDownload = onCancelDownload,
         downloadProgress = downloadProgress,
@@ -92,10 +103,20 @@ fun <T> EngineModelSection(
                 },
                 onDeviceLabel = languageManager.getString("on_device_label"),
                 onItemSelected = { item, isDownloaded ->
-                    onItemSelected(item, isDownloaded)
+                    // Selection from sheet list: PROMPT if not downloaded
+                    if (isDownloaded) {
+                        onItemSelected(item, true)
+                    } else {
+                        onDownloadRequest(item, true)
+                    }
                     showSheet = false
                 },
-                onDownloadRequest = { onDownloadRequest(it) },
+                onDownloadRequest = { item ->
+                    // DIRECT BUTTON CLICK FROM SHEET: NO PROMPT
+                    onItemSelected(item, false)
+                    onDownloadRequest(item, false)
+                    showSheet = false
+                },
                 onDeleteRequest = { onDeleteRequest(it) },
                 onCancelDownload = onCancelDownload,
                 downloadProgress = downloadProgress,
@@ -105,7 +126,7 @@ fun <T> EngineModelSection(
         }
     }
 
-    // 4. Default Offline Fallback Logic (if enabled)
+    // 4. Default Offline Fallback Logic
     if (showOfflineFallback && selectedItem != null) {
         val modelId = modelIdProvider(selectedItem)
         val isDownloaded = remember(modelId, refreshTrigger) { settingsManager.isModelDownloaded(modelId) }

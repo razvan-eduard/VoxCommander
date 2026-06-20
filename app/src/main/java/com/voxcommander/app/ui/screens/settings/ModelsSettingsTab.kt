@@ -51,6 +51,8 @@ fun ModelsSettingsTab(
     onCancelDownload: () -> Unit,
     onCleanupRequest: () -> Unit,
     onClearDefaultFallback: () -> Unit,
+    onDownloadWhisperModel: (String, String) -> Unit,
+    onDownloadVoskModel: (String, String, String) -> Unit,
     onDownloadLlamaModel: (AppModel) -> Unit,
     onDeleteLlamaModel: (AppModel) -> Unit,
     onDeleteRequest: (AppModel) -> Unit,
@@ -92,6 +94,7 @@ fun ModelsSettingsTab(
                 whisperModels, selectedWhisperModel, onWhisperModelSelected, onSelectCustomWhisperModel,
                 voskGroups, selectedVoskModel, isVoskLoading, isVoskOffline, isOffline,
                 voskError, onRetryConnection, onVoskModelSelected, onSelectCustomVoskModel,
+                onDownloadWhisperModel, onDownloadVoskModel,
                 downloadProgress, downloadingItem, downloadedColor, onCancelDownload,
                 onCleanupRequest, onClearDefaultFallback, onDeleteRequest, refreshTrigger
             )

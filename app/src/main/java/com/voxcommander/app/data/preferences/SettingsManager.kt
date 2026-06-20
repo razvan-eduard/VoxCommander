@@ -239,12 +239,35 @@ class SettingsManager(context: Context) {
     }
 
     /**
-     * UNIFIED CHECK: Checks if the currently selected picklist item is ready on device.
-     * This makes the UI model-agnostic.
-     * Simplified to just check the flag set by dropdown.
+     * UNIFIED CHECK: Performs a real-time check of the currently active voice processor
+     * and its selected model to determine if the assistant is ready.
      */
     fun isCurrentVoiceModelReady(context: android.content.Context): Boolean {
-        return isVoiceModelReady()
+        val processor = getVoiceProcessor()
+        val language = getVoiceLanguage()
+        
+        return when (processor) {
+            Strings.Processors.WHISPER_CPP,
+            Strings.Processors.WHISPER_VULKAN,
+            Strings.Processors.WHISPER_NEON -> {
+                val modelId = getSelectedWhisperModelId()
+                val isDownloaded = isModelDownloaded(modelId)
+                val customPath = getCustomWhisperModelPath()
+                isDownloaded || !customPath.isNullOrBlank()
+            }
+            Strings.Processors.VOSK -> {
+                val customPath = getCustomVoskModelPath(language)
+                if (!customPath.isNullOrBlank()) {
+                    java.io.File(customPath).exists()
+                } else {
+                    val modelName = getSelectedVoskModelName()
+                    !modelName.isNullOrBlank() && isModelDownloaded(modelName)
+                }
+            }
+            Strings.Processors.GOOGLE,
+            Strings.Processors.WHISPER_API -> true
+            else -> false
+        }
     }
 
     companion object {

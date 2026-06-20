@@ -18,14 +18,15 @@ object LlamaModelRegistry {
             id = "3.2-1b",
             label = "Llama 3.2 1B (Fast)",
             sizeDescription = "1.2 GB",
-            url = "https://huggingface.co/google/gemma-2b-it-android/resolve/main/llama-3.2-1b-it.bin",
+            // Direct download link from a reliable repository
+            url = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
             ramRequirement = "2GB+ RAM"
         ),
         LlamaModelInfo(
             id = "3.2-3b",
             label = "Llama 3.2 3B (Smart)",
             sizeDescription = "2.5 GB",
-            url = "https://huggingface.co/google/gemma-2b-it-android/resolve/main/llama-3.2-3b-it.bin",
+            url = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
             ramRequirement = "8GB+ RAM"
         )
     )

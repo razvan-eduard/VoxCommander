@@ -6,19 +6,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.domain.intent.interpreter.LlamaModelInfo
 import com.voxcommander.app.domain.intent.interpreter.LlamaModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.components.DropdownGroup
 import com.voxcommander.app.ui.components.EngineModelSection
-import com.voxcommander.app.ui.components.GroupedDropdownContent
-import com.voxcommander.app.ui.components.GroupedDropdownMenu
 import com.voxcommander.app.utils.Strings
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,9 +34,6 @@ fun IntentEnginesSubTab(
     val cloudEnabled by appStateManager.cloudIntelligenceEnabled.collectAsState()
     val aiProcessor by appStateManager.aiProcessor.collectAsState()
     val selectedLlamaId by appStateManager.selectedLlamaModelId.collectAsState()
-
-    var showLlamaSheet by remember { mutableStateOf(false) }
-    val llamaSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val selectedModel = remember(selectedLlamaId) {
         LlamaModelRegistry.models.find { it.id == selectedLlamaId } ?: LlamaModelRegistry.models.first()
@@ -116,7 +110,7 @@ fun IntentEnginesSubTab(
             }
         }
 
-        // --- LLAMA MODEL SELECTION (Using Universal Component) ---
+        // --- LLAMA MODEL SELECTION ---
         if (cloudEnabled && aiProcessor == Strings.AiProcessors.LLAMA_LOCAL) {
             EngineModelSection(
                 title = "Llama Model Selection",
@@ -128,12 +122,15 @@ fun IntentEnginesSubTab(
                 modelIdProvider = { it.id },
                 onItemSelected = { model, isDownloaded -> 
                     appStateManager.setSelectedLlamaModelId(model.id)
-                    // TRIGGER DOWNLOAD PROMPT IF NOT ON DEVICE
-                    if (!isDownloaded) {
+                },
+                onDownloadRequest = { model, showPrompt ->
+                    if (showPrompt) {
                         onDownloadLlamaModel(model)
+                    } else {
+                        // Direct button: Use the direct bridge to MainActivity
+                        onDeleteLlamaModel(model)
                     }
                 },
-                onDownloadRequest = onDownloadLlamaModel,
                 onDeleteRequest = onDeleteLlamaModel,
                 onCancelDownload = onCancelDownload,
                 downloadProgress = downloadProgress,
