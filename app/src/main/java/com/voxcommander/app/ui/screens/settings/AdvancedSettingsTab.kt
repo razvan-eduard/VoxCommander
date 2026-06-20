@@ -23,7 +23,9 @@ fun AdvancedSettingsTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
     appStateManager: AppStateManager,
-    onVerboseLoggingChange: (Boolean) -> Unit = {}
+    onCleanupRequest: () -> Unit,
+    onClearDefaultFallback: () -> Unit,
+    onVerboseLoggingChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -50,6 +52,7 @@ fun AdvancedSettingsTab(
             verboseLoggingEnabled = false
             settingsManager.saveVerboseLoggingEnabled(false)
             Logger.setVerboseLoggingEnabled(false)
+            onVerboseLoggingChange(false)
         }
     }
 
@@ -58,8 +61,8 @@ fun AdvancedSettingsTab(
         onVerboseLoggingChange(verboseLoggingEnabled)
     }
 
-    // Keep appStateManager for future use if needed, avoiding unused warning
-    val _state = appStateManager.voiceState.collectAsState()
+    // Keep subscription active
+    val _state by appStateManager.voiceState.collectAsState()
 
     // Initialize Logger
     LaunchedEffect(Unit) {
@@ -136,5 +139,22 @@ fun AdvancedSettingsTab(
             },
             enabled = loggingFlags.logcatEnabled
         )
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+
+    // --- SYSTEM MAINTENANCE ---
+    Text(text = "System Maintenance", style = MaterialTheme.typography.titleMedium)
+    Spacer(modifier = Modifier.height(12.dp))
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f))) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = onCleanupRequest, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                Text(languageManager.getString("delete_unused_models"))
+            }
+            Button(onClick = onClearDefaultFallback, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
+                Text(languageManager.getString("clear_default_fallback"))
+            }
+            Text(text = "Maintenance actions are global and affect all AI engines.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }

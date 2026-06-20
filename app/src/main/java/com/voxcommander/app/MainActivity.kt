@@ -320,10 +320,35 @@ class MainActivity : ComponentActivity() {
                                 customWhisperModelLauncher.launch(arrayOf(MIME_TYPE_ALL))
                             },
                             onDeleteUnusedModels = {
-                                val currentVoskLang = settingsManager.getVoiceLanguage()
-                                val currentWhisperId = settingsManager.getSelectedWhisperModelId()
-                                modelDownloader.deleteUnusedModels(currentVoskLang, currentWhisperId)
-                                settingsManager.clearUnusedModelFlags(currentVoskLang, currentWhisperId)
+                                // 1. Collect protected Vosk models
+                                val protectedVosk = mutableSetOf<String>()
+                                settingsManager.getSelectedVoskModelName()?.let { protectedVosk.add(it) }
+                                settingsManager.getWakeWordModelPath()?.let { protectedVosk.add(it) }
+                                if (settingsManager.getVoiceProcessor() == Strings.Processors.VOSK) {
+                                    settingsManager.getDefaultVoiceFallbackModel()?.let { protectedVosk.add(it) }
+                                }
+
+                                // 2. Collect protected Whisper models
+                                val protectedWhisper = mutableSetOf<String>()
+                                protectedWhisper.add(settingsManager.getSelectedWhisperModelId())
+                                if (settingsManager.getVoiceProcessor().startsWith("WHISPER")) {
+                                    settingsManager.getDefaultVoiceFallbackModel()?.let { protectedWhisper.add(it) }
+                                }
+
+                                // 3. Collect protected Llama models
+                                val protectedLlama = mutableSetOf<String>()
+                                protectedLlama.add(settingsManager.getSelectedLlamaModelId())
+                                settingsManager.getDefaultIntentFallbackModel()?.let { protectedLlama.add(it) }
+
+                                modelDownloader.deleteUnusedModels(protectedVosk, protectedWhisper, protectedLlama)
+                                
+                                // Refresh flags in settings
+                                settingsManager.clearUnusedModelFlags(
+                                    settingsManager.getSelectedVoskModelName() ?: "",
+                                    settingsManager.getSelectedWhisperModelId()
+                                )
+                                
+                                refreshModelsTab()
                                 Toast.makeText(this@MainActivity, languageManager.getString("unused_models_deleted"), Toast.LENGTH_SHORT).show()
                             },
                             onCancelDownload = { cancelDownload() },

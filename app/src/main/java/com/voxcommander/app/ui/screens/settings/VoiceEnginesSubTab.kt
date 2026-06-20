@@ -48,9 +48,8 @@ fun VoiceEnginesSubTab(
     downloadingItem: Any? = null,
     downloadedColor: Color,
     onCancelDownload: () -> Unit,
-    onCleanupRequest: () -> Unit,
-    onClearDefaultFallback: () -> Unit,
     onDeleteRequest: (AppModel) -> Unit, 
+    onFallbackChanged: () -> Unit = {},
     refreshTrigger: Int = 0
 ) {
     // 1. Processor Selection
@@ -162,6 +161,8 @@ fun VoiceEnginesSubTab(
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
                 currentProcessor = voiceProcessor,
+                fallbackCategory = "voice",
+                onFallbackChanged = onFallbackChanged,
                 refreshTrigger = refreshTrigger
             )
         }
@@ -193,17 +194,10 @@ fun VoiceEnginesSubTab(
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
                 currentProcessor = voiceProcessor,
+                fallbackCategory = "voice",
+                onFallbackChanged = onFallbackChanged,
                 refreshTrigger = refreshTrigger
             )
         }
-    }
-
-    // 4. Global Cleanup
-    Spacer(modifier = Modifier.height(8.dp))
-    Button(onClick = onCleanupRequest, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
-        Text(languageManager.getString("delete_unused_models"))
-    }
-    Button(onClick = onClearDefaultFallback, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
-        Text(languageManager.getString("clear_default_fallback"))
     }
 }

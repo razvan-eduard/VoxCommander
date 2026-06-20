@@ -49,13 +49,12 @@ fun ModelsSettingsTab(
     downloadingItem: Any? = null,
     downloadedColor: Color,
     onCancelDownload: () -> Unit,
-    onCleanupRequest: () -> Unit,
-    onClearDefaultFallback: () -> Unit,
     onDownloadWhisperModel: (String, String) -> Unit,
     onDownloadVoskModel: (String, String, String) -> Unit,
     onDownloadLlamaModel: (AppModel) -> Unit,
     onDeleteLlamaModel: (AppModel) -> Unit,
     onDeleteRequest: (AppModel) -> Unit,
+    onFallbackChanged: () -> Unit = {},
     refreshTrigger: Int = 0
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) }
@@ -96,7 +95,7 @@ fun ModelsSettingsTab(
                 voskError, onRetryConnection, onVoskModelSelected, onSelectCustomVoskModel,
                 onDownloadWhisperModel, onDownloadVoskModel,
                 downloadProgress, downloadingItem, downloadedColor, onCancelDownload,
-                onCleanupRequest, onClearDefaultFallback, onDeleteRequest, refreshTrigger
+                onDeleteRequest, onFallbackChanged, refreshTrigger
             )
         } else {
             IntentEnginesSubTab(
@@ -108,6 +107,7 @@ fun ModelsSettingsTab(
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
                 onCancelDownload = onCancelDownload,
+                onFallbackChanged = onFallbackChanged,
                 refreshTrigger = refreshTrigger
             )
         }

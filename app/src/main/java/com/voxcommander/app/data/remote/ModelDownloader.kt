@@ -86,23 +86,38 @@ class ModelDownloader(private val context: Context) {
         onComplete(modelFile.exists())
     }
 
-    fun deleteUnusedModels(activeVoskLang: String, activeWhisperId: String) {
+    fun deleteUnusedModels(
+        protectedVoskModels: Set<String>,
+        protectedWhisperModels: Set<String>,
+        protectedLlamaModels: Set<String>
+    ) {
         val rootDir = context.getExternalFilesDir(null) ?: return
-        
-        val activeVoskDirName = VOSK_MODEL_DIR_PREFIX + activeVoskLang
-        val activeWhisperFileName = WHISPER_MODEL_FILENAME_PREFIX + activeWhisperId + WHISPER_MODEL_EXTENSION
         
         rootDir.listFiles()?.forEach { file ->
             val name = file.name
-            // Delete Vosk models that are not active
-            if (name.startsWith(VOSK_MODEL_DIR_PREFIX) && name != activeVoskDirName) {
-                file.deleteRecursively()
+            
+            // 1. Vosk Protection (Directories)
+            if (name.startsWith(VOSK_MODEL_DIR_PREFIX)) {
+                val modelName = name.removePrefix(VOSK_MODEL_DIR_PREFIX)
+                if (!protectedVoskModels.contains(modelName)) {
+                    file.deleteRecursively()
+                }
             }
-            // Delete Whisper models that are not active
-            if (name.startsWith(WHISPER_MODEL_FILENAME_PREFIX) && 
-                name.endsWith(WHISPER_MODEL_EXTENSION) && 
-                name != activeWhisperFileName) {
-                file.delete()
+            
+            // 2. Whisper Protection (Files)
+            if (name.startsWith(WHISPER_MODEL_FILENAME_PREFIX) && name.endsWith(WHISPER_MODEL_EXTENSION)) {
+                val modelId = name.removePrefix(WHISPER_MODEL_FILENAME_PREFIX).removeSuffix(WHISPER_MODEL_EXTENSION)
+                if (!protectedWhisperModels.contains(modelId)) {
+                    file.delete()
+                }
+            }
+            
+            // 3. Llama Protection (Files)
+            if (name.startsWith("llama-model-") && name.endsWith(".bin")) {
+                val modelId = name.removePrefix("llama-model-").removeSuffix(".bin")
+                if (!protectedLlamaModels.contains(modelId)) {
+                    file.delete()
+                }
             }
         }
     }

@@ -4,7 +4,6 @@ import android.app.ActivityManager
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -12,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
@@ -59,34 +59,23 @@ fun SettingsContent(
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { 6 })
 
-    // --- 1. HOISTED REALTIME STATE ---
-    var wakeWordEnabled by remember { mutableStateOf(settingsManager.isWakeWordEnabled()) }
-    var verboseLoggingEnabled by remember { mutableStateOf(settingsManager.isVerboseLoggingEnabled()) }
-    var wakeWordState by remember { mutableStateOf(settingsManager.getWakeWord()) }
+    // REALTIME STATE
     var voiceLanguage by remember { mutableStateOf(settingsManager.getVoiceLanguage()) }
     var voiceProcessor by remember { mutableStateOf(settingsManager.getVoiceProcessor()) }
-    
     var selectedWhisperId by remember { mutableStateOf(settingsManager.getSelectedWhisperModelId()) }
-    var selectedVoskModelName by remember { mutableStateOf("") } 
-
-    // THE MASTER UI REFRESH TRIGGER
     var refreshTrigger by remember { mutableIntStateOf(0) }
 
-    // Service status check (Live)
     var isServiceRunning by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            val running = context.getSystemService(Context.ACTIVITY_SERVICE)
+            isServiceRunning = context.getSystemService(Context.ACTIVITY_SERVICE)
                 ?.let { it as ActivityManager }
                 ?.getRunningServices(Integer.MAX_VALUE)
-                ?.any { it.service.className == "com.voxcommander.app.service.WakeWordService" }
-                ?: false
-            isServiceRunning = running
+                ?.any { it.service.className == "com.voxcommander.app.service.WakeWordService" } ?: false
             delay(1000)
         }
     }
 
-    // Vosk loading
     var voskGroups by remember { mutableStateOf<List<VoskLanguageGroup>>(emptyList()) }
     var isVoskLoading by remember { mutableStateOf(false) }
     var isVoskOffline by remember { mutableStateOf(false) }
@@ -104,23 +93,12 @@ fun SettingsContent(
         val savedModelName = settingsManager.getSelectedVoskModelName()
         val allModels = result.groups.flatMap { it.models }
         val previouslySelected = allModels.find { it.name == savedModelName }
-        
-        if (previouslySelected != null) {
-            selectedVoskModel = previouslySelected
-            selectedVoskModelName = previouslySelected.name
-        } else {
-            val currentGroup = result.groups.find { it.language.contains(voiceLanguage, ignoreCase = true) }
-            selectedVoskModel = currentGroup?.models?.firstOrNull() ?: result.groups.firstOrNull()?.models?.firstOrNull()
-            selectedVoskModelName = selectedVoskModel?.name ?: ""
-        }
+        if (previouslySelected != null) selectedVoskModel = previouslySelected
     }
 
     LaunchedEffect(Unit) { loadVoskModels(force = true) }
 
-    // Dialogs: Only show cleanup and delete. Download is now IMMEDIATE.
-    var showCleanupDialog by remember { mutableStateOf(false) }
     var downloadingItemState by remember { mutableStateOf<Any?>(null) }
-    
     LaunchedEffect(downloadProgress) {
         if (downloadProgress == null || downloadProgress >= 1.0f) {
             if (downloadingItemState != null) {
@@ -131,16 +109,13 @@ fun SettingsContent(
         }
     }
 
-    // DELETE SAFEGUARD DIALOGS
-    var modelToDelete by remember { mutableStateOf<Any?>(null) }
+    var modelToDelete by remember { mutableStateOf<AppModel?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
-    var isDeletingDefaultFallback by remember { mutableStateOf(false) }
-    var isDeletingActiveWakeWord by remember { mutableStateOf(false) }
+    var showCleanupDialog by remember { mutableStateOf(false) }
 
     val downloadedColor = Color(0xFF2E7D32)
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(bottom = 16.dp)) {
-        // --- HEADER ---
         Surface(
             modifier = Modifier.fillMaxWidth(),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
@@ -158,7 +133,11 @@ fun SettingsContent(
                     edgePadding = 16.dp,
                     containerColor = Color.Transparent,
                     divider = {}, 
-                    indicator = { },
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage])
+                        )
+                    },
                     modifier = Modifier.padding(bottom = 12.dp)
                 ) {
                     val tabs = listOf("tab_general", "tab_models", "tab_service", "tab_benchmark", "tab_advanced", "tab_verbose_logging")
@@ -182,7 +161,7 @@ fun SettingsContent(
                 } else {
                     Column(modifier = Modifier.fillMaxSize().padding(top = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         when (page) {
-                            0 -> GeneralSettingsTab_Realtime(languageManager = languageManager, settingsManager = settingsManager, refreshTrigger = refreshTrigger)
+                            0 -> GeneralSettingsTab_Realtime(languageManager = languageManager, settingsManager = settingsManager)
                             1 -> ModelsSettingsTab(
                                 languageManager = languageManager,
                                 settingsManager = settingsManager,
@@ -191,29 +170,26 @@ fun SettingsContent(
                                 onProcessorSelected = {
                                     voiceProcessor = it
                                     appStateManager.setVoiceProcessor(it)
-                                    updateVoiceEngine()
-                                    onRefreshMain()
-                                    refreshTrigger++
+                                    updateVoiceEngine(); onRefreshMain(); refreshTrigger++
                                 },
-                                hasApiKey = !(settingsManager.getApiKey().isNullOrBlank()),
+                                hasApiKey = settingsManager.getApiKey() != null,
                                 googleSttAvailable = googleSttAvailable,
                                 voiceLanguage = voiceLanguage,
                                 onVoiceLanguageSelected = {
                                     voiceLanguage = it
                                     appStateManager.setVoiceLanguage(it)
-                                    updateVoiceEngine()
-                                    onRefreshMain()
-                                    refreshTrigger++
+                                    updateVoiceEngine(); onRefreshMain(); refreshTrigger++
                                 },
                                 whisperModels = WhisperModelRegistry.models,
                                 selectedWhisperModel = WhisperModelRegistry.models.find { it.id == selectedWhisperId } ?: WhisperModelRegistry.models.firstOrNull(),
                                 onWhisperModelSelected = { model, isDownloaded ->
                                     selectedWhisperId = model.id
                                     appStateManager.setSelectedWhisperModelId(model.id)
-                                    updateVoiceEngine()
-                                    onRefreshMain()
-                                    refreshTrigger++
-                                    // NO PROMPT: Parent handles immediate download if not isDownloaded
+                                    if (!isDownloaded) {
+                                        downloadingItemState = model
+                                        onDownloadWhisperModel(model.id, model.url)
+                                    }
+                                    updateVoiceEngine(); onRefreshMain(); refreshTrigger++
                                 },
                                 onSelectCustomWhisperModel = onSelectCustomWhisperModel,
                                 voskGroups = voskGroups,
@@ -227,11 +203,12 @@ fun SettingsContent(
                                     voiceLanguage = langCode
                                     appStateManager.setVoiceLanguage(langCode)
                                     selectedVoskModel = model
-                                    selectedVoskModelName = model.name
                                     appStateManager.setSelectedVoskModelName(model.name)
-                                    updateVoiceEngine()
-                                    onRefreshMain()
-                                    refreshTrigger++
+                                    if (!isDownloaded) {
+                                        downloadingItemState = model
+                                        onDownloadVoskModel(langCode, model.url, model.name)
+                                    }
+                                    updateVoiceEngine(); onRefreshMain(); refreshTrigger++
                                 },
                                 onSelectCustomVoskModel = { onSelectCustomVoskModel(voiceLanguage) },
                                 onDownloadWhisperModel = { id, url -> 
@@ -239,7 +216,6 @@ fun SettingsContent(
                                     onDownloadWhisperModel(id, url) 
                                 },
                                 onDownloadVoskModel = { code, url, name -> 
-                                    // Search for the model object to set as downloadingItemState
                                     downloadingItemState = voskGroups.flatMap { it.models }.find { it.name == name }
                                     onDownloadVoskModel(code, url, name) 
                                 },
@@ -249,50 +225,46 @@ fun SettingsContent(
                                 },
                                 onDeleteLlamaModel = { model ->
                                     modelToDelete = model
-                                    isDeletingDefaultFallback = (model.id == settingsManager.getDefaultOfflineFallbackModel())
                                     showDeleteConfirmDialog = true
                                 },
-                                onCancelDownload = onCancelDownload,
                                 downloadProgress = downloadProgress,
                                 downloadingItem = downloadingItemState,
                                 downloadedColor = downloadedColor,
-                                onCleanupRequest = { showCleanupDialog = true },
-                                onClearDefaultFallback = { settingsManager.clearDefaultOfflineFallback(); refreshTrigger++ },
+                                onCancelDownload = onCancelDownload,
                                 onDeleteRequest = { model ->
                                     modelToDelete = model
-                                    isDeletingDefaultFallback = ((model as? AppModel)?.id == settingsManager.getDefaultOfflineFallbackModel())
                                     showDeleteConfirmDialog = true
                                 },
+                                onFallbackChanged = { refreshTrigger++ },
                                 refreshTrigger = refreshTrigger
                             )
                             2 -> ServiceSettingsTab(
                                 languageManager = languageManager,
                                 settingsManager = settingsManager,
-                                wakeWordEnabled = wakeWordEnabled,
+                                wakeWordEnabled = settingsManager.isWakeWordEnabled(),
                                 onWakeWordEnabledChange = {
-                                    wakeWordEnabled = it
                                     settingsManager.saveWakeWordEnabled(it)
                                     if (!it && isServiceRunning) WakeWordService.stopService(context)
                                     refreshTrigger++
                                 },
-                                wakeWord = wakeWordState,
-                                onWakeWordChange = { wakeWordState = it; settingsManager.saveWakeWord(it); refreshTrigger++ },
+                                wakeWord = settingsManager.getWakeWord(),
+                                onWakeWordChange = { settingsManager.saveWakeWord(it); refreshTrigger++ },
                                 voskGroups = voskGroups,
                                 selectedWakeWordModel = voskGroups.flatMap { it.models }.find { it.name == settingsManager.getWakeWordModelPath() },
                                 onWakeWordModelSelected = { model ->
                                     settingsManager.saveWakeWordModelPath(model.name)
-                                    refreshTrigger++
                                     if (!settingsManager.isModelDownloaded(model.name)) {
                                         downloadingItemState = model
                                         onDownloadVoskModel("en", model.url, model.name)
                                     }
+                                    refreshTrigger++
                                 },
                                 isServiceRunning = isServiceRunning,
                                 onStartService = { WakeWordService.startService(context) },
                                 onStopService = { WakeWordService.stopService(context) },
                                 downloadedColor = downloadedColor,
                                 onDownloadRequest = { model -> downloadingItemState = model; onDownloadVoskModel("en", model.url, model.name) },
-                                onDeleteRequest = { model -> modelToDelete = model; showDeleteConfirmDialog = true },
+                                onDeleteRequest = { model -> modelToDelete = model as? AppModel; showDeleteConfirmDialog = true },
                                 onCancelDownload = onCancelDownload,
                                 downloadProgress = downloadProgress,
                                 downloadingItem = downloadingItemState,
@@ -300,8 +272,21 @@ fun SettingsContent(
                                 voiceProcessor = voiceProcessor,
                                 refreshTrigger = refreshTrigger
                             )
-                            4 -> AdvancedSettingsTab(languageManager, settingsManager, appStateManager) { verboseLoggingEnabled = it; refreshTrigger++ }
-                            5 -> VerboseLoggingTab(languageManager, verboseLoggingEnabled)
+                            4 -> AdvancedSettingsTab(
+                                languageManager = languageManager,
+                                settingsManager = settingsManager,
+                                appStateManager = appStateManager,
+                                onCleanupRequest = { showCleanupDialog = true },
+                                onClearDefaultFallback = { 
+                                    settingsManager.clearDefaultOfflineFallback()
+                                    refreshTrigger++ 
+                                },
+                                onVerboseLoggingChange = { 
+                                    settingsManager.saveVerboseLoggingEnabled(it)
+                                    refreshTrigger++
+                                }
+                            )
+                            5 -> VerboseLoggingTab(languageManager, settingsManager.isVerboseLoggingEnabled())
                         }
                     }
                 }
@@ -318,19 +303,25 @@ fun SettingsContent(
         onConfirmCleanup = { onDeleteUnusedModels(); showCleanupDialog = false; refreshTrigger++ },
         onDismissDelete = { showDeleteConfirmDialog = false; modelToDelete = null },
         onConfirmDelete = {
-            modelToDelete?.let { model ->
-                val m = model as? AppModel ?: return@let
+            modelToDelete?.let { m ->
+                val isIntent = m.engineType == "Llama"
+                if (isIntent) {
+                    if (m.id == settingsManager.getDefaultIntentFallbackModel()) settingsManager.clearDefaultIntentFallback()
+                } else {
+                    if (m.id == settingsManager.getDefaultVoiceFallbackModel()) settingsManager.clearDefaultVoiceFallback()
+                }
                 settingsManager.setModelDownloaded(m.id, false)
                 onRefreshMain(); refreshTrigger++
             }
             showDeleteConfirmDialog = false
+            modelToDelete = null
         }
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GeneralSettingsTab_Realtime(languageManager: LanguageManager, settingsManager: SettingsManager, refreshTrigger: Int = 0) {
+fun GeneralSettingsTab_Realtime(languageManager: LanguageManager, settingsManager: SettingsManager) {
     var apiKey by remember { mutableStateOf(settingsManager.getApiKey() ?: "") }
     val languages = languageManager.getAvailableLanguages()
     val appLanguage = settingsManager.getLanguage()
@@ -338,7 +329,6 @@ fun GeneralSettingsTab_Realtime(languageManager: LanguageManager, settingsManage
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(text = languageManager.getString("app_settings_section"), style = MaterialTheme.typography.titleMedium)
         TextField(value = apiKey, onValueChange = { apiKey = it; settingsManager.saveApiKey(it) }, label = { Text(languageManager.getString("api_key")) }, modifier = Modifier.fillMaxWidth())
-        
         Text(text = languageManager.getString("language"), style = MaterialTheme.typography.labelLarge)
         Box {
             var expanded by remember { mutableStateOf(false) }
@@ -357,7 +347,7 @@ private fun SettingsDialogs(
     languageManager: LanguageManager,
     showCleanupDialog: Boolean,
     showDeleteConfirmDialog: Boolean,
-    modelToDelete: Any?,
+    modelToDelete: AppModel?,
     onDismissCleanup: () -> Unit,
     onConfirmCleanup: () -> Unit,
     onDismissDelete: () -> Unit,
@@ -373,16 +363,11 @@ private fun SettingsDialogs(
         )
     }
 
-    if (showDeleteConfirmDialog) {
+    if (showDeleteConfirmDialog && modelToDelete != null) {
         AlertDialog(
             onDismissRequest = onDismissDelete,
             title = { Text(languageManager.getString("confirm_delete_title")) },
-            text = {
-                val m = modelToDelete as? AppModel
-                Column {
-                    m?.let { Text(languageManager.getString("confirm_delete_msg").format(it.engineType, "${it.label} (${it.sizeDescription})")) }
-                }
-            },
+            text = { Text(languageManager.getString("confirm_delete_msg").format(modelToDelete.engineType, "${modelToDelete.label} (${modelToDelete.sizeDescription})")) },
             confirmButton = { TextButton(onClick = onConfirmDelete, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(languageManager.getString("delete_button")) } },
             dismissButton = { TextButton(onClick = onDismissDelete) { Text(languageManager.getString("cancel_button")) } }
         )

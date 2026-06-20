@@ -9,7 +9,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
-import com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry
 
 object GeneralSettingsTabConfig {
     const val SHOW_SAVE_BUTTON = true
@@ -32,7 +31,7 @@ fun GeneralSettingsTab(
 
     TextField(
         value = apiKey,
-        onValueChange = { apiKey = it },
+        onValueChange = { apiKey = it; settingsManager.saveApiKey(it) },
         label = { Text(languageManager.getString("api_key")) },
         modifier = Modifier.fillMaxWidth()
     )
@@ -77,17 +76,31 @@ fun GeneralSettingsTab(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
     )
 
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // --- VOICE FALLBACK INFO ---
+    Text(text = "Voice Fallback: ${languageManager.getString("default_offline_model")}", style = MaterialTheme.typography.labelLarge)
+    val defaultVoiceProcessor = settingsManager.getDefaultVoiceFallbackProcessor()
+    val defaultVoiceModel = settingsManager.getDefaultVoiceFallbackModel()
+    Text(
+        text = if (defaultVoiceProcessor != null && defaultVoiceModel != null) {
+            "$defaultVoiceProcessor: $defaultVoiceModel"
+        } else {
+            "None"
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.secondary
+    )
+
     Spacer(modifier = Modifier.height(8.dp))
 
-    // Default Offline Model (simple text - shows current default tuple)
-    Text(text = languageManager.getString("default_offline_model"), style = MaterialTheme.typography.labelLarge)
-    val whisperModels = WhisperModelRegistry.models
-    val defaultProcessor = settingsManager.getDefaultOfflineFallbackProcessor()
-    val defaultModel = settingsManager.getDefaultOfflineFallbackModel()
-    val selectedModel = whisperModels.find { it.id == defaultModel }
+    // --- INTENT FALLBACK INFO ---
+    Text(text = "Intent Fallback: ${languageManager.getString("default_offline_model")}", style = MaterialTheme.typography.labelLarge)
+    val defaultIntentProcessor = settingsManager.getDefaultIntentFallbackProcessor()
+    val defaultIntentModel = settingsManager.getDefaultIntentFallbackModel()
     Text(
-        text = if (defaultProcessor != null && defaultModel != null) {
-            "$defaultProcessor: ${selectedModel?.let { "${it.label} (${it.sizeDescription})" } ?: defaultModel}"
+        text = if (defaultIntentProcessor != null && defaultIntentModel != null) {
+            "$defaultIntentProcessor: $defaultIntentModel"
         } else {
             "None"
         },

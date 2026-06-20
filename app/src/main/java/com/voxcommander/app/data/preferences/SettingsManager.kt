@@ -64,11 +64,22 @@ class SettingsManager(context: Context) {
         val activeVoskKey = "${KEY_MODEL_DOWNLOADED_PREFIX}$activeVoskModelName"
         val activeWhisperKey = "${KEY_MODEL_DOWNLOADED_PREFIX}$activeWhisperId"
         
+        // Also protect wake word and fallbacks
+        val wakeWordModel = getWakeWordModelPath()
+        val wakeWordKey = wakeWordModel?.let { "${KEY_MODEL_DOWNLOADED_PREFIX}$it" }
+        val voiceFallbackKey = getDefaultVoiceFallbackModel()?.let { "${KEY_MODEL_DOWNLOADED_PREFIX}$it" }
+        val intentFallbackKey = getDefaultIntentFallbackModel()?.let { "${KEY_MODEL_DOWNLOADED_PREFIX}$it" }
+        val activeLlamaKey = "${KEY_MODEL_DOWNLOADED_PREFIX}${getSelectedLlamaModelId()}"
+        
         sharedPreferences.edit().let { edit ->
             all.keys.forEach { key ->
                 if (key.startsWith(KEY_MODEL_DOWNLOADED_PREFIX) && 
                     key != activeVoskKey && 
-                    key != activeWhisperKey) {
+                    key != activeWhisperKey &&
+                    key != wakeWordKey &&
+                    key != voiceFallbackKey &&
+                    key != intentFallbackKey &&
+                    key != activeLlamaKey) {
                     edit.remove(key)
                 }
             }
@@ -154,27 +165,39 @@ class SettingsManager(context: Context) {
         sharedPreferences.edit().remove(KEY_DEFAULT_OFFLINE_MODEL).apply()
     }
 
-    // Single default offline fallback tuple (processor, model)
-    fun saveDefaultOfflineFallback(processor: String, modelId: String) {
+    // --- VOICE FALLBACK ---
+    fun saveDefaultVoiceFallback(processor: String, modelId: String) {
         sharedPreferences.edit()
-            .putString(KEY_DEFAULT_OFFLINE_FALLBACK_PROCESSOR, processor)
-            .putString(KEY_DEFAULT_OFFLINE_FALLBACK_MODEL, modelId)
+            .putString(KEY_DEFAULT_VOICE_FALLBACK_PROCESSOR, processor)
+            .putString(KEY_DEFAULT_VOICE_FALLBACK_MODEL, modelId)
             .apply()
     }
-
-    fun getDefaultOfflineFallbackProcessor(): String? {
-        return sharedPreferences.getString(KEY_DEFAULT_OFFLINE_FALLBACK_PROCESSOR, null)
+    fun getDefaultVoiceFallbackProcessor(): String? = sharedPreferences.getString(KEY_DEFAULT_VOICE_FALLBACK_PROCESSOR, null)
+    fun getDefaultVoiceFallbackModel(): String? = sharedPreferences.getString(KEY_DEFAULT_VOICE_FALLBACK_MODEL, null)
+    fun clearDefaultVoiceFallback() {
+        sharedPreferences.edit().remove(KEY_DEFAULT_VOICE_FALLBACK_PROCESSOR).remove(KEY_DEFAULT_VOICE_FALLBACK_MODEL).apply()
     }
 
-    fun getDefaultOfflineFallbackModel(): String? {
-        return sharedPreferences.getString(KEY_DEFAULT_OFFLINE_FALLBACK_MODEL, null)
+    // --- INTENT FALLBACK ---
+    fun saveDefaultIntentFallback(processor: String, modelId: String) {
+        sharedPreferences.edit()
+            .putString(KEY_DEFAULT_INTENT_FALLBACK_PROCESSOR, processor)
+            .putString(KEY_DEFAULT_INTENT_FALLBACK_MODEL, modelId)
+            .apply()
+    }
+    fun getDefaultIntentFallbackProcessor(): String? = sharedPreferences.getString(KEY_DEFAULT_INTENT_FALLBACK_PROCESSOR, null)
+    fun getDefaultIntentFallbackModel(): String? = sharedPreferences.getString(KEY_DEFAULT_INTENT_FALLBACK_MODEL, null)
+    fun clearDefaultIntentFallback() {
+        sharedPreferences.edit().remove(KEY_DEFAULT_INTENT_FALLBACK_PROCESSOR).remove(KEY_DEFAULT_INTENT_FALLBACK_MODEL).apply()
     }
 
+    // Legacy support
+    fun saveDefaultOfflineFallback(processor: String, modelId: String) = saveDefaultVoiceFallback(processor, modelId)
+    fun getDefaultOfflineFallbackProcessor(): String? = getDefaultVoiceFallbackProcessor()
+    fun getDefaultOfflineFallbackModel(): String? = getDefaultVoiceFallbackModel()
     fun clearDefaultOfflineFallback() {
-        sharedPreferences.edit()
-            .remove(KEY_DEFAULT_OFFLINE_FALLBACK_PROCESSOR)
-            .remove(KEY_DEFAULT_OFFLINE_FALLBACK_MODEL)
-            .apply()
+        clearDefaultVoiceFallback()
+        clearDefaultIntentFallback()
     }
 
     // Logging settings
@@ -293,9 +316,11 @@ class SettingsManager(context: Context) {
         private const val KEY_WAKE_WORD_ENABLED = Strings.Preferences.KEY_WAKE_WORD_ENABLED
         private const val KEY_WAKE_WORD_MODEL_PATH = Strings.Preferences.KEY_WAKE_WORD_MODEL_PATH
         private const val KEY_OFFLINE_FALLBACK_TIMEOUT = Strings.Preferences.KEY_OFFLINE_FALLBACK_TIMEOUT
+        private const val KEY_DEFAULT_VOICE_FALLBACK_PROCESSOR = "default_voice_fallback_processor"
+        private const val KEY_DEFAULT_VOICE_FALLBACK_MODEL = "default_voice_fallback_model"
+        private const val KEY_DEFAULT_INTENT_FALLBACK_PROCESSOR = "default_intent_fallback_processor"
+        private const val KEY_DEFAULT_INTENT_FALLBACK_MODEL = "default_intent_fallback_model"
         private const val KEY_DEFAULT_OFFLINE_MODEL = "default_offline_model"
-        private const val KEY_DEFAULT_OFFLINE_FALLBACK_PROCESSOR = "default_offline_fallback_processor"
-        private const val KEY_DEFAULT_OFFLINE_FALLBACK_MODEL = "default_offline_fallback_model"
         private const val KEY_LOG_LEVEL = "log_level"
         private const val KEY_VERBOSE_LOGGING_ENABLED = Strings.Preferences.KEY_VERBOSE_LOGGING
         private const val KEY_VOICE_MODEL_READY = "voice_model_ready"

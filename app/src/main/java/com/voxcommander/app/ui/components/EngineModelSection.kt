@@ -14,7 +14,7 @@ import com.voxcommander.app.domain.localization.LanguageManager
 
 /**
  * Universal component for managing ANY engine model (Whisper, Vosk, Llama).
- * Handles: Dropdown selection, IMMEDIATE Download (No Popups), Delete confirmation, and Offline Fallback.
+ * Handles: Dropdown selection, IMMEDIATE Download (No Popups), Delete confirmation, and Categorized Fallback.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,13 +27,14 @@ fun <T> EngineModelSection(
     itemLabel: (T) -> String,
     modelIdProvider: (T) -> String,
     onItemSelected: (T, Boolean) -> Unit,
-    onDownloadRequest: (T) -> Unit, // Removed showPrompt
+    onDownloadRequest: (T) -> Unit,
     onDeleteRequest: (T) -> Unit,
     onCancelDownload: () -> Unit,
     downloadProgress: Float?,
     downloadingItem: Any?,
     currentProcessor: String,
-    showOfflineFallback: Boolean = true,
+    fallbackCategory: String = "voice", // "voice" or "intent"
+    onFallbackChanged: () -> Unit = {},
     refreshTrigger: Int = 0,
     onShowInfo: (() -> Unit)? = null
 ) {
@@ -64,9 +65,6 @@ fun <T> EngineModelSection(
         },
         onDeviceLabel = languageManager.getString("on_device_label"),
         onItemSelected = { item, isDownloaded ->
-            // Logic: Selection triggers immediate action. 
-            // If already downloaded, it selects. 
-            // If NOT downloaded, start download immediately (no dialog).
             onItemSelected(item, isDownloaded)
             if (!isDownloaded) {
                 onDownloadRequest(item)
@@ -74,7 +72,6 @@ fun <T> EngineModelSection(
         },
         onExpandedChange = { showSheet = it },
         onDownloadRequest = { item ->
-            // Clicking direct button triggers download request immediately (NO POPUP)
             onItemSelected(item, false)
             onDownloadRequest(item) 
         },
@@ -108,7 +105,6 @@ fun <T> EngineModelSection(
                     showSheet = false
                 },
                 onDownloadRequest = { item ->
-                    // Direct button from sheet: IMMEDIATE
                     onItemSelected(item, false)
                     onDownloadRequest(item)
                     showSheet = false
@@ -122,32 +118,38 @@ fun <T> EngineModelSection(
         }
     }
 
-    // 4. Default Offline Fallback Logic
-    if (showOfflineFallback && selectedItem != null) {
+    // 4. Categorized Fallback Logic
+    if (selectedItem != null) {
         val modelId = modelIdProvider(selectedItem)
         val isDownloaded = remember(modelId, refreshTrigger) { settingsManager.isModelDownloaded(modelId) }
         
-        var defaultProcessor by remember(refreshTrigger) { mutableStateOf(settingsManager.getDefaultOfflineFallbackProcessor()) }
-        var defaultModel by remember(refreshTrigger) { mutableStateOf(settingsManager.getDefaultOfflineFallbackModel()) }
+        val defaultProcessor = remember(fallbackCategory, refreshTrigger) { 
+            if (fallbackCategory == "voice") settingsManager.getDefaultVoiceFallbackProcessor() 
+            else settingsManager.getDefaultIntentFallbackProcessor() 
+        }
+        val defaultModelId = remember(fallbackCategory, refreshTrigger) { 
+            if (fallbackCategory == "voice") settingsManager.getDefaultVoiceFallbackModel() 
+            else settingsManager.getDefaultIntentFallbackModel() 
+        }
         
-        val isDefault = defaultProcessor == currentProcessor && defaultModel == modelId
+        val isDefault = defaultProcessor == currentProcessor && defaultModelId == modelId
         var showChangeDialog by remember { mutableStateOf(false) }
 
         Surface(
             onClick = {
                 if (isDownloaded) {
                     if (!isDefault) {
-                        if (defaultProcessor != null && defaultModel != null) {
+                        if (defaultProcessor != null && defaultModelId != null && defaultModelId != modelId) {
                             showChangeDialog = true
                         } else {
-                            settingsManager.saveDefaultOfflineFallback(currentProcessor, modelId)
-                            defaultProcessor = currentProcessor
-                            defaultModel = modelId
+                            if (fallbackCategory == "voice") settingsManager.saveDefaultVoiceFallback(currentProcessor, modelId)
+                            else settingsManager.saveDefaultIntentFallback(currentProcessor, modelId)
+                            onFallbackChanged()
                         }
                     } else {
-                        settingsManager.clearDefaultOfflineFallback()
-                        defaultProcessor = null
-                        defaultModel = null
+                        if (fallbackCategory == "voice") settingsManager.clearDefaultVoiceFallback()
+                        else settingsManager.clearDefaultIntentFallback()
+                        onFallbackChanged()
                     }
                 }
             },
@@ -179,12 +181,12 @@ fun <T> EngineModelSection(
             AlertDialog(
                 onDismissRequest = { showChangeDialog = false },
                 title = { Text(languageManager.getString("change_default_model_title")) },
-                text = { Text(languageManager.getString("change_default_model_message").format(defaultModel, modelId)) },
+                text = { Text(languageManager.getString("change_default_model_message").format(defaultModelId, modelId)) },
                 confirmButton = {
                     Button(onClick = {
-                        settingsManager.saveDefaultOfflineFallback(currentProcessor, modelId)
-                        defaultProcessor = currentProcessor
-                        defaultModel = modelId
+                        if (fallbackCategory == "voice") settingsManager.saveDefaultVoiceFallback(currentProcessor, modelId)
+                        else settingsManager.saveDefaultIntentFallback(currentProcessor, modelId)
+                        onFallbackChanged()
                         showChangeDialog = false
                     }) { Text(languageManager.getString("change")) }
                 },

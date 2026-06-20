@@ -29,6 +29,7 @@ fun IntentEnginesSubTab(
     downloadProgress: Float?,
     downloadingItem: Any?,
     onCancelDownload: () -> Unit,
+    onFallbackChanged: () -> Unit = {},
     refreshTrigger: Int
 ) {
     val cloudEnabled by appStateManager.cloudIntelligenceEnabled.collectAsState()
@@ -132,6 +133,8 @@ fun IntentEnginesSubTab(
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
                 currentProcessor = aiProcessor,
+                fallbackCategory = "intent",
+                onFallbackChanged = onFallbackChanged,
                 refreshTrigger = refreshTrigger
             )
             
