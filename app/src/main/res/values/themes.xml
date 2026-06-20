@@ -10,9 +10,10 @@
 
     <!-- Splash Screen Theme -->
     <style name="Theme.VoxCommander.Splash" parent="Theme.SplashScreen">
-        <!-- Using the dedicated branding logo -->
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
-        <!-- Background set to solid black for a seamless transition -->
+        <!-- We use a transparent icon here because the REAL splash is set in windowBackground -->
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <!-- The layer-list background allows us to show the full vertical image centered on black -->
+        <item name="android:windowBackground">@drawable/splash_background</item>
         <item name="windowSplashScreenBackground">@android:color/black</item>
         <item name="postSplashScreenTheme">@style/Theme.VoxCommander</item>
     </style>
