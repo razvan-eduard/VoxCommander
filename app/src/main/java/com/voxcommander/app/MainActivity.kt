@@ -58,7 +58,8 @@ class MainActivity : ComponentActivity() {
     private var pendingModelLanguage: String? = null
     private var lastDownloadedVoskModelName: String? = null
     private var lastDownloadedWhisperModelId: String? = null
-    private var lastDownloadType: String? = null // "vosk" or "whisper"
+    private var lastDownloadedLlamaModelId: String? = null
+    private var lastDownloadType: String? = null // "vosk", "whisper", or "llama"
     
     // Progress tracking state
     private val _downloadProgress = mutableStateOf<Float?>(null)
@@ -148,6 +149,12 @@ class MainActivity : ComponentActivity() {
                                 showSuccessMessage("Vosk Model $modelName ready!")
                             }
                         }
+                    }
+                    "llama" -> {
+                        val modelId = lastDownloadedLlamaModelId ?: settingsManager.getSelectedLlamaModelId()
+                        settingsManager.setModelDownloaded(modelId, true)
+                        refreshModelsTab()
+                        showSuccessMessage("Llama Model $modelId ready!")
                     }
                 }
                 lastDownloadType = null
@@ -286,6 +293,21 @@ class MainActivity : ComponentActivity() {
                                 Toast.makeText(this@MainActivity, languageManager.getString("unused_models_deleted"), Toast.LENGTH_SHORT).show()
                             },
                             onCancelDownload = { cancelDownload() },
+                            onDownloadLlamaModel = { model ->
+                                lastDownloadedLlamaModelId = model.id
+                                lastDownloadType = "llama"
+                                val id = modelDownloader.downloadLlamaModel(model.id, model.url)
+                                startProgressTracking(id)
+                                Toast.makeText(this@MainActivity, "Llama download started", Toast.LENGTH_SHORT).show()
+                            },
+                            onDeleteLlamaModel = { model ->
+                                settingsManager.setModelDownloaded(model.id, false)
+                                // Actually delete the file
+                                val file = File(getExternalFilesDir(null), "llama-model-${model.id}.bin")
+                                if (file.exists()) file.delete()
+                                refreshModelsTab()
+                                Toast.makeText(this@MainActivity, "Llama model deleted", Toast.LENGTH_SHORT).show()
+                            },
                             downloadProgress = currentProgress,
                             selectionSuccessMessage = successMessage,
                             googleSttAvailable = googleSttAvailable,
@@ -412,6 +434,10 @@ class MainActivity : ComponentActivity() {
         } catch (e: android.content.ActivityNotFoundException) {
             Toast.makeText(this, "Google App is not installed on this device!", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun refreshModelsTab() {
+        appStateManager.refreshAll()
     }
 
     companion object {

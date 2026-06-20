@@ -122,6 +122,8 @@
   "vulkan_incompatible_title": "Vulkan inkompatibel",
   "vulkan_incompatible_msg": "Der GPU-Treiber ist inkompatibel. System hat für Stabilität auf NEON (CPU) umgeschaltet.",
   "advanced_settings_section": "Erweiterte Einstellungen",
+  "cloud_intelligence_title": "Cloud-Intelligenz (L2 Fallback)",
+  "cloud_intelligence_desc": "Verwendet OpenAI, um Befehle zu verstehen, wenn lokale Regeln (L1) fehlschlagen. Erfordert API-Key.",
   "logging_level": "Logging-Level",
   "verbose_logging": "Verbose Logging",
   "verbose_logging_section": "Detailliertes Logging",

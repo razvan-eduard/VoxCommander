@@ -90,6 +90,16 @@ class BenchmarkEngine(
             runApiBenchmark(apiKey, dummyAudio)
         }
 
+        // 5. LLM Diagnostics (Llama Local)
+        val llamaModelId = settingsManager.getSelectedLlamaModelId()
+        if (settingsManager.isModelDownloaded(llamaModelId)) {
+            diagInfo.append("--- LOCAL LLM DIAGNOSTICS ---\n")
+            diagInfo.append("Engine: MediaPipe GenAI\n")
+            diagInfo.append("Active Model: $llamaModelId\n\n")
+            
+            runLlamaBenchmark(llamaModelId)
+        }
+
         // Finalize system info view
         appStateManager.setSystemInfo(diagInfo.toString())
         
@@ -148,6 +158,33 @@ class BenchmarkEngine(
             engine.release()
         } catch (e: Exception) {
             appStateManager.updateBenchmarkResult(BenchmarkResult("Whisper API", "Cloud", 0, 0f, false, e.message))
+        }
+    }
+
+    private suspend fun runLlamaBenchmark(modelId: String) {
+        try {
+            val engine = com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter(context, settingsManager)
+            val start = System.currentTimeMillis()
+            // We'll test with a simple "ping" command
+            engine.processCommand("ping")
+            val end = System.currentTimeMillis()
+            
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "Llama Local",
+                model = modelId,
+                inferenceTimeMs = end - start,
+                rtf = 0f, // RTF not applicable to LLMs
+                isSuccess = true
+            ))
+        } catch (e: Exception) {
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "Llama Local",
+                model = modelId,
+                inferenceTimeMs = 0,
+                rtf = 0f,
+                isSuccess = false,
+                error = e.message
+            ))
         }
     }
 }

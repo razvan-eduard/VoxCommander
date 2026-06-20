@@ -21,12 +21,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
-import com.voxcommander.app.domain.engine.vosk.VoskModelRegistry
 import com.voxcommander.app.domain.engine.vosk.VoskLanguageGroup
-import com.voxcommander.app.service.WakeWordService
 import com.voxcommander.app.domain.engine.vosk.VoskModelInfo
+import com.voxcommander.app.domain.engine.vosk.VoskModelRegistry
+import com.voxcommander.app.service.WakeWordService
 import com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry
 import com.voxcommander.app.domain.engine.whisper.WhisperModelInfo
+import com.voxcommander.app.domain.intent.interpreter.LlamaModelInfo
+import com.voxcommander.app.domain.intent.interpreter.LlamaModelRegistry
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.delay
@@ -43,6 +46,8 @@ fun SettingsContent(
     onSelectCustomVoskModel: (String) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
     onDeleteUnusedModels: () -> Unit,
+    onDownloadLlamaModel: (AppModel) -> Unit,
+    onDeleteLlamaModel: (AppModel) -> Unit,
     onCancelDownload: () -> Unit = {},
     onRefreshMain: () -> Unit = {},
     downloadProgress: Float? = null,
@@ -120,6 +125,7 @@ fun SettingsContent(
     var showDownloadDialog by remember { mutableStateOf(false) }
     var pendingVoskModel by remember { mutableStateOf<Pair<String, VoskModelInfo>?>(null) }
     var pendingWhisperModel by remember { mutableStateOf<WhisperModelInfo?>(null) }
+    var pendingLlamaModel by remember { mutableStateOf<AppModel?>(null) }
     var pendingWakeWordModel by remember { mutableStateOf<VoskModelInfo?>(null) }
     var showCleanupDialog by remember { mutableStateOf(false) }
     var downloadingItemState by remember { mutableStateOf<Any?>(null) }
@@ -214,9 +220,7 @@ fun SettingsContent(
                 modifier = Modifier.fillMaxSize(),
                 beyondViewportPageCount = 1
             ) { page ->
-                // FIX: Separăm paginile care au LazyColumn intern de cele care au nevoie de Column cu scroll
                 if (page == 3) {
-                    // Diagnostic Tab (Benchmark) are propriul LazyColumn
                     BenchmarkSettingsTab(
                         languageManager = languageManager,
                         appStateManager = appStateManager
@@ -238,11 +242,11 @@ fun SettingsContent(
                             1 -> ModelsSettingsTab(
                                 languageManager = languageManager,
                                 settingsManager = settingsManager,
+                                appStateManager = appStateManager,
                                 voiceProcessor = voiceProcessor,
                                 onProcessorSelected = {
                                     voiceProcessor = it
                                     appStateManager.setVoiceProcessor(it)
-                                    // Re-evaluate model ready flag based on new processor
                                     when (it) {
                                         Strings.Processors.WHISPER_CPP,
                                         Strings.Processors.WHISPER_VULKAN,
@@ -256,7 +260,7 @@ fun SettingsContent(
                                             val customPath = appStateManager.customVoskModelPaths.value[lang]
                                             appStateManager.setVoiceModelReady(settingsManager.isModelDownloaded(modelName ?: "") || !customPath.isNullOrBlank())
                                         }
-                                        else -> appStateManager.setVoiceModelReady(true) // Remote models always ready
+                                        else -> appStateManager.setVoiceModelReady(true)
                                     }
                                     updateVoiceEngine()
                                     onRefreshMain()
@@ -321,6 +325,17 @@ fun SettingsContent(
                                 onClearDefaultFallback = {
                                     settingsManager.clearDefaultOfflineFallback()
                                     refreshTrigger++
+                                },
+                                onDownloadLlamaModel = { model ->
+                                    downloadingItemState = model
+                                    pendingLlamaModel = model
+                                    showDownloadDialog = true
+                                },
+                                onDeleteLlamaModel = { model ->
+                                    isDeletingDefaultFallback = (model.id == settingsManager.getDefaultOfflineFallbackModel())
+                                    isDeletingActiveWakeWord = false
+                                    modelToDelete = model
+                                    showDeleteConfirmDialog = true
                                 },
                                 onDeleteRequest = { model ->
                                     val modelId = when(model) {
@@ -388,10 +403,10 @@ fun SettingsContent(
                                 voiceProcessor = voiceProcessor,
                                 refreshTrigger = refreshTrigger
                             )
-                            // Page 3 is handled above (Diagnostic Tab)
                             4 -> AdvancedSettingsTab(
                                 languageManager = languageManager,
                                 settingsManager = settingsManager,
+                                appStateManager = appStateManager,
                                 onVerboseLoggingChange = { 
                                     verboseLoggingEnabled = it
                                     settingsManager.saveVerboseLoggingEnabled(it)
@@ -419,6 +434,7 @@ fun SettingsContent(
         modelToDelete = modelToDelete,
         pendingVoskModel = pendingVoskModel,
         pendingWhisperModel = pendingWhisperModel,
+        pendingLlamaModel = pendingLlamaModel,
         pendingWakeWordModel = pendingWakeWordModel,
         onDismissCleanup = { showCleanupDialog = false },
         onConfirmCleanup = { onDeleteUnusedModels(); showCleanupDialog = false; refreshTrigger++ },
@@ -426,18 +442,20 @@ fun SettingsContent(
             showDownloadDialog = false
             pendingVoskModel = null
             pendingWhisperModel = null
+            pendingLlamaModel = null
             pendingWakeWordModel = null
             downloadingItemState = null 
         },
         onConfirmDownload = {
             pendingVoskModel?.let { (lang, model) -> onDownloadVoskModel(lang, model.url, model.name) }
             pendingWhisperModel?.let { model -> onDownloadWhisperModel(model.id, model.url) }
+            pendingLlamaModel?.let { model -> onDownloadLlamaModel(model) }
             pendingWakeWordModel?.let { model -> 
                 val group = voskGroups.find { it.models.contains(model) }
                 val langCode = if (group?.language?.contains("Romanian") == true) "ro" else "en"
                 onDownloadVoskModel(langCode, model.url, model.name) 
             }
-            showDownloadDialog = false; pendingVoskModel = null; pendingWhisperModel = null; pendingWakeWordModel = null
+            showDownloadDialog = false; pendingVoskModel = null; pendingWhisperModel = null; pendingLlamaModel = null; pendingWakeWordModel = null
         },
         onDismissDelete = { showDeleteConfirmDialog = false; modelToDelete = null },
         onConfirmDelete = {
@@ -445,7 +463,7 @@ fun SettingsContent(
                 val modelId = when(model) {
                     is WhisperModelInfo -> model.id
                     is VoskModelInfo -> model.name
-                    else -> model.toString()
+                    else -> (model as? AppModel)?.id ?: model.toString()
                 }
                 
                 if (isDeletingDefaultFallback) {
@@ -457,7 +475,9 @@ fun SettingsContent(
                 }
 
                 settingsManager.setModelDownloaded(modelId, false)
-                if (appStateManager.selectedWhisperModelId.value == modelId || appStateManager.selectedVoskModelName.value == modelId) {
+                if (appStateManager.selectedWhisperModelId.value == modelId || 
+                    appStateManager.selectedVoskModelName.value == modelId ||
+                    appStateManager.selectedLlamaModelId.value == modelId) {
                     appStateManager.setVoiceModelReady(false)
                 }
                 onRefreshMain()
@@ -577,6 +597,7 @@ private fun SettingsDialogs(
     modelToDelete: Any?,
     pendingVoskModel: Pair<String, VoskModelInfo>?,
     pendingWhisperModel: WhisperModelInfo?,
+    pendingLlamaModel: AppModel?,
     pendingWakeWordModel: VoskModelInfo?,
     onDismissCleanup: () -> Unit,
     onConfirmCleanup: () -> Unit,
@@ -600,13 +621,14 @@ private fun SettingsDialogs(
     }
 
     if (showDownloadDialog) {
+        val model = pendingVoskModel?.second ?: pendingWhisperModel ?: pendingLlamaModel ?: pendingWakeWordModel
         AlertDialog(
             onDismissRequest = onDismissDownload,
             title = { Text(languageManager.getString("download_model_title")) },
             text = { 
-                val name = pendingVoskModel?.second?.name ?: pendingWhisperModel?.label ?: pendingWakeWordModel?.name ?: ""
-                val size = pendingVoskModel?.second?.size ?: pendingWhisperModel?.sizeDescription ?: pendingWakeWordModel?.size ?: ""
-                Text(languageManager.getString("download_model_msg").format(name, size))
+                model?.let {
+                    Text(languageManager.getString("download_model_msg").format(it.label, it.sizeDescription))
+                }
             },
             confirmButton = { TextButton(onClick = onConfirmDownload) { Text(languageManager.getString("download_button")) } },
             dismissButton = { TextButton(onClick = onDismissDownload) { Text(languageManager.getString("cancel_button")) } }
@@ -618,17 +640,7 @@ private fun SettingsDialogs(
             onDismissRequest = onDismissDelete,
             title = { Text(languageManager.getString("confirm_delete_title")) },
             text = {
-                val modelType = when(modelToDelete) {
-                    is WhisperModelInfo -> "Whisper"
-                    is VoskModelInfo -> "Vosk"
-                    else -> ""
-                }
-                val modelLabel = when(modelToDelete) {
-                    is WhisperModelInfo -> "${modelToDelete.label} (${modelToDelete.sizeDescription})"
-                    is VoskModelInfo -> "${modelToDelete.name} (${modelToDelete.size ?: "±50MB"})"
-                    else -> ""
-                }
-                
+                val model = modelToDelete as? AppModel
                 val msgTemplate = if (isDeletingDefaultFallback) {
                     languageManager.getString("confirm_delete_default_msg")
                 } else {
@@ -636,7 +648,9 @@ private fun SettingsDialogs(
                 }
                 
                 Column {
-                    Text(msgTemplate.format(modelType, modelLabel))
+                    model?.let {
+                        Text(msgTemplate.format(it.engineType, "${it.label} (${it.sizeDescription})"))
+                    }
                     if (isDeletingActiveWakeWord) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(

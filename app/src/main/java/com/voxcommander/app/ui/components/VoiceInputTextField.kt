@@ -27,7 +27,8 @@ fun VoiceInputTextField(
     voiceLanguage: String,
     voiceProcessor: String,
     isModelOnDevice: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onVoiceResult: ((String) -> Unit)? = null // Add this callback
 ) {
     // Collect the global listening state to keep UI in sync
     val isGloballyListening by VoiceManager.isListeningFlow.collectAsState()
@@ -69,6 +70,7 @@ fun VoiceInputTextField(
                             // IMPORTANT: transcription could be an error message
                             if (transcription.isNotEmpty() && !transcription.startsWith("Error:")) {
                                 onValueChange(transcription)
+                                onVoiceResult?.invoke(transcription) // Notify the wizard
                             }
                         }
                     }

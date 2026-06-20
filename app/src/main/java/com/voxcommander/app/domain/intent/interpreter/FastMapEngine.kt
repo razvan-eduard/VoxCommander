@@ -3,12 +3,14 @@ package com.voxcommander.app.domain.intent.interpreter
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.domain.intent.model.IntentPayload
 
+import kotlinx.coroutines.flow.first
+
 class FastMapEngine(
     private val fastMapDao: FastMapDao
 ) : AssistantEngine {
 
     override suspend fun processCommand(spokenText: String): IntentPayload? {
-        val rules = fastMapDao.getAllRules()
+        val rules = fastMapDao.getAllRules().first()
 
         for (rule in rules) {
             val regex = Regex(rule.triggerPattern, RegexOption.IGNORE_CASE)

@@ -5,23 +5,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.LogLevel
 import com.voxcommander.app.utils.LoggingFlags
-
-object AdvancedSettingsTabConfig {
-    const val SHOW_SAVE_BUTTON = true
-}
+import com.voxcommander.app.utils.Strings
 
 @Composable
 fun AdvancedSettingsTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
+    appStateManager: AppStateManager,
     onVerboseLoggingChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -57,6 +58,9 @@ fun AdvancedSettingsTab(
         onVerboseLoggingChange(verboseLoggingEnabled)
     }
 
+    // Keep appStateManager for future use if needed, avoiding unused warning
+    val _state = appStateManager.voiceState.collectAsState()
+
     // Initialize Logger
     LaunchedEffect(Unit) {
         Logger.initialize(context, LoggingFlags.toLogLevel(loggingFlags))
@@ -80,7 +84,7 @@ fun AdvancedSettingsTab(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("Toast")
-        Checkbox(
+        androidx.compose.material3.Checkbox(
             checked = loggingFlags.toastEnabled,
             onCheckedChange = { enabled ->
                 loggingFlags = loggingFlags.copy(toastEnabled = enabled)
@@ -100,7 +104,7 @@ fun AdvancedSettingsTab(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("Logcat")
-        Checkbox(
+        androidx.compose.material3.Checkbox(
             checked = loggingFlags.logcatEnabled,
             onCheckedChange = { enabled ->
                 loggingFlags = loggingFlags.copy(logcatEnabled = enabled)

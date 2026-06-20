@@ -1,0 +1,178 @@
+package com.voxcommander.app.ui.components
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.domain.localization.LanguageManager
+
+/**
+ * Universal component for managing ANY engine model (Whisper, Vosk, Llama).
+ * Handles: Dropdown selection, Download prompt, Delete confirmation, and Offline Fallback.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> EngineModelSection(
+    title: String,
+    languageManager: LanguageManager,
+    settingsManager: SettingsManager,
+    groups: List<DropdownGroup<T>>,
+    selectedItem: T?,
+    itemLabel: (T) -> String,
+    modelIdProvider: (T) -> String,
+    onItemSelected: (T, Boolean) -> Unit,
+    onDownloadRequest: (T) -> Unit,
+    onDeleteRequest: (T) -> Unit,
+    onCancelDownload: () -> Unit,
+    downloadProgress: Float?,
+    downloadingItem: Any?,
+    currentProcessor: String,
+    showOfflineFallback: Boolean = true,
+    refreshTrigger: Int = 0,
+    onShowInfo: (() -> Unit)? = null
+) {
+    var showSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // 1. Header
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = title, style = MaterialTheme.typography.labelLarge)
+        if (onShowInfo != null) {
+            IconButton(onClick = onShowInfo) {
+                Icon(Icons.Outlined.Info, contentDescription = "Info")
+            }
+        }
+    }
+
+    // 2. Main Dropdown
+    GroupedDropdownMenu(
+        selectedItem = selectedItem,
+        groups = groups,
+        itemLabel = itemLabel,
+        isDownloaded = { item ->
+            remember(modelIdProvider(item), refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
+        },
+        onDeviceLabel = languageManager.getString("on_device_label"),
+        onItemSelected = { item, isDownloaded ->
+            onItemSelected(item, isDownloaded)
+        },
+        onExpandedChange = { showSheet = it },
+        onDownloadRequest = { onDownloadRequest(it) },
+        onDeleteRequest = { onDeleteRequest(it) },
+        onCancelDownload = onCancelDownload,
+        downloadProgress = downloadProgress,
+        downloadingItem = downloadingItem,
+        languageManager = languageManager
+    )
+
+    // 3. Selection Sheet
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            GroupedDropdownContent(
+                title = title,
+                groups = groups,
+                itemLabel = itemLabel,
+                isDownloaded = { item ->
+                    remember(modelIdProvider(item), refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
+                },
+                onDeviceLabel = languageManager.getString("on_device_label"),
+                onItemSelected = { item, isDownloaded ->
+                    onItemSelected(item, isDownloaded)
+                    showSheet = false
+                },
+                onDownloadRequest = { onDownloadRequest(it) },
+                onDeleteRequest = { onDeleteRequest(it) },
+                onCancelDownload = onCancelDownload,
+                downloadProgress = downloadProgress,
+                downloadingItem = downloadingItem,
+                languageManager = languageManager
+            )
+        }
+    }
+
+    // 4. Default Offline Fallback Logic (if enabled)
+    if (showOfflineFallback && selectedItem != null) {
+        val modelId = modelIdProvider(selectedItem)
+        val isDownloaded = remember(modelId, refreshTrigger) { settingsManager.isModelDownloaded(modelId) }
+        
+        var defaultProcessor by remember(refreshTrigger) { mutableStateOf(settingsManager.getDefaultOfflineFallbackProcessor()) }
+        var defaultModel by remember(refreshTrigger) { mutableStateOf(settingsManager.getDefaultOfflineFallbackModel()) }
+        
+        val isDefault = defaultProcessor == currentProcessor && defaultModel == modelId
+        var showChangeDialog by remember { mutableStateOf(false) }
+
+        Surface(
+            onClick = {
+                if (isDownloaded) {
+                    if (!isDefault) {
+                        if (defaultProcessor != null && defaultModel != null) {
+                            showChangeDialog = true
+                        } else {
+                            settingsManager.saveDefaultOfflineFallback(currentProcessor, modelId)
+                            defaultProcessor = currentProcessor
+                            defaultModel = modelId
+                        }
+                    } else {
+                        settingsManager.clearDefaultOfflineFallback()
+                        defaultProcessor = null
+                        defaultModel = null
+                    }
+                }
+            },
+            enabled = isDownloaded,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            shape = MaterialTheme.shapes.small,
+            border = BorderStroke(
+                width = if (isDefault) 2.dp else 1.dp,
+                color = if (!isDownloaded) MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        else if (isDefault) MaterialTheme.colorScheme.primary 
+                        else MaterialTheme.colorScheme.outline
+            ),
+            color = if (!isDownloaded) MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                    else if (isDefault) MaterialTheme.colorScheme.primaryContainer 
+                    else MaterialTheme.colorScheme.surface
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(6.dp)) {
+                Checkbox(checked = isDefault, onCheckedChange = null, enabled = isDownloaded)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = languageManager.getString("default_offline_fallback_model"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDownloaded) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            }
+        }
+
+        if (showChangeDialog) {
+            AlertDialog(
+                onDismissRequest = { showChangeDialog = false },
+                title = { Text(languageManager.getString("change_default_model_title")) },
+                text = { Text(languageManager.getString("change_default_model_message").format(defaultModel, modelId)) },
+                confirmButton = {
+                    Button(onClick = {
+                        settingsManager.saveDefaultOfflineFallback(currentProcessor, modelId)
+                        defaultProcessor = currentProcessor
+                        defaultModel = modelId
+                        showChangeDialog = false
+                    }) { Text(languageManager.getString("change")) }
+                },
+                dismissButton = { Button(onClick = { showChangeDialog = false }) { Text(languageManager.getString("cancel_button")) } }
+            )
+        }
+    }
+}

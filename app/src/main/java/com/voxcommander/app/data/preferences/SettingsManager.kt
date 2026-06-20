@@ -202,6 +202,30 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getBoolean(KEY_VULKAN_INCOMPATIBLE, false)
     }
 
+    fun saveCloudIntelligenceEnabled(enabled: Boolean) {
+        sharedPreferences.edit().putBoolean(Strings.Preferences.KEY_CLOUD_INTELLIGENCE_ENABLED, enabled).apply()
+    }
+
+    fun isCloudIntelligenceEnabled(): Boolean {
+        return sharedPreferences.getBoolean(Strings.Preferences.KEY_CLOUD_INTELLIGENCE_ENABLED, false)
+    }
+
+    fun saveAiProcessor(processor: String) {
+        sharedPreferences.edit().putString(Strings.Preferences.KEY_AI_PROCESSOR, processor).apply()
+    }
+
+    fun getAiProcessor(): String {
+        return sharedPreferences.getString(Strings.Preferences.KEY_AI_PROCESSOR, Strings.AiProcessors.OPENAI) ?: Strings.AiProcessors.OPENAI
+    }
+
+    fun saveSelectedLlamaModelId(modelId: String) {
+        sharedPreferences.edit().putString(Strings.Preferences.KEY_SELECTED_LLAMA_MODEL_ID, modelId).apply()
+    }
+
+    fun getSelectedLlamaModelId(): String {
+        return sharedPreferences.getString(Strings.Preferences.KEY_SELECTED_LLAMA_MODEL_ID, "3.2-1b") ?: "3.2-1b"
+    }
+
     /**
      * VOICE MODEL READY FLAG: Set by dropdown when model is selected.
      * This is the source of truth for MainScreen - dropdown knows if model exists.
@@ -252,5 +276,6 @@ class SettingsManager(context: Context) {
         private const val KEY_LOG_LEVEL = "log_level"
         private const val KEY_VERBOSE_LOGGING_ENABLED = Strings.Preferences.KEY_VERBOSE_LOGGING
         private const val KEY_VOICE_MODEL_READY = "voice_model_ready"
+        private const val KEY_CLOUD_INTELLIGENCE_ENABLED = "cloud_intelligence_enabled"
     }
 }

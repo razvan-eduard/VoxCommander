@@ -32,6 +32,18 @@ class ModelDownloader(private val context: Context) {
         return downloadManager.enqueue(request)
     }
 
+    fun downloadLlamaModel(modelId: String, url: String): Long {
+        val request = DownloadManager.Request(Uri.parse(url))
+            .setTitle("Downloading Llama $modelId")
+            .setDescription("Downloading local AI brain")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalFilesDir(context, null, "llama-model-$modelId.bin")
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+
+        return downloadManager.enqueue(request)
+    }
+
     fun unzipVoskModel(modelName: String, onComplete: (Boolean) -> Unit) {
         val zipFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), VOSK_MODEL_ZIP_PREFIX + modelName + ZIP_EXTENSION)
         val targetDir = File(context.getExternalFilesDir(null), VOSK_MODEL_DIR_PREFIX + modelName)

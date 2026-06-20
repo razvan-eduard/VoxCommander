@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.screens.rules.RulesManagerContent
 import com.voxcommander.app.ui.screens.settings.SettingsContent
@@ -33,6 +34,8 @@ fun TopHeaderContainer(
     onSelectCustomVoskModel: (String) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
     onDeleteUnusedModels: () -> Unit,
+    onDownloadLlamaModel: (AppModel) -> Unit,
+    onDeleteLlamaModel: (AppModel) -> Unit,
     onCancelDownload: () -> Unit,
     onRefreshMain: () -> Unit,
     downloadProgress: Float?,
@@ -65,6 +68,8 @@ fun TopHeaderContainer(
                         onSelectCustomVoskModel = onSelectCustomVoskModel,
                         onSelectCustomWhisperModel = onSelectCustomWhisperModel,
                         onDeleteUnusedModels = onDeleteUnusedModels,
+                        onDownloadLlamaModel = onDownloadLlamaModel,
+                        onDeleteLlamaModel = onDeleteLlamaModel,
                         onCancelDownload = onCancelDownload,
                         onRefreshMain = onRefreshMain,
                         downloadProgress = downloadProgress,

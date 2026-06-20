@@ -19,6 +19,7 @@ import com.google.gson.GsonBuilder
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.components.MicrophoneButton
@@ -42,6 +43,8 @@ fun MainScreen(
     onSelectCustomVoskModel: (String) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
     onDeleteUnusedModels: () -> Unit,
+    onDownloadLlamaModel: (AppModel) -> Unit,
+    onDeleteLlamaModel: (AppModel) -> Unit,
     onCancelDownload: () -> Unit,
     downloadProgress: Float?,
     selectionSuccessMessage: String?,
@@ -161,6 +164,8 @@ fun MainScreen(
             onSelectCustomVoskModel = onSelectCustomVoskModel,
             onSelectCustomWhisperModel = onSelectCustomWhisperModel,
             onDeleteUnusedModels = onDeleteUnusedModels,
+            onDownloadLlamaModel = onDownloadLlamaModel,
+            onDeleteLlamaModel = onDeleteLlamaModel,
             onCancelDownload = onCancelDownload,
             onRefreshMain = { /* AppStateManager handles state updates automatically */ },
             downloadProgress = downloadProgress,

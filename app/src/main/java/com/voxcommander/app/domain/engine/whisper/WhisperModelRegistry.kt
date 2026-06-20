@@ -1,12 +1,16 @@
 package com.voxcommander.app.domain.engine.whisper
 
+import com.voxcommander.app.domain.model.AppModel
+
 data class WhisperModelInfo(
-    val id: String,
-    val label: String,
-    val url: String,
-    val sizeDescription: String,
+    override val id: String,
+    override val label: String,
+    override val url: String,
+    override val sizeDescription: String,
     val isMultilingual: Boolean = true
-)
+) : AppModel {
+    override val engineType: String get() = "Whisper"
+}
 
 object WhisperModelRegistry {
     val models = listOf(

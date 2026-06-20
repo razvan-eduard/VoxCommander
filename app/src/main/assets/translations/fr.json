@@ -122,6 +122,8 @@
   "vulkan_incompatible_title": "Vulkan incompatible",
   "vulkan_incompatible_msg": "Le pilote GPU est incompatible. Le système est passé en mode NEON (CPU) pour la stabilité.",
   "advanced_settings_section": "Paramètres avancés",
+  "cloud_intelligence_title": "Intelligence Cloud (L2 Fallback)",
+  "cloud_intelligence_desc": "Utilise OpenAI pour comprendre les commandes quand les Règles Locales (L1) échouent. Nécessite une clé API.",
   "logging_level": "Niveau de log",
   "verbose_logging": "Logs détaillés",
   "verbose_logging_section": "Journalisation détaillée",

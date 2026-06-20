@@ -7,10 +7,12 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.voxcommander.app.domain.intent.model.FastMapRule
 
+import kotlinx.coroutines.flow.Flow
+
 @Dao
 interface FastMapDao {
     @Query("SELECT * FROM fast_map_rules")
-    suspend fun getAllRules(): List<FastMapRule>
+    fun getAllRules(): Flow<List<FastMapRule>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRule(rule: FastMapRule)

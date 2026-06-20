@@ -21,6 +21,12 @@ object Strings {
         const val WHISPER_CLOUD = "WHISPER_CLOUD"
     }
 
+    object AiProcessors {
+        const val OPENAI = "OPENAI"
+        const val LLAMA_LOCAL = "LLAMA_LOCAL"
+        const val GEMINI_NATIVE = "GEMINI_NATIVE"
+    }
+
     object Routes {
         const val MAIN = "main"
         const val SETTINGS = "settings"
@@ -47,6 +53,9 @@ object Strings {
         const val KEY_WAKE_WORD_MODEL_PATH = "wake_word_model_path"
         const val KEY_VERBOSE_LOGGING = "verbose_logging_enabled"
         const val KEY_OFFLINE_FALLBACK_TIMEOUT = "offline_fallback_timeout"
+        const val KEY_CLOUD_INTELLIGENCE_ENABLED = "cloud_intelligence_enabled"
+        const val KEY_AI_PROCESSOR = "ai_processor"
+        const val KEY_SELECTED_LLAMA_MODEL_ID = "selected_llama_model_id"
     }
 
     object Database {
