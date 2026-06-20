@@ -10,11 +10,13 @@
 
     <!-- Splash Screen Theme -->
     <style name="Theme.VoxCommander.Splash" parent="Theme.SplashScreen">
-        <!-- We use a transparent icon here because the REAL splash is set in windowBackground -->
+        <!-- Make the system icon transparent to avoid the circular crop -->
         <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
-        <!-- The layer-list background allows us to show the full vertical image centered on black -->
-        <item name="android:windowBackground">@drawable/splash_background</item>
-        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <!-- Set the branding image as the ACTUAL window background for FULLSCREEN effect -->
+        <item name="android:windowBackground">@drawable/splash_logo</item>
+        <!-- Fullscreen settings -->
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         <item name="postSplashScreenTheme">@style/Theme.VoxCommander</item>
     </style>
 </resources>

@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Solid black background layer -->
-    <item>
-        <color android:color="@android:color/black"/>
-    </item>
-    <!-- The actual image layer, centered and maintaining aspect ratio -->
-    <item>
-        <bitmap
-            android:src="@drawable/splash_logo"
-            android:gravity="center"/>
-    </item>
+    <!-- 1. Background Layer: Solid Black -->
+    <item android:drawable="@android:color/black" />
+
+    <!-- 2. Image Layer: Centered Branding Image -->
+    <item
+        android:drawable="@drawable/splash_logo"
+        android:gravity="center" />
 </layer-list>
