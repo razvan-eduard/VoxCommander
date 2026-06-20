@@ -123,13 +123,9 @@ fun IntentEnginesSubTab(
                 onItemSelected = { model, isDownloaded -> 
                     appStateManager.setSelectedLlamaModelId(model.id)
                 },
-                onDownloadRequest = { model, showPrompt ->
-                    if (showPrompt) {
-                        onDownloadLlamaModel(model)
-                    } else {
-                        // Direct button: Use the direct bridge to MainActivity
-                        onDeleteLlamaModel(model)
-                    }
+                onDownloadRequest = { model ->
+                    appStateManager.setSelectedLlamaModelId(model.id)
+                    onDownloadLlamaModel(model)
                 },
                 onDeleteRequest = onDeleteLlamaModel,
                 onCancelDownload = onCancelDownload,

@@ -154,12 +154,8 @@ fun VoiceEnginesSubTab(
                 onItemSelected = { model, isDownloaded ->
                     onWhisperModelSelected(model, isDownloaded)
                 },
-                onDownloadRequest = { model, showPrompt ->
-                    if (showPrompt) {
-                        onWhisperModelSelected(model, false)
-                    } else {
-                        onDownloadWhisperModel(model.id, model.url)
-                    }
+                onDownloadRequest = { model ->
+                    onDownloadWhisperModel(model.id, model.url)
                 },
                 onDeleteRequest = onDeleteRequest,
                 onCancelDownload = onCancelDownload,
@@ -187,14 +183,10 @@ fun VoiceEnginesSubTab(
                     val code = if (group?.language?.contains("Romanian") == true) "ro" else "en"
                     onVoskModelSelected(model, isDownloaded, code)
                 },
-                onDownloadRequest = { model, showPrompt ->
+                onDownloadRequest = { model ->
                     val group = voskGroups.find { it.models.contains(model) }
                     val code = if (group?.language?.contains("Romanian") == true) "ro" else "en"
-                    if (showPrompt) {
-                        onVoskModelSelected(model, false, code)
-                    } else {
-                        onDownloadVoskModel(code, model.url, model.id)
-                    }
+                    onDownloadVoskModel(code, model.url, model.id)
                 },
                 onDeleteRequest = onDeleteRequest,
                 onCancelDownload = onCancelDownload,

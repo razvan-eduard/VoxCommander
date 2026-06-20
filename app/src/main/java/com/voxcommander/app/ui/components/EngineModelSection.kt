@@ -14,7 +14,7 @@ import com.voxcommander.app.domain.localization.LanguageManager
 
 /**
  * Universal component for managing ANY engine model (Whisper, Vosk, Llama).
- * Handles: Dropdown selection, Download logic, Delete confirmation, and Offline Fallback.
+ * Handles: Dropdown selection, IMMEDIATE Download (No Popups), Delete confirmation, and Offline Fallback.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,7 +27,7 @@ fun <T> EngineModelSection(
     itemLabel: (T) -> String,
     modelIdProvider: (T) -> String,
     onItemSelected: (T, Boolean) -> Unit,
-    onDownloadRequest: (T, Boolean) -> Unit, // Boolean: showPrompt
+    onDownloadRequest: (T) -> Unit, // Removed showPrompt
     onDeleteRequest: (T) -> Unit,
     onCancelDownload: () -> Unit,
     downloadProgress: Float?,
@@ -64,21 +64,19 @@ fun <T> EngineModelSection(
         },
         onDeviceLabel = languageManager.getString("on_device_label"),
         onItemSelected = { item, isDownloaded ->
-            // Indirect selection (tapping the picklist): 
-            // If already downloaded, just select it.
-            // If NOT downloaded, we show the confirmation prompt.
-            if (isDownloaded) {
-                onItemSelected(item, true)
-            } else {
-                // Tapping a non-downloaded item in the main field should PROMPT
-                onDownloadRequest(item, true)
+            // Logic: Selection triggers immediate action. 
+            // If already downloaded, it selects. 
+            // If NOT downloaded, start download immediately (no dialog).
+            onItemSelected(item, isDownloaded)
+            if (!isDownloaded) {
+                onDownloadRequest(item)
             }
         },
         onExpandedChange = { showSheet = it },
         onDownloadRequest = { item ->
-            // DIRECT BUTTON CLICK: Start download immediately (NO PROMPT) and select it
+            // Clicking direct button triggers download request immediately (NO POPUP)
             onItemSelected(item, false)
-            onDownloadRequest(item, false) 
+            onDownloadRequest(item) 
         },
         onDeleteRequest = { onDeleteRequest(it) },
         onCancelDownload = onCancelDownload,
@@ -103,18 +101,16 @@ fun <T> EngineModelSection(
                 },
                 onDeviceLabel = languageManager.getString("on_device_label"),
                 onItemSelected = { item, isDownloaded ->
-                    // Selection from sheet list: PROMPT if not downloaded
-                    if (isDownloaded) {
-                        onItemSelected(item, true)
-                    } else {
-                        onDownloadRequest(item, true)
+                    onItemSelected(item, isDownloaded)
+                    if (!isDownloaded) {
+                        onDownloadRequest(item)
                     }
                     showSheet = false
                 },
                 onDownloadRequest = { item ->
-                    // DIRECT BUTTON CLICK FROM SHEET: NO PROMPT
+                    // Direct button from sheet: IMMEDIATE
                     onItemSelected(item, false)
-                    onDownloadRequest(item, false)
+                    onDownloadRequest(item)
                     showSheet = false
                 },
                 onDeleteRequest = { onDeleteRequest(it) },

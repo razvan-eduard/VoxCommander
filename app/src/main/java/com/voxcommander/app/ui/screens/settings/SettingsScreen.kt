@@ -117,12 +117,7 @@ fun SettingsContent(
 
     LaunchedEffect(Unit) { loadVoskModels(force = true) }
 
-    // Dialogs
-    var showDownloadDialog by remember { mutableStateOf(false) }
-    var pendingVoskModel by remember { mutableStateOf<Pair<String, VoskModelInfo>?>(null) }
-    var pendingWhisperModel by remember { mutableStateOf<WhisperModelInfo?>(null) }
-    var pendingLlamaModel by remember { mutableStateOf<AppModel?>(null) }
-    var pendingWakeWordModel by remember { mutableStateOf<VoskModelInfo?>(null) }
+    // Dialogs: Only show cleanup and delete. Download is now IMMEDIATE.
     var showCleanupDialog by remember { mutableStateOf(false) }
     var downloadingItemState by remember { mutableStateOf<Any?>(null) }
     
@@ -218,11 +213,7 @@ fun SettingsContent(
                                     updateVoiceEngine()
                                     onRefreshMain()
                                     refreshTrigger++
-                                    if (!isDownloaded) {
-                                        downloadingItemState = model
-                                        pendingWhisperModel = model
-                                        showDownloadDialog = true
-                                    }
+                                    // NO PROMPT: Parent handles immediate download if not isDownloaded
                                 },
                                 onSelectCustomWhisperModel = onSelectCustomWhisperModel,
                                 voskGroups = voskGroups,
@@ -241,42 +232,38 @@ fun SettingsContent(
                                     updateVoiceEngine()
                                     onRefreshMain()
                                     refreshTrigger++
-                                    if (!isDownloaded) {
-                                        downloadingItemState = model
-                                        pendingVoskModel = langCode to model
-                                        showDownloadDialog = true
-                                    }
                                 },
                                 onSelectCustomVoskModel = { onSelectCustomVoskModel(voiceLanguage) },
-                                onDownloadWhisperModel = { id, url -> onDownloadWhisperModel(id, url) },
-                                onDownloadVoskModel = { code, url, name -> onDownloadVoskModel(code, url, name) },
+                                onDownloadWhisperModel = { id, url -> 
+                                    downloadingItemState = WhisperModelRegistry.getModelById(id)
+                                    onDownloadWhisperModel(id, url) 
+                                },
+                                onDownloadVoskModel = { code, url, name -> 
+                                    // Search for the model object to set as downloadingItemState
+                                    downloadingItemState = voskGroups.flatMap { it.models }.find { it.name == name }
+                                    onDownloadVoskModel(code, url, name) 
+                                },
                                 onDownloadLlamaModel = { model ->
-                                    // DIRECT BUTTON: Start download immediately
                                     downloadingItemState = model
                                     onDownloadLlamaModel(model as LlamaModelInfo)
                                 },
                                 onDeleteLlamaModel = { model ->
-                                    // THIS IS THE BRIDGE FOR DIRECT BUTTONS (ALL ENGINES)
-                                    val m = model as? AppModel ?: return@ModelsSettingsTab
-                                    downloadingItemState = m
-                                    when (m.engineType) {
-                                        "Whisper" -> onDownloadWhisperModel(m.id, (m as WhisperModelInfo).url)
-                                        "Vosk" -> onDownloadVoskModel("en", (m as VoskModelInfo).url, m.id)
-                                        "Llama" -> onDownloadLlamaModel(m as LlamaModelInfo)
-                                    }
+                                    modelToDelete = model
+                                    isDeletingDefaultFallback = (model.id == settingsManager.getDefaultOfflineFallbackModel())
+                                    showDeleteConfirmDialog = true
                                 },
+                                onCancelDownload = onCancelDownload,
+                                downloadProgress = downloadProgress,
+                                downloadingItem = downloadingItemState,
+                                downloadedColor = downloadedColor,
+                                onCleanupRequest = { showCleanupDialog = true },
+                                onClearDefaultFallback = { settingsManager.clearDefaultOfflineFallback(); refreshTrigger++ },
                                 onDeleteRequest = { model ->
                                     modelToDelete = model
                                     isDeletingDefaultFallback = ((model as? AppModel)?.id == settingsManager.getDefaultOfflineFallbackModel())
                                     showDeleteConfirmDialog = true
                                 },
-                                refreshTrigger = refreshTrigger,
-                                downloadProgress = downloadProgress,
-                                downloadingItem = downloadingItemState,
-                                downloadedColor = downloadedColor,
-                                onCancelDownload = onCancelDownload,
-                                onCleanupRequest = { showCleanupDialog = true },
-                                onClearDefaultFallback = { settingsManager.clearDefaultOfflineFallback(); refreshTrigger++ }
+                                refreshTrigger = refreshTrigger
                             )
                             2 -> ServiceSettingsTab(
                                 languageManager = languageManager,
@@ -297,15 +284,14 @@ fun SettingsContent(
                                     refreshTrigger++
                                     if (!settingsManager.isModelDownloaded(model.name)) {
                                         downloadingItemState = model
-                                        pendingWakeWordModel = model
-                                        showDownloadDialog = true
+                                        onDownloadVoskModel("en", model.url, model.name)
                                     }
                                 },
                                 isServiceRunning = isServiceRunning,
                                 onStartService = { WakeWordService.startService(context) },
                                 onStopService = { WakeWordService.stopService(context) },
                                 downloadedColor = downloadedColor,
-                                onDownloadRequest = { model -> downloadingItemState = model; pendingWakeWordModel = model; showDownloadDialog = true },
+                                onDownloadRequest = { model -> downloadingItemState = model; onDownloadVoskModel("en", model.url, model.name) },
                                 onDeleteRequest = { model -> modelToDelete = model; showDeleteConfirmDialog = true },
                                 onCancelDownload = onCancelDownload,
                                 downloadProgress = downloadProgress,
@@ -326,25 +312,10 @@ fun SettingsContent(
     SettingsDialogs(
         languageManager = languageManager,
         showCleanupDialog = showCleanupDialog,
-        showDownloadDialog = showDownloadDialog,
         showDeleteConfirmDialog = showDeleteConfirmDialog,
-        isDeletingDefaultFallback = isDeletingDefaultFallback,
-        isDeletingActiveWakeWord = isDeletingActiveWakeWord,
         modelToDelete = modelToDelete,
-        pendingVoskModel = pendingVoskModel,
-        pendingWhisperModel = pendingWhisperModel,
-        pendingLlamaModel = pendingLlamaModel,
-        pendingWakeWordModel = pendingWakeWordModel,
         onDismissCleanup = { showCleanupDialog = false },
         onConfirmCleanup = { onDeleteUnusedModels(); showCleanupDialog = false; refreshTrigger++ },
-        onDismissDownload = { showDownloadDialog = false; downloadingItemState = null },
-        onConfirmDownload = {
-            pendingVoskModel?.let { (lang, model) -> onDownloadVoskModel(lang, model.url, model.name) }
-            pendingWhisperModel?.let { model -> onDownloadWhisperModel(model.id, model.url) }
-            pendingLlamaModel?.let { model -> onDownloadLlamaModel(model as LlamaModelInfo) }
-            pendingWakeWordModel?.let { model -> onDownloadVoskModel("en", model.url, model.name) }
-            showDownloadDialog = false
-        },
         onDismissDelete = { showDeleteConfirmDialog = false; modelToDelete = null },
         onConfirmDelete = {
             modelToDelete?.let { model ->
@@ -385,19 +356,10 @@ fun GeneralSettingsTab_Realtime(languageManager: LanguageManager, settingsManage
 private fun SettingsDialogs(
     languageManager: LanguageManager,
     showCleanupDialog: Boolean,
-    showDownloadDialog: Boolean,
     showDeleteConfirmDialog: Boolean,
-    isDeletingDefaultFallback: Boolean,
-    isDeletingActiveWakeWord: Boolean,
     modelToDelete: Any?,
-    pendingVoskModel: Pair<String, VoskModelInfo>?,
-    pendingWhisperModel: WhisperModelInfo?,
-    pendingLlamaModel: AppModel?,
-    pendingWakeWordModel: VoskModelInfo?,
     onDismissCleanup: () -> Unit,
     onConfirmCleanup: () -> Unit,
-    onDismissDownload: () -> Unit,
-    onConfirmDownload: () -> Unit,
     onDismissDelete: () -> Unit,
     onConfirmDelete: () -> Unit
 ) {
@@ -408,17 +370,6 @@ private fun SettingsDialogs(
             text = { Text(languageManager.getString("confirm_delete_msg")) },
             confirmButton = { TextButton(onClick = onConfirmCleanup, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(languageManager.getString("delete_button")) } },
             dismissButton = { TextButton(onClick = onDismissCleanup) { Text(languageManager.getString("cancel_button")) } }
-        )
-    }
-
-    if (showDownloadDialog) {
-        val model = pendingVoskModel?.second ?: pendingWhisperModel ?: pendingLlamaModel ?: pendingWakeWordModel
-        AlertDialog(
-            onDismissRequest = onDismissDownload,
-            title = { Text(languageManager.getString("download_model_title")) },
-            text = { model?.let { Text(languageManager.getString("download_model_msg").format(it.label, it.sizeDescription)) } },
-            confirmButton = { TextButton(onClick = onConfirmDownload) { Text(languageManager.getString("download_button")) } },
-            dismissButton = { TextButton(onClick = onDismissDownload) { Text(languageManager.getString("cancel_button")) } }
         )
     }
 
