@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.VoxCommander" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Base application theme -->
+    <style name="Theme.VoxCommander" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- We use Compose, so these colors are mostly for the system bars -->
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- Splash Screen Theme -->
+    <style name="Theme.VoxCommander.Splash" parent="Theme.SplashScreen">
+        <!-- Poti schimba @mipmap/ic_launcher cu @drawable/splash_logo daca ai pus o imagine separata -->
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="windowSplashScreenBackground">@android:color/white</item>
+        <item name="postSplashScreenTheme">@style/Theme.VoxCommander</item>
+    </style>
 </resources>

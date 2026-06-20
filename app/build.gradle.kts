@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
     // Room
@@ -83,6 +84,7 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.vosk.android)
     implementation(libs.jsoup)
+    implementation(libs.mediapipe.genai)
     // STT Engines (Whisper.cpp integration)
 
     testImplementation(libs.junit)
