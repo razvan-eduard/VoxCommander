@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- A more compatible layer-list for system themes -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 1. Background Layer: Solid Black -->
+    <!-- Ensure background is pitch black -->
     <item android:drawable="@android:color/black" />
 
-    <!-- 2. Image Layer: Centered Branding Image -->
-    <item
-        android:drawable="@drawable/splash_logo"
-        android:gravity="center" />
+    <!-- Explicitly render the branding image using bitmap tag for scaling control -->
+    <item>
+        <bitmap
+            android:src="@drawable/splash_logo"
+            android:gravity="center"
+            android:mipMap="true"
+            android:filter="true" />
+    </item>
 </layer-list>

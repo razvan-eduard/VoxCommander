@@ -21,7 +21,7 @@ vosk = "0.3.75"
 jna = "5.13.0"
 jsoup = "1.18.3"
 whisperCpp = "0.2.1"
-mediapipeGenai = "0.10.14"
+mediapipeGenai = "0.10.35"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
