@@ -10,9 +10,10 @@
 
     <!-- Splash Screen Theme -->
     <style name="Theme.VoxCommander.Splash" parent="Theme.SplashScreen">
-        <!-- Using the dedicated branding logo found in drawables -->
+        <!-- Using the dedicated branding logo -->
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
-        <item name="windowSplashScreenBackground">@android:color/white</item>
+        <!-- Background set to solid black for a seamless transition -->
+        <item name="windowSplashScreenBackground">@android:color/black</item>
         <item name="postSplashScreenTheme">@style/Theme.VoxCommander</item>
     </style>
 </resources>
