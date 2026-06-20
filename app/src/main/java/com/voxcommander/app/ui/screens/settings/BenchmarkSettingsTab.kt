@@ -151,12 +151,28 @@ fun EngineLibGroupCard(title: String, libs: List<com.voxcommander.app.state.Nati
 
 @Composable
 fun NativeLibStatusItem(lib: com.voxcommander.app.state.NativeLibStatus) {
+    val statusColor = when {
+        lib.isActive && lib.exists -> Color.Green
+        !lib.isActive && lib.exists -> Color(0xFF2196F3) // Blue (Standby)
+        lib.isActive && !lib.exists -> Color.Red // CRITICAL: Active but missing
+        else -> Color.Gray // Not present, not active
+    }
+
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(10.dp).background(if (lib.isActive) Color.Green else if (lib.exists) Color.Red else Color.Gray, shape = androidx.compose.foundation.shape.CircleShape))
+        Box(modifier = Modifier.size(10.dp).background(statusColor, shape = androidx.compose.foundation.shape.CircleShape))
         Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text(text = lib.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(text = lib.description, style = MaterialTheme.typography.labelSmall, color = if (lib.isActive) Color.Gray else if (lib.exists) Color.Red else Color.Gray)
+            Text(
+                text = when {
+                    lib.isActive && lib.exists -> "${lib.description} (Active)"
+                    !lib.isActive && lib.exists -> "${lib.description} (Ready)"
+                    lib.isActive && !lib.exists -> "${lib.description} (MISSING!)"
+                    else -> "${lib.description} (Not Installed)"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (lib.isActive && !lib.exists) Color.Red else Color.Gray
+            )
         }
     }
 }

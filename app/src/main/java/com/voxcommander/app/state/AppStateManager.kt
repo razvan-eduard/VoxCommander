@@ -247,8 +247,10 @@ class AppStateManager private constructor(
         val soFiles = listOf(
             "libwhisper.so" to "Core Whisper STT Engine",
             "libggml.so" to "GGML Tensor Library",
+            "libggml-cpu.so" to "GGML CPU Operations",
+            "libggml-base.so" to "GGML Base Library",
             "libggml-vulkan.so" to "Vulkan GPU Acceleration",
-            "libggml-neon.so" to "ARM Neon Acceleration",
+            "libomp.so" to "OpenMP Multi-threading",
             "libvosk.so" to "Vosk Voice Engine",
             "libllm_inference_engine_jni.so" to "MediaPipe Llama Engine"
         )
@@ -258,8 +260,10 @@ class AppStateManager private constructor(
             val exists = file.exists()
             val isActive = when {
                 name.contains("whisper") && _voiceProcessor.value.startsWith("WHISPER") -> true
+                name.contains("ggml") && _voiceProcessor.value.startsWith("WHISPER") -> true
+                name.contains("omp") && _voiceProcessor.value.startsWith("WHISPER") -> true
                 name.contains("vosk") && _voiceProcessor.value == "VOSK" -> true
-                name.contains("llm") && settingsManager.getAiProcessor() == "LLAMA_LOCAL" -> true
+                name.contains("llm") && settingsManager.getAiProcessor() == Strings.AiProcessors.LLAMA_LOCAL -> true
                 else -> false
             }
             NativeLibStatus(name, exists, isActive, desc)
