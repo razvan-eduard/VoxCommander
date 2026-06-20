@@ -91,10 +91,10 @@ class WakeWordService : Service() {
         Log.d(TAG, "Starting wake word detection")
         Logger.log("startWakeWordDetection called")
         
-        if (!appStateManager.canStartWakeWord()) {
-            Log.w(TAG, "Cannot start wake word detection: current state is ${appStateManager.voiceState.value}")
-            Logger.log("Cannot start - not IDLE state: ${appStateManager.voiceState.value}")
-            return
+        // --- FORCE RESET IF STUCK ---
+        if (appStateManager.voiceState.value != VoiceState.IDLE) {
+            Log.w(TAG, "Service was in state ${appStateManager.voiceState.value}. Forcing IDLE...")
+            appStateManager.setVoiceState(VoiceState.IDLE)
         }
 
         startForeground(NOTIFICATION_ID, createNotification())
@@ -159,9 +159,12 @@ class WakeWordService : Service() {
         Log.i(TAG, "Wake word detected!")
         Logger.log("Wake word detected!")
         
+        // --- REACTIVE TRIGGER (AppStateManager) ---
         appStateManager.onWakeWordDetected()
+        
         playHapticFeedback()
 
+        // We still bring the activity to front to ensure it can start recording
         val intent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra("action", "WAKE_WORD_DETECTED")
@@ -200,7 +203,7 @@ class WakeWordService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Wake Word Service",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Monitors microphone for wake word"
             }
@@ -218,7 +221,7 @@ class WakeWordService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Vox Commander")
             .setContentText("Wake Word Service is active")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
@@ -234,7 +237,7 @@ class WakeWordService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Vox Commander")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()

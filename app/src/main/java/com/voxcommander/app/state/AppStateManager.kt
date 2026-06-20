@@ -139,6 +139,20 @@ class AppStateManager(
     private val _wakeWordEnabled = MutableStateFlow(settingsManager.isWakeWordEnabled())
     val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled.asStateFlow()
 
+    // Wake Word Service Listening State
+    private val _isWakeWordServiceListening = MutableStateFlow(false)
+    val isWakeWordServiceListening: StateFlow<Boolean> = _isWakeWordServiceListening.asStateFlow()
+
+    // Cloud Intelligence State
+    private val _cloudIntelligenceEnabled = MutableStateFlow(settingsManager.isCloudIntelligenceEnabled())
+    val cloudIntelligenceEnabled: StateFlow<Boolean> = _cloudIntelligenceEnabled.asStateFlow()
+
+    private val _aiProcessor = MutableStateFlow(settingsManager.getAiProcessor())
+    val aiProcessor: StateFlow<String> = _aiProcessor.asStateFlow()
+
+    private val _selectedLlamaModelId = MutableStateFlow(settingsManager.getSelectedLlamaModelId())
+    val selectedLlamaModelId: StateFlow<String> = _selectedLlamaModelId.asStateFlow()
+
     // --- BENCHMARK & DIAGNOSTIC STATE ---
     private val _benchmarkResults = MutableStateFlow<List<BenchmarkResult>>(emptyList())
     val benchmarkResults: StateFlow<List<BenchmarkResult>> = _benchmarkResults.asStateFlow()
@@ -216,6 +230,25 @@ class AppStateManager(
     fun setWakeWordEnabled(enabled: Boolean) {
         settingsManager.saveWakeWordEnabled(enabled)
         _wakeWordEnabled.value = enabled
+    }
+
+    fun setWakeWordServiceListening(listening: Boolean) {
+        _isWakeWordServiceListening.value = listening
+    }
+
+    fun setCloudIntelligenceEnabled(enabled: Boolean) {
+        settingsManager.saveCloudIntelligenceEnabled(enabled)
+        _cloudIntelligenceEnabled.value = enabled
+    }
+
+    fun setAiProcessor(processor: String) {
+        settingsManager.saveAiProcessor(processor)
+        _aiProcessor.value = processor
+    }
+
+    fun setSelectedLlamaModelId(modelId: String) {
+        settingsManager.saveSelectedLlamaModelId(modelId)
+        _selectedLlamaModelId.value = modelId
     }
 
     fun onWhisperDownloadComplete(modelId: String) {

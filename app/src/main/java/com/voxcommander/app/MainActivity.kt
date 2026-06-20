@@ -1,6 +1,7 @@
 package com.voxcommander.app
 
 import android.Manifest
+import android.os.Build
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -20,6 +21,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -28,6 +30,8 @@ import com.voxcommander.app.data.local.db.VoxDatabase
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.domain.intent.IntentDecisionMap
+import com.voxcommander.app.domain.intent.interpreter.AiInterpreter
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
@@ -152,6 +156,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 1. Install Splash Screen BEFORE super.onCreate()
+        installSplashScreen()
+
         super.onCreate(savedInstanceState)
         Logger.log("MainActivity: onCreate called")
 
@@ -175,7 +182,11 @@ class MainActivity : ComponentActivity() {
         ).fallbackToDestructiveMigration().build()
 
         val fastMapDao = db.fastMapDao()
-        val assistantEngine = FastMapEngine(fastMapDao)
+        
+        // --- Hierarchical Intent System (Triple AI Architecture) ---
+        val l1Engine = FastMapEngine(fastMapDao)
+        val l2Engine = AiInterpreter(this, settingsManager)
+        val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine)
 
         // Initialize VoiceManager with the Hub. It will reactively manage engines from here.
         VoiceManager.init(
@@ -198,7 +209,7 @@ class MainActivity : ComponentActivity() {
         // Check Google STT availability
         val googleSttAvailable = android.speech.SpeechRecognizer.isRecognitionAvailable(this)
 
-        val mainViewModel = MainViewModel(assistantEngine)
+        val mainViewModel = MainViewModel(masterIntentEngine)
 
         checkPermissions()
 
@@ -209,6 +220,21 @@ class MainActivity : ComponentActivity() {
                 val currentProgress by _downloadProgress
                 val successMessage by _selectionSuccessMessage
                 val showVulkanError by _showVulkanError
+
+                // --- WAKE WORD DETECTION LISTENER ---
+                val wakeWordDetected by appStateManager.wakeWordDetected.collectAsState()
+                LaunchedEffect(wakeWordDetected) {
+                    if (wakeWordDetected) {
+                        Logger.log("MainActivity: Wake word detected! (via StateFlow)")
+                        mainViewModel.processVoiceCommand(
+                            settingsManager.getVoiceLanguage(),
+                            settingsManager.getVoiceProcessor()
+                        )
+                        // Add a small delay to ensure processing starts before reset
+                        delay(500)
+                        appStateManager.resetWakeWordDetection()
+                    }
+                }
 
                 if (showVulkanError) {
                     AlertDialog(
@@ -280,10 +306,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val missingPermissions = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missingPermissions.isNotEmpty()) {
+            requestPermissionLauncher.launch(missingPermissions.first())
         }
     }
 
