@@ -33,17 +33,20 @@ class OpenAiInterpreter(
         }
 
         val systemPrompt = """
-            You are an intent extraction engine for a voice assistant called Vox Commander.
-            Translate the user's spoken command into a structured JSON object.
-            Format: {"category": "MEDIA|SYSTEM|APP|HOME", "actionType": "PLAY|STOP|SET|GET|TOGGLE", "target": "string", "query": "optional string"}
-            Rules:
-            1. Output ONLY valid JSON. No conversational text.
-            2. Map Romanian commands correctly.
-            3. If unsure, return null.
+            Mapare intenții sistem Vox Commander. Reguli:
+            1. category: Alege STRICT din ["audio", "settings", "maps", "home", "app"].
+            2. actionType: Alege STRICT din:
+               - audio: ["audio_youtube", "audio_spotify", "media_pause", "media_play", "media_next", "media_prev"]
+               - settings: ["vol_up", "vol_down", "wifi_toggle", "bluetooth_toggle"]
+               - maps: ["waze_nav", "maps_nav"]
+            3. DACĂ este muzică și nu se specifică platforma, setează implicit actionType="audio_youtube".
+            4. SINTAXĂ: "track de la artist" -> category="audio", track=track, artist=artist.
+            5. Returnează EXCLUSIV un obiect JSON cu aceste 6 chei: category, actionType, artist, track, album, destination.
         """.trimIndent()
 
         val jsonBody = JSONObject().apply {
-            put("model", "gpt-4o-mini") // Fast and cheap
+            put("model", "gpt-4o-mini")
+            put("temperature", 0.0) // Match MacroDroid precision
             put("messages", JSONArray().apply {
                 put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
                 put(JSONObject().apply { put("role", "user"); put("content", spokenText) })

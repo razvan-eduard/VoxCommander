@@ -25,11 +25,11 @@ class LocalLlmInterpreter(
     private fun setupLlm() {
         if (llmInference != null) return
 
-        // In a real implementation, the path would be to the downloaded .bin file
-        val modelPath = File(context.getExternalFilesDir(null), "llama-3.2-1b.bin").absolutePath
-        
+        val modelId = settingsManager.getSelectedLlamaModelId()
+        val modelPath = File(context.getExternalFilesDir(null), "llama-model-$modelId.bin").absolutePath
+
         if (!File(modelPath).exists()) {
-            Log.e(TAG, "Llama model not found at $modelPath")
+            Log.e(TAG, "Llama model not found at $modelPath. Make sure it is downloaded.")
             return
         }
 
@@ -46,9 +46,11 @@ class LocalLlmInterpreter(
         val engine = llmInference ?: return@withContext null
 
         val systemPrompt = """
-            You are an intent extractor. Map user input to JSON: {"category": string, "actionType": string, "target": string}.
-            Categories: [MEDIA, SYSTEM, APP, HOME].
-            Response must be ONLY valid JSON.
+            Mapare intenții sistem. Reguli:
+            1. category: ["audio", "settings", "maps", "home", "app"].
+            2. actionType: ["audio_youtube", "audio_spotify", "media_pause", "media_play", "media_next", "media_prev", "vol_up", "vol_down", "wifi_toggle", "bluetooth_toggle", "waze_nav", "maps_nav"].
+            3. Returnează EXCLUSIV JSON: category, actionType, artist, track, album, destination.
+            
             Input: "$spokenText"
             JSON:
         """.trimIndent()
@@ -56,7 +58,7 @@ class LocalLlmInterpreter(
         try {
             val response = engine.generateResponse(systemPrompt)
             Log.d(TAG, "Llama response: $response")
-            
+
             // Basic cleaning to ensure we have only JSON
             val jsonStart = response.indexOf("{")
             val jsonEnd = response.lastIndexOf("}") + 1

@@ -89,10 +89,16 @@ class VoskSttEngine(
         val currentModel = model ?: return@withContext "Error: Vosk Model ($langCode) not found."
         
         val result = try {
+            // Vosk expects 16-bit PCM Mono. Convert to ShortArray for cleaner processing if needed,
+            // but the recognizer accepts ByteArray and handles it if the format matches SAMPLE_RATE.
+            // Ensure we are passing correct byte length.
             val recognizer = activeRecognizer ?: Recognizer(currentModel, SAMPLE_RATE)
+            
+            // Critical: If we just created the recognizer, we need to feed it the whole buffer
             if (activeRecognizer == null) {
                 recognizer.acceptWaveForm(audio, audio.size)
             }
+
             val resultJson = recognizer.finalResult
             JSONObject(resultJson).optString(JSON_KEY_TEXT, "")
         } catch (e: Exception) {

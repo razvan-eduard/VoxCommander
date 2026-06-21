@@ -96,7 +96,9 @@ class WhisperCppSttEngine(
         }
     }
 
-    override suspend fun transcribe(audio: ByteArray): String = withContext(Dispatchers.IO) {
+    override suspend fun transcribe(audio: ByteArray): String = transcribeWithLanguage(audio, null)
+
+    suspend fun transcribeWithLanguage(audio: ByteArray, langCode: String?): String = withContext(Dispatchers.IO) {
         if (!WhisperLib.isReady()) return@withContext "Error: Native library failed to load"
 
         ensureModelLoaded()
@@ -111,9 +113,11 @@ class WhisperCppSttEngine(
 
             Log.d(
                 TAG,
-                "Transcribing using ${if (isUsingGpu) "VULKAN" else "CPU"} ($threads threads)"
+                "Transcribing using ${if (isUsingGpu) "VULKAN" else "CPU"} ($threads threads), Lang: ${langCode ?: "auto"}"
             )
-            val result = currentContext.transcribeData(floatAudio, threads, printTimestamp = false)
+            
+            // Force language if provided to prevent Cyrillic/Slavic hallucinations
+            val result = currentContext.transcribeData(floatAudio, threads, language = langCode, printTimestamp = false)
 
             return@withContext result.trim()
         } catch (e: Exception) {

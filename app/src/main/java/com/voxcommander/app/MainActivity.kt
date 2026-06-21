@@ -31,8 +31,9 @@ import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.domain.intent.IntentDecisionMap
-import com.voxcommander.app.domain.intent.interpreter.AiInterpreter
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
+import com.voxcommander.app.domain.intent.interpreter.OpenAiInterpreter
+import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.ui.screens.main.MainScreen
@@ -224,8 +225,9 @@ class MainActivity : ComponentActivity() {
         
         // --- Hierarchical Intent System (Triple AI Architecture) ---
         val l1Engine = FastMapEngine(fastMapDao)
-        val l2Engine = AiInterpreter(this, settingsManager)
-        val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine)
+        val l2Engine = OpenAiInterpreter(settingsManager)
+        val l3Engine = LocalLlmInterpreter(this, settingsManager)
+        val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, l3Engine, settingsManager)
 
         // Initialize VoiceManager with the Hub. It will reactively manage engines from here.
         VoiceManager.init(

@@ -40,7 +40,10 @@ fun RulesManagerContent(
     val rules by fastMapDao.getAllRules().collectAsState(initial = emptyList())
     
     var triggerPattern by remember { mutableStateOf("") }
-    var target by remember { mutableStateOf("") }
+    var artist by remember { mutableStateOf("") }
+    var track by remember { mutableStateOf("") }
+    var album by remember { mutableStateOf("") }
+    var destination by remember { mutableStateOf("") }
 
     // Edit State
     var editingRuleId by remember { mutableStateOf<Long?>(null) }
@@ -139,7 +142,10 @@ fun RulesManagerContent(
                                 TextButton(onClick = {
                                     editingRuleId = null
                                     triggerPattern = ""
-                                    target = ""
+                                    artist = ""
+                                    track = ""
+                                    album = ""
+                                    destination = ""
                                     wizardTokens = emptyList()
                                     selectedWizardIndices.clear()
                                 }) {
@@ -218,12 +224,28 @@ fun RulesManagerContent(
                             }
                         }
 
-                        OutlinedTextField(
-                            value = target,
-                            onValueChange = { target = it },
-                            label = { Text(languageManager.getString("target_label")) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // New Fields based on category
+                        if (selectedCategory == "audio") {
+                            OutlinedTextField(
+                                value = artist,
+                                onValueChange = { artist = it },
+                                label = { Text("Artist (Static)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = track,
+                                onValueChange = { track = it },
+                                label = { Text("Track (Static)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else if (selectedCategory == "maps") {
+                            OutlinedTextField(
+                                value = destination,
+                                onValueChange = { destination = it },
+                                label = { Text("Destination (Static)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             // Category Dropdown
@@ -276,21 +298,27 @@ fun RulesManagerContent(
                                         id = editingRuleId ?: 0,
                                         category = selectedCategory,
                                         actionType = selectedAction,
-                                        target = target,
-                                        triggerPattern = triggerPattern
+                                        triggerPattern = triggerPattern,
+                                        artist = artist.takeIf { it.isNotBlank() },
+                                        track = track.takeIf { it.isNotBlank() },
+                                        album = album.takeIf { it.isNotBlank() },
+                                        destination = destination.takeIf { it.isNotBlank() }
                                     )
                                     fastMapDao.insertRule(rule)
                                     
                                     // Reset form
                                     triggerPattern = ""
-                                    target = ""
+                                    artist = ""
+                                    track = ""
+                                    album = ""
+                                    destination = ""
                                     wizardTokens = emptyList()
                                     selectedWizardIndices.clear()
                                     editingRuleId = null
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = triggerPattern.isNotBlank() && target.isNotBlank()
+                            enabled = triggerPattern.isNotBlank()
                         ) {
                             Text(if (editingRuleId == null) languageManager.getString("add_rule_button") else "Update Rule")
                         }
@@ -311,7 +339,10 @@ fun RulesManagerContent(
                         onClick = {
                             editingRuleId = rule.id
                             triggerPattern = rule.triggerPattern
-                            target = rule.target
+                            artist = rule.artist ?: ""
+                            track = rule.track ?: ""
+                            album = rule.album ?: ""
+                            destination = rule.destination ?: ""
                             selectedCategory = categories.find { it == rule.category } ?: categories[0]
                             // selectedAction will be updated by the remember(selectedCategory)
                             wizardTokens = emptyList()
@@ -323,7 +354,10 @@ fun RulesManagerContent(
                                 if (editingRuleId == rule.id) {
                                     editingRuleId = null
                                     triggerPattern = ""
-                                    target = ""
+                                    artist = ""
+                                    track = ""
+                                    album = ""
+                                    destination = ""
                                 }
                             } 
                         }
@@ -358,8 +392,14 @@ fun RuleItem(rule: FastMapRule, isEditing: Boolean, onClick: () -> Unit, onDelet
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = rule.triggerPattern, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                val detail = buildString {
+                    append("${rule.category} > ${rule.actionType}")
+                    if (rule.artist != null) append(" | Artist: ${rule.artist}")
+                    if (rule.track != null) append(" | Track: ${rule.track}")
+                    if (rule.destination != null) append(" | Dest: ${rule.destination}")
+                }
                 Text(
-                    text = "${rule.category} > ${rule.actionType} on ${rule.target}",
+                    text = detail,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.secondary
                 )

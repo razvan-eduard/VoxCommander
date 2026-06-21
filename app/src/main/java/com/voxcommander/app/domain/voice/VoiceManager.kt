@@ -15,6 +15,8 @@ import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.sqrt
 
 /**
@@ -232,7 +234,7 @@ object VoiceManager {
                 
                 @Suppress("MissingPermission")
                 val audioRecord = AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION, // Calibrated for STT, avoids aggressive MIC processing
                     currentQuality.sampleRate,
                     CHANNEL_CONFIG,
                     AUDIO_FORMAT,
@@ -249,8 +251,9 @@ object VoiceManager {
                 }
 
                 audioRecord.startRecording()
-                val audioData = mutableListOf<Byte>()
-                val buffer = ByteArray(bufferSize)
+                val audioChunks = mutableListOf<ShortArray>() // Use chunks to avoid boxing into Short objects
+                val buffer = ShortArray(bufferSize / 2)
+                var totalShorts = 0
                 var lastVoiceTime = System.currentTimeMillis()
 
                 // Loop continues as long as isListening is true
@@ -258,7 +261,8 @@ object VoiceManager {
                     val read = audioRecord.read(buffer, 0, buffer.size)
                     if (read > 0) {
                         val chunk = buffer.copyOfRange(0, read)
-                        audioData.addAll(chunk.toList())
+                        audioChunks.add(chunk)
+                        totalShorts += read
                         
                         val rms = calculateRms(buffer, read)
                         _volumeFlow.value = rms
@@ -267,7 +271,7 @@ object VoiceManager {
                             lastVoiceTime = System.currentTimeMillis()
                         } else if (System.currentTimeMillis() - lastVoiceTime > SILENCE_TIMEOUT_MS) {
                             Log.d(TAG, "Silence detected, stopping recording")
-                            isListening = false // Transition to transcribing locally
+                            isListening = false 
                         }
                     } else if (read < 0) {
                         Log.e(TAG, "AudioRecord error: $read")
@@ -279,15 +283,38 @@ object VoiceManager {
                 audioRecord.release()
 
                 // Finalize STT
-                if (audioData.isNotEmpty()) {
+                if (audioChunks.isNotEmpty()) {
                     withContext(Dispatchers.Main) { 
                         _partialTranscriptionFlow.value = "Transcribing..." 
-                        _isListeningFlow.value = false // Close the "Talking" overlay
+                        _isListeningFlow.value = false 
                     }
                     
-                    // Secure access to native engine via AppStateManager's mutex
+                    // Flatten chunks into a single ShortArray efficiently
+                    val finalShortArray = ShortArray(totalShorts)
+                    var offset = 0
+                    for (chunk in audioChunks) {
+                        System.arraycopy(chunk, 0, finalShortArray, offset, chunk.size)
+                        offset += chunk.size
+                    }
+
+                    // Convert ShortArray to ByteArray with correct Little Endian order for native engines
+                    val byteArray = ByteBuffer.allocate(finalShortArray.size * 2)
+                        .order(ByteOrder.LITTLE_ENDIAN)
+                        .apply { asShortBuffer().put(finalShortArray) }
+                        .array()
+
                     val result = appStateManager?.executeSecureVoiceAction {
-                        engine.transcribe(audioData.toByteArray())
+                        // Pass language code to engine if it supports it
+                        val rawResult = if (engine is WhisperSttEngine) {
+                            engine.transcribeWithLanguage(byteArray, languageCode)
+                        } else if (engine is WhisperCppSttEngine) {
+                            engine.transcribeWithLanguage(byteArray, languageCode)
+                        } else {
+                            engine.transcribe(byteArray)
+                        }
+                        
+                        // Clean up transcription to remove trailing noise/formatting that kills regex matches
+                        rawResult.trim().lowercase().removeSuffix(".")
                     } ?: "Error: Sync failed"
                     
                     withContext(Dispatchers.Main) { 
@@ -325,14 +352,12 @@ object VoiceManager {
         isListening = false
     }
 
-    private fun calculateRms(buffer: ByteArray, length: Int): Float {
+    private fun calculateRms(buffer: ShortArray, length: Int): Float {
         var sum = 0.0
-        for (i in 0 until length step 2) {
-            if (i + 1 < length) {
-                val sample = ((buffer[i + 1].toInt() shl 8) or (buffer[i].toInt() and 0xFF)).toShort()
-                sum += sample * sample
-            }
+        for (i in 0 until length) {
+            val sample = buffer[i]
+            sum += sample.toDouble() * sample
         }
-        return sqrt(sum / (length / 2)).toFloat() / 32768.0f
+        return sqrt(sum / length).toFloat() / 32768.0f
     }
 }

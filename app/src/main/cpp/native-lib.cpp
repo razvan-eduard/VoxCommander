@@ -54,7 +54,8 @@ Java_com_whispercpp_whisper_WhisperLib_00024Companion_fullTranscribe(
         jobject /* this */,
         jlong contextPtr,
         jint numThreads,
-        jfloatArray audioData) {
+        jfloatArray audioData,
+        jstring language) {
 
     whisper_context* ctx = reinterpret_cast<whisper_context*>(contextPtr);
 
@@ -63,18 +64,23 @@ Java_com_whispercpp_whisper_WhisperLib_00024Companion_fullTranscribe(
         return;
     }
 
+    const char* lang = nullptr;
+    if (language != nullptr) {
+        lang = env->GetStringUTFChars(language, nullptr);
+    }
+
     jfloat* audio = env->GetFloatArrayElements(audioData, nullptr);
     jsize length = env->GetArrayLength(audioData);
 
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Transcribing with %d threads, audio length: %d", numThreads, length);
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Transcribing with %d threads, lang: %s, audio length: %d",
+        numThreads, lang ? lang : "auto", length);
 
     whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
     params.print_progress = false;
     params.print_special = false;
     params.print_realtime = false;
     params.n_threads = numThreads;
-    // Auto-detect language or use model default to avoid "en" override issues
-    params.language = nullptr;
+    params.language = lang;
     params.temperature = 0.0f;
     params.max_len = 224;
     params.token_timestamps = false;
@@ -84,6 +90,9 @@ Java_com_whispercpp_whisper_WhisperLib_00024Companion_fullTranscribe(
     int result = whisper_full(ctx, params, audio, length);
 
     env->ReleaseFloatArrayElements(audioData, audio, 0);
+    if (language != nullptr) {
+        env->ReleaseStringUTFChars(language, lang);
+    }
 
     if (result != 0) {
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Transcription failed with code: %d", result);

@@ -95,16 +95,31 @@ fun IntentEnginesSubTab(
                         Strings.AiProcessors.GEMINI_NATIVE to "Gemini Nano (System)"
                     )
 
-                    aiOptions.forEach { (id, label) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    var expanded by remember { mutableStateOf(false) }
+                    
+                    Box {
+                        OutlinedButton(
+                            onClick = { expanded = true },
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            RadioButton(
-                                selected = aiProcessor == id,
-                                onClick = { appStateManager.setAiProcessor(id) }
-                            )
-                            Text(text = label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp))
+                            val currentLabel = aiOptions.find { it.first == aiProcessor }?.second ?: "Select..."
+                            Text(text = currentLabel)
+                        }
+                        
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            aiOptions.forEach { (id, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(text = label) },
+                                    onClick = {
+                                        appStateManager.setAiProcessor(id)
+                                        expanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }

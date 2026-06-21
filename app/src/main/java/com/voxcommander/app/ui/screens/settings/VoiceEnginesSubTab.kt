@@ -86,53 +86,93 @@ fun VoiceEnginesSubTab(
 
     HorizontalDivider()
 
-    // 2. Language Selection (Google/API)
-    if (voiceProcessor == Strings.Processors.GOOGLE || voiceProcessor == Strings.Processors.WHISPER_API) {
-        val languages = listOf(
-            "ro" to languageManager.getString("voice_language_ro"),
-            "en" to languageManager.getString("voice_language_en"),
-            "de" to languageManager.getString("voice_language_de"),
-            "fr" to languageManager.getString("voice_language_fr"),
-            "es" to languageManager.getString("voice_language_es"),
-            "it" to languageManager.getString("voice_language_it")
-        )
+    // 2. Global Voice Language Selection
+    val languages = listOf(
+        "ro" to languageManager.getString("voice_language_ro"),
+        "en" to languageManager.getString("voice_language_en"),
+        "de" to languageManager.getString("voice_language_de"),
+        "fr" to languageManager.getString("voice_language_fr"),
+        "es" to languageManager.getString("voice_language_es"),
+        "it" to languageManager.getString("voice_language_it")
+    )
 
-        var showLanguageSheet by remember { mutableStateOf(false) }
-        val languageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showLanguageSheet by remember { mutableStateOf(false) }
+    val languageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-        val languageGroups = listOf(DropdownGroup("AVAILABLE LANGUAGES", languages))
-        val selectedLangPair = languages.find { it.first == voiceLanguage }
+    val languageGroups = listOf(DropdownGroup("AVAILABLE LANGUAGES", languages))
+    val selectedLangPair = languages.find { it.first == voiceLanguage }
 
-        Text(text = languageManager.getString("voice_language"), style = MaterialTheme.typography.labelLarge)
+    Text(text = languageManager.getString("voice_language"), style = MaterialTheme.typography.labelLarge)
+    
+    GroupedDropdownMenu(
+        selectedItem = selectedLangPair,
+        groups = languageGroups,
+        itemLabel = { it.second },
+        isDownloaded = { true }, 
+        onDeviceLabel = "",
+        onItemSelected = { pair, _ -> onVoiceLanguageSelected(pair.first) },
+        onExpandedChange = { showLanguageSheet = it },
+        languageManager = languageManager
+    )
+
+    if (showLanguageSheet) {
+        ModalBottomSheet(onDismissRequest = { showLanguageSheet = false }, sheetState = languageSheetState) {
+            GroupedDropdownContent(
+                title = languageManager.getString("voice_language"),
+                groups = languageGroups,
+                itemLabel = { it.second },
+                isDownloaded = { true },
+                onDeviceLabel = "",
+                onItemSelected = { pair, _ -> onVoiceLanguageSelected(pair.first); showLanguageSheet = false },
+                languageManager = languageManager
+            )
+        }
+    }
+    
+    HorizontalDivider()
+
+    // 3. API Model Selection (OpenAI Whisper)
+    if (voiceProcessor == Strings.Processors.WHISPER_API) {
+        val apiModels = listOf("whisper-1") // Add more as they become available
+        var selectedApiModel by remember { mutableStateOf(apiModels.first()) }
+        val isSelectionEnabled = apiModels.size > 1
         
-        GroupedDropdownMenu(
-            selectedItem = selectedLangPair,
-            groups = languageGroups,
-            itemLabel = { it.second },
-            isDownloaded = { true }, 
-            onDeviceLabel = "",
-            onItemSelected = { pair, _ -> onVoiceLanguageSelected(pair.first) },
-            onExpandedChange = { showLanguageSheet = it },
-            languageManager = languageManager
+        Text(
+            text = "OpenAI Whisper Model", 
+            style = MaterialTheme.typography.labelLarge,
+            color = if (isSelectionEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
         )
-
-        if (showLanguageSheet) {
-            ModalBottomSheet(onDismissRequest = { showLanguageSheet = false }, sheetState = languageSheetState) {
-                GroupedDropdownContent(
-                    title = languageManager.getString("voice_language"),
-                    groups = languageGroups,
-                    itemLabel = { it.second },
-                    isDownloaded = { true },
-                    onDeviceLabel = "",
-                    onItemSelected = { pair, _ -> onVoiceLanguageSelected(pair.first); showLanguageSheet = false },
-                    languageManager = languageManager
-                )
+        
+        var expanded by remember { mutableStateOf(false) }
+        Box {
+            OutlinedButton(
+                onClick = { if (isSelectionEnabled) expanded = true }, 
+                modifier = Modifier.fillMaxWidth(),
+                enabled = isSelectionEnabled
+            ) {
+                Text(text = selectedApiModel)
+            }
+            
+            DropdownMenu(
+                expanded = expanded, 
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.fillMaxWidth(0.9f) // Match the width of the button roughly in the container
+            ) {
+                apiModels.forEach { model ->
+                    DropdownMenuItem(
+                        text = { Text(model, modifier = Modifier.fillMaxWidth()) },
+                        onClick = {
+                            selectedApiModel = model
+                            expanded = false
+                        }
+                    )
+                }
             }
         }
         HorizontalDivider()
     }
 
-    // 3. Engine Specific Sections
+    // 4. Engine Specific Sections
     when (voiceProcessor) {
         Strings.Processors.WHISPER_CPP, 
         Strings.Processors.WHISPER_VULKAN, 

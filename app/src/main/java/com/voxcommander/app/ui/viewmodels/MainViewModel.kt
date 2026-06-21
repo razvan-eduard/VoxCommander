@@ -25,10 +25,17 @@ class MainViewModel(
     fun processVoiceCommand(voiceLanguage: String, userPreference: String) {
         _isProcessing.value = true
         VoiceManager.startListening(voiceLanguage, userPreference) { text ->
-            _transcription.value = text
+            val cleanText = text.trim()
+            _transcription.value = cleanText
+            
+            if (cleanText.isBlank() || cleanText.startsWith("Error:")) {
+                _isProcessing.value = false
+                return@startListening
+            }
+
             viewModelScope.launch {
                 try {
-                    val result = assistantEngine.processCommand(text)
+                    val result = assistantEngine.processCommand(cleanText)
                     _currentIntent.value = result
                 } catch (e: Exception) {
                     e.printStackTrace()

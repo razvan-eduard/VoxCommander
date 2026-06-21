@@ -18,17 +18,20 @@ class FastMapEngine(
 
             if (matchResult != null) {
                 // Extract the first capture group if it exists
-                val query = if (matchResult.groups.size > 1) {
+                val extractedValue = if (matchResult.groups.size > 1) {
                     matchResult.groups[1]?.value
                 } else {
                     null
                 }
 
+                // Map the rule fields to the intent payload
                 return IntentPayload(
                     category = rule.category,
                     actionType = rule.actionType,
-                    target = rule.target,
-                    query = query
+                    artist = rule.artist,
+                    track = rule.track ?: extractedValue, // Capture group takes precedence if track is null
+                    album = rule.album,
+                    destination = rule.destination ?: if (rule.category == "maps") extractedValue else null
                 )
             }
         }

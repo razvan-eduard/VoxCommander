@@ -16,11 +16,11 @@ class WhisperContext private constructor(private var ptr: Long) {
         Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     )
 
-    suspend fun transcribeData(data: FloatArray, threads: Int, printTimestamp: Boolean = true): String = withContext(scope.coroutineContext) {
+    suspend fun transcribeData(data: FloatArray, threads: Int, language: String? = null, printTimestamp: Boolean = true): String = withContext(scope.coroutineContext) {
         if (ptr == 0L) return@withContext "Error: Context released"
         
-        Log.d(LOG_TAG, "Transcribing with $threads threads")
-        WhisperLib.fullTranscribe(ptr, threads, data)
+        Log.d(LOG_TAG, "Transcribing with $threads threads, lang: ${language ?: "auto"}")
+        WhisperLib.fullTranscribe(ptr, threads, data, language)
         
         val textCount = WhisperLib.getTextSegmentCount(ptr)
         return@withContext buildString {
@@ -96,7 +96,7 @@ class WhisperLib {
         // JNI Methods - Signature matching libwhisper.so (contains JNI Patch)
         external fun initContext(modelPath: String, useGpu: Boolean): Long
         external fun freeContext(contextPtr: Long)
-        external fun fullTranscribe(contextPtr: Long, numThreads: Int, audioData: FloatArray)
+        external fun fullTranscribe(contextPtr: Long, numThreads: Int, audioData: FloatArray, language: String?)
         external fun getTextSegmentCount(contextPtr: Long): Int
         external fun getTextSegment(contextPtr: Long, index: Int): String
         external fun getTextSegmentT0(contextPtr: Long, index: Int): Long

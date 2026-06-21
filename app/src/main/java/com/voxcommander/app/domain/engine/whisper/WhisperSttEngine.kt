@@ -2,6 +2,7 @@ package com.voxcommander.app.domain.engine.whisper
 
 import com.voxcommander.app.domain.engine.SttEngine
 import com.voxcommander.app.utils.Strings
+import com.voxcommander.app.utils.WavUtils
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -18,13 +19,17 @@ interface WhisperApi {
     suspend fun transcribe(
         @Header("Authorization") token: String,
         @Part file: MultipartBody.Part,
-        @Part model: MultipartBody.Part = MultipartBody.Part.createFormData(WhisperSttEngine.PART_MODEL, WhisperSttEngine.MODEL_NAME)
+        @Part model: MultipartBody.Part,
+        @Part language: MultipartBody.Part? = null
     ): WhisperResponse
 }
 
 data class WhisperResponse(val text: String)
 
-class WhisperSttEngine(private val apiKey: String) : SttEngine {
+class WhisperSttEngine(
+    private val apiKey: String,
+    private val modelName: String = MODEL_NAME
+) : SttEngine {
     
     private val api = Retrofit.Builder()
         .baseUrl(BASE_URL)
@@ -32,12 +37,21 @@ class WhisperSttEngine(private val apiKey: String) : SttEngine {
         .build()
         .create(WhisperApi::class.java)
 
-    override suspend fun transcribe(audio: ByteArray): String {
-        val requestBody = audio.toRequestBody(MEDIA_TYPE_WAV.toMediaType())
+    override suspend fun transcribe(audio: ByteArray): String = transcribeWithLanguage(audio, null)
+
+    suspend fun transcribeWithLanguage(audio: ByteArray, langCode: String?): String {
+        val wavAudio = WavUtils.wrapPcmToWav(audio)
+        val requestBody = wavAudio.toRequestBody(MEDIA_TYPE_WAV.toMediaType())
         val filePart = MultipartBody.Part.createFormData(PART_FILE, FILENAME_WAV, requestBody)
+        val modelPart = MultipartBody.Part.createFormData(PART_MODEL, modelName)
+        
+        // Use provided language code to prevent hallucinating Slavic languages (e.g. Polish)
+        val langPart = langCode?.let { 
+            MultipartBody.Part.createFormData("language", it) 
+        }
         
         return try {
-            val response = api.transcribe(AUTH_PREFIX + apiKey, filePart)
+            val response = api.transcribe(AUTH_PREFIX + apiKey, filePart, modelPart, langPart)
             response.text
         } catch (e: Exception) {
             e.printStackTrace()

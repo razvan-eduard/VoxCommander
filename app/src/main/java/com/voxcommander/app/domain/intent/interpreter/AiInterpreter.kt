@@ -42,7 +42,7 @@ class AiInterpreter(
     private fun mockL2Response(spokenText: String): IntentPayload? {
         return when {
             spokenText.contains("help", ignoreCase = true) -> {
-                IntentPayload(category = "SYSTEM", actionType = "INFO", target = "User", query = "Mock L2 Help")
+                IntentPayload(category = "settings", actionType = "help")
             }
             else -> null
         }
