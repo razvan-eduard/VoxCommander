@@ -17,6 +17,7 @@ class IntentDecisionMap(
     private val l1Engine: AssistantEngine,
     private val l2CloudEngine: AssistantEngine,
     private val l3LocalEngine: AssistantEngine,
+    private val geminiEngine: AssistantEngine,
     private val settingsManager: SettingsManager
 ) : AssistantEngine {
 
@@ -47,6 +48,9 @@ class IntentDecisionMap(
                 }
                 Strings.AiProcessors.LLAMA_LOCAL -> {
                     l3LocalEngine.processCommand(spokenText)
+                }
+                Strings.AiProcessors.GEMINI_NATIVE -> {
+                    geminiEngine.processCommand(spokenText)
                 }
                 else -> null
             }

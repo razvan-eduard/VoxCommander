@@ -255,6 +255,15 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getBoolean(KEY_VULKAN_RUNTIME_VERIFIED, false)
     }
 
+    // --- GEMINI NATIVE SUPPORT ---
+    fun setGeminiIncompatible(incompatible: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_GEMINI_INCOMPATIBLE, incompatible).apply()
+    }
+
+    fun isGeminiIncompatible(): Boolean {
+        return sharedPreferences.getBoolean(KEY_GEMINI_INCOMPATIBLE, false)
+    }
+
     fun saveCloudIntelligenceEnabled(enabled: Boolean) {
         sharedPreferences.edit().putBoolean(Strings.Preferences.KEY_CLOUD_INTELLIGENCE_ENABLED, enabled).apply()
     }
@@ -358,5 +367,6 @@ class SettingsManager(context: Context) {
         private const val KEY_VERBOSE_LOGGING_ENABLED = Strings.Preferences.KEY_VERBOSE_LOGGING
         private const val KEY_VOICE_MODEL_READY = "voice_model_ready"
         private const val KEY_CLOUD_INTELLIGENCE_ENABLED = "cloud_intelligence_enabled"
+        private const val KEY_GEMINI_INCOMPATIBLE = "gemini_incompatible"
     }
 }

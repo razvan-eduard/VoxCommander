@@ -9,6 +9,7 @@ import com.voxcommander.app.domain.intent.IntentDecisionMap
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
 import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
 import com.voxcommander.app.domain.intent.interpreter.OpenAiInterpreter
+import com.voxcommander.app.domain.intent.interpreter.GeminiNanoInterpreter
 import com.voxcommander.app.domain.diagnostic.VulkanProbe
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
@@ -49,7 +50,8 @@ class AppContainer(context: Context) {
     private val l1Engine = FastMapEngine(fastMapDao)
     private val l2Engine = OpenAiInterpreter(settingsManager)
     private val l3Engine = LocalLlmInterpreter(appContext, settingsManager)
-    val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, l3Engine, settingsManager)
+    private val geminiEngine = GeminiNanoInterpreter(appContext)
+    val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, l3Engine, geminiEngine, settingsManager)
 
     // --- VIEW MODELS ---
     val mainViewModel = MainViewModel(masterIntentEngine)
@@ -61,9 +63,27 @@ class AppContainer(context: Context) {
     )
 
     init {
-        android.util.Log.d("AppContainer", "AppContainer init - starting Vulkan checks")
+        android.util.Log.d("AppContainer", "AppContainer init - starting compatibility checks")
         checkVulkanCrashCookie()
         detectVulkanSupport()
+        detectGeminiSupport()
+    }
+
+    /**
+     * Checks if Gemini Nano (AICore) is available on the system.
+     */
+    private fun detectGeminiSupport() {
+        try {
+            val pm = appContext.packageManager
+            pm.getPackageInfo("com.google.android.aicore", 0)
+            android.util.Log.d("GeminiProbe", "AICore detected - Gemini Nano supported")
+            settingsManager.setGeminiIncompatible(false)
+        } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            android.util.Log.w("GeminiProbe", "AICore not found - marking Gemini Nano incompatible")
+            settingsManager.setGeminiIncompatible(true)
+        } catch (e: Exception) {
+            android.util.Log.e("GeminiProbe", "Error probing Gemini support", e)
+        }
     }
 
     /**

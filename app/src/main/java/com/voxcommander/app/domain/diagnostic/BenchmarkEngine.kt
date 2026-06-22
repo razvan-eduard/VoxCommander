@@ -104,14 +104,18 @@ class BenchmarkEngine(
             runApiBenchmark(apiKey, dummyAudio)
         }
 
-        // 5. LLM Diagnostics (Llama Local)
+        // 5. LLM Diagnostics (Local LLM via MediaPipe)
         val llamaModelId = settingsManager.getSelectedLlamaModelId()
+        
+        diagInfo.append("--- LOCAL LLM DIAGNOSTICS ---\n")
+        val geminiSupported = !settingsManager.isGeminiIncompatible()
+        diagInfo.append("Gemini Nano Native: ${if (geminiSupported) "SUPPORTED" else "INCOMPATIBLE"}\n")
+        
         if (settingsManager.isModelDownloaded(llamaModelId)) {
-            diagInfo.append("--- LOCAL LLM DIAGNOSTICS ---\n")
-            diagInfo.append("Engine: MediaPipe GenAI\n")
             diagInfo.append("Active Model: $llamaModelId\n\n")
-            
             runLlamaBenchmark(llamaModelId)
+        } else {
+            diagInfo.append("Llama Model: Not Downloaded\n\n")
         }
 
         // Finalize system info view

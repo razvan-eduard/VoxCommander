@@ -15,8 +15,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.voxcommander.app.domain.diagnostic.BenchmarkEngine
@@ -111,8 +115,25 @@ fun BenchmarkSettingsTab(
         if (systemInfo.isNotBlank()) {
             item {
                 Text(text = "Engine Runtime Diagnostics", style = MaterialTheme.typography.titleSmall)
-                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.Black)) {
-                    Text(text = systemInfo, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = Color.Green, modifier = Modifier.padding(12.dp), fontSize = 10.sp)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.Black)
+                ) {
+                    val annotatedInfo = buildAnnotatedString {
+                        systemInfo.split("\n").forEach { line ->
+                            val isError = line.contains("INCOMPATIBLE") || line.contains("Error") || line.contains("Failed")
+                            withStyle(style = SpanStyle(color = if (isError) Color.Red else Color.Green)) {
+                                append(line + "\n")
+                            }
+                        }
+                    }
+                    Text(
+                        text = annotatedInfo,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(12.dp),
+                        fontSize = 10.sp
+                    )
                 }
             }
         }

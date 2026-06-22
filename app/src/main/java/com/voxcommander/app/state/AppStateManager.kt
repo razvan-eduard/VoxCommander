@@ -244,7 +244,7 @@ class AppStateManager private constructor(
 
     // Diagnostic Helpers
     fun refreshNativeLibsStatus() {
-        // List of SO files we depend on
+        // List of SO files and system components we depend on
         val soFiles = listOf(
             "libwhisper.so" to "Core Whisper STT Engine",
             "libggml.so" to "GGML Tensor Library",
@@ -253,50 +253,58 @@ class AppStateManager private constructor(
             "libggml-vulkan.so" to "Vulkan GPU Acceleration",
             "libomp.so" to "OpenMP Multi-threading",
             "libvosk.so" to "Vosk Voice Engine",
-            "libllm_inference_engine_jni.so" to "MediaPipe Llama Engine"
+            "libllm_inference_engine_jni.so" to "MediaPipe Llama Engine",
+            "Google AICore" to "Gemini Nano System Service"
         )
 
         val statusList = soFiles.map { (name, desc) ->
-            val file = java.io.File(context.applicationInfo.nativeLibraryDir, name)
-            val exists = file.exists()
+            val exists: Boolean
+            val isIncompatible: Boolean
+            
+            if (name == "Google AICore") {
+                isIncompatible = settingsManager.isGeminiIncompatible()
+                exists = !isIncompatible
+            } else {
+                val file = java.io.File(context.applicationInfo.nativeLibraryDir, name)
+                exists = file.exists()
+                isIncompatible = name.contains("ggml-vulkan") && settingsManager.isVulkanIncompatible()
+            }
+            
             val isActive: Boolean
             val adjustedDesc: String
-            val isIncompatible: Boolean
+            
             when {
-                name.contains("ggml-vulkan") && settingsManager.isVulkanIncompatible() -> {
+                isIncompatible -> {
                     isActive = false
-                    adjustedDesc = "Vulkan GPU Acceleration (Incompatible)"
-                    isIncompatible = true
+                    adjustedDesc = "$desc (Incompatible)"
                 }
                 name.contains("whisper") && _voiceProcessor.value.startsWith("WHISPER") -> {
                     isActive = true
                     adjustedDesc = desc
-                    isIncompatible = false
                 }
                 name.contains("ggml") && _voiceProcessor.value.startsWith("WHISPER") -> {
                     isActive = true
                     adjustedDesc = desc
-                    isIncompatible = false
                 }
                 name.contains("omp") && _voiceProcessor.value.startsWith("WHISPER") -> {
                     isActive = true
                     adjustedDesc = desc
-                    isIncompatible = false
                 }
                 name.contains("vosk") && _voiceProcessor.value == "VOSK" -> {
                     isActive = true
                     adjustedDesc = desc
-                    isIncompatible = false
                 }
                 name.contains("llm") && settingsManager.getAiProcessor() == Strings.AiProcessors.LLAMA_LOCAL -> {
                     isActive = true
                     adjustedDesc = desc
-                    isIncompatible = false
+                }
+                name == "Google AICore" && settingsManager.getAiProcessor() == Strings.AiProcessors.GEMINI_NATIVE -> {
+                    isActive = true
+                    adjustedDesc = desc
                 }
                 else -> {
                     isActive = false
                     adjustedDesc = desc
-                    isIncompatible = false
                 }
             }
             NativeLibStatus(name, exists, isActive, adjustedDesc, isIncompatible)

@@ -112,12 +112,25 @@ fun IntentEnginesSubTab(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             aiOptions.forEach { (id, label) ->
+                                val isEnabled = when (id) {
+                                    Strings.AiProcessors.GEMINI_NATIVE -> !settingsManager.isGeminiIncompatible()
+                                    else -> true
+                                }
+                                
                                 DropdownMenuItem(
-                                    text = { Text(text = label) },
+                                    text = { 
+                                        Text(
+                                            text = if (isEnabled) label else "$label (Incompatible)",
+                                            color = if (isEnabled) LocalContentColor.current else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        ) 
+                                    },
                                     onClick = {
-                                        appStateManager.setAiProcessor(id)
-                                        expanded = false
-                                    }
+                                        if (isEnabled) {
+                                            appStateManager.setAiProcessor(id)
+                                            expanded = false
+                                        }
+                                    },
+                                    enabled = isEnabled
                                 )
                             }
                         }
