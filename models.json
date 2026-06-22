@@ -742,16 +742,16 @@
     "nlu_llm": [
       {
         "id": "qwen2.5-0.5b",
-        "label": "Qwen 2.5 0.5B (Extreme Speed)",
-        "path": "nlu-assets/Qwen2.5-0.5B-Instruct_q8.task",
+        "label": "Qwen 2.5 0.5B (High Precision q8)",
+        "path": "nlu-assets/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
         "size_mb": 690,
         "engine_type": "MEDIAPIPE_GENAI"
       },
       {
         "id": "gemma3-1b",
-        "label": "Gemma 3 1B (Google Native)",
-        "path": "nlu-assets/gemma3-1b-it-q4.task",
-        "size_mb": 555,
+        "label": "Gemma 3 1B (Balanced q4)",
+        "path": "nlu-assets/Gemma3-1B-IT_multi-prefill-seq_q4_block128_ekv1280.task",
+        "size_mb": 689,
         "engine_type": "MEDIAPIPE_GENAI"
       }
     ]
