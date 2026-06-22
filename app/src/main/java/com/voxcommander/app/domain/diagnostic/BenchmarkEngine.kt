@@ -36,7 +36,21 @@ class BenchmarkEngine(
         // 1. Hardware Info (from Whisper/GGML)
         diagInfo.append("--- HARDWARE CAPABILITIES ---\n")
         diagInfo.append(WhisperLib.getSystemInfo())
-        diagInfo.append("\n\n")
+        diagInfo.append("\n")
+
+        // Add Whisper Vulkan compatibility status
+        diagInfo.append("--- WHISPER VULKAN COMPATIBILITY ---\n")
+        if (settingsManager.isVulkanIncompatible()) {
+            diagInfo.append("Status: INCOMPATIBLE (GPU crashes during Whisper inference)\n")
+            diagInfo.append("Note: Hardware supports Vulkan but Whisper GPU workload fails.\n")
+        } else if (settingsManager.isVulkanRuntimeVerified()) {
+            diagInfo.append("Status: VERIFIED (GPU inference tested successfully)\n")
+        } else if (settingsManager.isVulkanProbeDone()) {
+            diagInfo.append("Status: COMPATIBLE (probe passed, inference not yet verified)\n")
+        } else {
+            diagInfo.append("Status: UNKNOWN (probe not yet run)\n")
+        }
+        diagInfo.append("\n")
 
         // 2. Whisper Diagnostics
         val downloadedWhisperModels = WhisperModelRegistry.models.filter {

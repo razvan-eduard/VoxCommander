@@ -225,6 +225,36 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getBoolean(KEY_VULKAN_INCOMPATIBLE, false)
     }
 
+    fun setVulkanProbeDone(done: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_VULKAN_PROBE_DONE, done).apply()
+    }
+
+    fun isVulkanProbeDone(): Boolean {
+        return sharedPreferences.getBoolean(KEY_VULKAN_PROBE_DONE, false)
+    }
+
+    /**
+     * Crash-cookie: set (committed synchronously) right before a real GPU/Vulkan
+     * operation that may crash the process natively. If the process dies, this flag
+     * survives and is detected on next launch.
+     */
+    fun setVulkanRuntimeAttempt(active: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_VULKAN_RUNTIME_ATTEMPT, active).commit()
+    }
+
+    fun isVulkanRuntimeAttemptPending(): Boolean {
+        return sharedPreferences.getBoolean(KEY_VULKAN_RUNTIME_ATTEMPT, false)
+    }
+
+    /** Set once a real GPU transcription has completed successfully on this device. */
+    fun setVulkanRuntimeVerified(verified: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_VULKAN_RUNTIME_VERIFIED, verified).apply()
+    }
+
+    fun isVulkanRuntimeVerified(): Boolean {
+        return sharedPreferences.getBoolean(KEY_VULKAN_RUNTIME_VERIFIED, false)
+    }
+
     fun saveCloudIntelligenceEnabled(enabled: Boolean) {
         sharedPreferences.edit().putBoolean(Strings.Preferences.KEY_CLOUD_INTELLIGENCE_ENABLED, enabled).apply()
     }
@@ -312,6 +342,9 @@ class SettingsManager(context: Context) {
         private const val KEY_SELECTED_VOSK_MODEL_NAME = Strings.Preferences.KEY_SELECTED_VOSK_MODEL_NAME
         private const val KEY_MODEL_DOWNLOADED_PREFIX = Strings.Preferences.KEY_MODEL_DOWNLOADED_PREFIX
         private const val KEY_VULKAN_INCOMPATIBLE = Strings.Preferences.KEY_VULKAN_INCOMPATIBLE
+        private const val KEY_VULKAN_PROBE_DONE = Strings.Preferences.KEY_VULKAN_PROBE_DONE
+        private const val KEY_VULKAN_RUNTIME_ATTEMPT = Strings.Preferences.KEY_VULKAN_RUNTIME_ATTEMPT
+        private const val KEY_VULKAN_RUNTIME_VERIFIED = Strings.Preferences.KEY_VULKAN_RUNTIME_VERIFIED
         private const val KEY_WAKE_WORD = Strings.Preferences.KEY_WAKE_WORD
         private const val KEY_WAKE_WORD_ENABLED = Strings.Preferences.KEY_WAKE_WORD_ENABLED
         private const val KEY_WAKE_WORD_MODEL_PATH = Strings.Preferences.KEY_WAKE_WORD_MODEL_PATH

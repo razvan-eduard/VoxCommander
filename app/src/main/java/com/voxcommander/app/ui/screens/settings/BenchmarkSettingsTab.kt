@@ -152,6 +152,7 @@ fun EngineLibGroupCard(title: String, libs: List<com.voxcommander.app.state.Nati
 @Composable
 fun NativeLibStatusItem(lib: com.voxcommander.app.state.NativeLibStatus) {
     val statusColor = when {
+        lib.isIncompatible -> Color.Red
         lib.isActive && lib.exists -> Color.Green
         !lib.isActive && lib.exists -> Color(0xFF2196F3) // Blue (Standby)
         lib.isActive && !lib.exists -> Color.Red // CRITICAL: Active but missing
@@ -165,13 +166,14 @@ fun NativeLibStatusItem(lib: com.voxcommander.app.state.NativeLibStatus) {
             Text(text = lib.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Text(
                 text = when {
+                    lib.isIncompatible -> "${lib.description}"
                     lib.isActive && lib.exists -> "${lib.description} (Active)"
                     !lib.isActive && lib.exists -> "${lib.description} (Ready)"
                     lib.isActive && !lib.exists -> "${lib.description} (MISSING!)"
                     else -> "${lib.description} (Not Installed)"
                 },
                 style = MaterialTheme.typography.labelSmall,
-                color = if (lib.isActive && !lib.exists) Color.Red else Color.Gray
+                color = if (lib.isIncompatible || (lib.isActive && !lib.exists)) Color.Red else Color.Gray
             )
         }
     }

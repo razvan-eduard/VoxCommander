@@ -4,6 +4,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import android.util.Log
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -91,42 +92,63 @@ class ModelDownloader(private val context: Context) {
         protectedWhisperModels: Set<String>,
         protectedLlamaModels: Set<String>
     ) {
-        val rootDir = context.getExternalFilesDir(null) ?: return
-        
+        val rootDir = context.getExternalFilesDir(null) ?: run {
+            Log.w(CLEANUP_TAG, "rootDir (getExternalFilesDir) is null; aborting cleanup")
+            return
+        }
+
+        Log.d(CLEANUP_TAG, "Cleanup start. rootDir=${rootDir.absolutePath}")
+        Log.d(CLEANUP_TAG, "Protected -> vosk=$protectedVoskModels whisper=$protectedWhisperModels llama=$protectedLlamaModels")
+        val allNames = rootDir.listFiles()?.map { it.name } ?: emptyList()
+        Log.d(CLEANUP_TAG, "Files in rootDir (${allNames.size}): $allNames")
+
         rootDir.listFiles()?.forEach { file ->
             val name = file.name
             
             // 1. Vosk Protection (Directories)
-            if (name.startsWith(VOSK_MODEL_DIR_PREFIX)) {
+            if (name.startsWith(VOSK_MODEL_DIR_PREFIX) && file.isDirectory) {
                 val modelName = name.removePrefix(VOSK_MODEL_DIR_PREFIX)
-                if (!protectedVoskModels.contains(modelName)) {
-                    file.deleteRecursively()
+                val protectedModel = protectedVoskModels.contains(modelName)
+                Log.d(CLEANUP_TAG, "VOSK dir '$name' id='$modelName' protected=$protectedModel")
+                if (!protectedModel) {
+                    val deleted = file.deleteRecursively()
+                    Log.d(CLEANUP_TAG, "VOSK delete '$name' result=$deleted")
                 }
             }
             
             // 2. Whisper Protection (Files)
             if (name.startsWith(WHISPER_MODEL_FILENAME_PREFIX) && name.endsWith(WHISPER_MODEL_EXTENSION)) {
                 val modelId = name.removePrefix(WHISPER_MODEL_FILENAME_PREFIX).removeSuffix(WHISPER_MODEL_EXTENSION)
-                if (!protectedWhisperModels.contains(modelId)) {
-                    file.delete()
+                val protectedModel = protectedWhisperModels.contains(modelId)
+                Log.d(CLEANUP_TAG, "WHISPER file '$name' id='$modelId' protected=$protectedModel")
+                if (!protectedModel) {
+                    val deleted = file.delete()
+                    Log.d(CLEANUP_TAG, "WHISPER delete '$name' result=$deleted exists=${file.exists()}")
                 }
             }
             
             // 3. Llama Protection (Files)
-            if (name.startsWith("llama-model-") && name.endsWith(".bin")) {
-                val modelId = name.removePrefix("llama-model-").removeSuffix(".bin")
-                if (!protectedLlamaModels.contains(modelId)) {
-                    file.delete()
+            if (name.startsWith(LLAMA_MODEL_FILENAME_PREFIX) && name.endsWith(LLAMA_MODEL_EXTENSION)) {
+                val modelId = name.removePrefix(LLAMA_MODEL_FILENAME_PREFIX).removeSuffix(LLAMA_MODEL_EXTENSION)
+                val protectedModel = protectedLlamaModels.contains(modelId)
+                Log.d(CLEANUP_TAG, "LLAMA file '$name' id='$modelId' protected=$protectedModel size=${file.length()}")
+                if (!protectedModel) {
+                    val deleted = file.delete()
+                    Log.d(CLEANUP_TAG, "LLAMA delete '$name' result=$deleted exists=${file.exists()}")
                 }
             }
         }
+        Log.d(CLEANUP_TAG, "Cleanup done.")
     }
 
     companion object {
+        private const val CLEANUP_TAG = "ModelCleanup"
         private const val WHISPER_MODEL_FILENAME_PREFIX = "whisper-model-"
         private const val WHISPER_MODEL_EXTENSION = ".bin"
         private const val VOSK_MODEL_ZIP_PREFIX = "vosk-model-"
         private const val VOSK_MODEL_DIR_PREFIX = "vosk-model-"
         private const val ZIP_EXTENSION = ".zip"
+        private const val LLAMA_MODEL_FILENAME_PREFIX = "llama-model-"
+        private const val LLAMA_MODEL_EXTENSION = ".bin"
     }
 }

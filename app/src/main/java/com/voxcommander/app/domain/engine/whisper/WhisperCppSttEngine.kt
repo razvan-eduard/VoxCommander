@@ -116,12 +116,25 @@ class WhisperCppSttEngine(
                 "Transcribing using ${if (isUsingGpu) "VULKAN" else "CPU"} ($threads threads), Lang: ${langCode ?: "auto"}"
             )
             
+            // Crash-cookie: a native GPU crash during inference cannot be caught by
+            // try/catch. Commit a marker before real GPU work; if the process dies,
+            // AppContainer detects the leftover cookie next launch and disables Vulkan.
+            val guardGpu = isUsingGpu && !settingsManager.isVulkanRuntimeVerified()
+            if (guardGpu) settingsManager.setVulkanRuntimeAttempt(true)
+
             // Force language if provided to prevent Cyrillic/Slavic hallucinations
             val result = currentContext.transcribeData(floatAudio, threads, language = langCode, printTimestamp = false)
+
+            if (guardGpu) {
+                // Survived a real GPU transcription -> device is genuinely compatible.
+                settingsManager.setVulkanRuntimeAttempt(false)
+                settingsManager.setVulkanRuntimeVerified(true)
+            }
 
             return@withContext result.trim()
         } catch (e: Exception) {
             Log.e(TAG, "Transcription failed", e)
+            if (isUsingGpu) settingsManager.setVulkanRuntimeAttempt(false)
             "Error: ${e.message}"
         }
     }

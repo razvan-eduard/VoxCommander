@@ -37,7 +37,8 @@ data class NativeLibStatus(
     val name: String,
     val exists: Boolean,
     val isActive: Boolean,
-    val description: String
+    val description: String,
+    val isIncompatible: Boolean = false
 )
 
 class AppStateManager private constructor(
@@ -258,15 +259,47 @@ class AppStateManager private constructor(
         val statusList = soFiles.map { (name, desc) ->
             val file = java.io.File(context.applicationInfo.nativeLibraryDir, name)
             val exists = file.exists()
-            val isActive = when {
-                name.contains("whisper") && _voiceProcessor.value.startsWith("WHISPER") -> true
-                name.contains("ggml") && _voiceProcessor.value.startsWith("WHISPER") -> true
-                name.contains("omp") && _voiceProcessor.value.startsWith("WHISPER") -> true
-                name.contains("vosk") && _voiceProcessor.value == "VOSK" -> true
-                name.contains("llm") && settingsManager.getAiProcessor() == Strings.AiProcessors.LLAMA_LOCAL -> true
-                else -> false
+            val isActive: Boolean
+            val adjustedDesc: String
+            val isIncompatible: Boolean
+            when {
+                name.contains("ggml-vulkan") && settingsManager.isVulkanIncompatible() -> {
+                    isActive = false
+                    adjustedDesc = "Vulkan GPU Acceleration (Incompatible)"
+                    isIncompatible = true
+                }
+                name.contains("whisper") && _voiceProcessor.value.startsWith("WHISPER") -> {
+                    isActive = true
+                    adjustedDesc = desc
+                    isIncompatible = false
+                }
+                name.contains("ggml") && _voiceProcessor.value.startsWith("WHISPER") -> {
+                    isActive = true
+                    adjustedDesc = desc
+                    isIncompatible = false
+                }
+                name.contains("omp") && _voiceProcessor.value.startsWith("WHISPER") -> {
+                    isActive = true
+                    adjustedDesc = desc
+                    isIncompatible = false
+                }
+                name.contains("vosk") && _voiceProcessor.value == "VOSK" -> {
+                    isActive = true
+                    adjustedDesc = desc
+                    isIncompatible = false
+                }
+                name.contains("llm") && settingsManager.getAiProcessor() == Strings.AiProcessors.LLAMA_LOCAL -> {
+                    isActive = true
+                    adjustedDesc = desc
+                    isIncompatible = false
+                }
+                else -> {
+                    isActive = false
+                    adjustedDesc = desc
+                    isIncompatible = false
+                }
             }
-            NativeLibStatus(name, exists, isActive, desc)
+            NativeLibStatus(name, exists, isActive, adjustedDesc, isIncompatible)
         }
         _nativeLibsStatus.value = statusList
     }
