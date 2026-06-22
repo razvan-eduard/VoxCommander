@@ -3,6 +3,7 @@ package com.voxcommander.app.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -29,15 +30,19 @@ fun MicrophoneButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isModelOnDevice by appStateManager.voiceModelReady.collectAsState()
+    val isVoiceReady by appStateManager.voiceModelReady.collectAsState()
+    val isIntentReady by appStateManager.intentModelReady.collectAsState()
     val globalVoiceState by appStateManager.voiceState.collectAsState()
     
     val isCurrentlyProcessing = globalVoiceState == VoiceState.PROCESSING || isProcessing
     val isRecording = globalVoiceState == VoiceState.LISTENING_COMMAND
 
+    // Button is enabled only if BOTH Voice and Intent engines are ready
+    val isAppReady = isVoiceReady && isIntentReady
+
     val buttonColor by animateColorAsState(
         targetValue = when {
-            !isModelOnDevice -> Color.Gray
+            !isAppReady -> Color.Gray
             isRecording -> MaterialTheme.colorScheme.error // RED
             isCurrentlyProcessing -> Color(0xFFFFA000) // ORANGE
             else -> MaterialTheme.colorScheme.primary
@@ -50,12 +55,11 @@ fun MicrophoneButton(
         onClick = onClick,
         modifier = modifier.size(150.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        enabled = isModelOnDevice,
+        enabled = isAppReady,
         colors = ButtonDefaults.buttonColors(containerColor = buttonColor)
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (isCurrentlyProcessing) {
-                // Spinning indicator for "AI is thinking"
                 CircularProgressIndicator(
                     modifier = Modifier.size(80.dp),
                     color = Color.White,
@@ -66,7 +70,7 @@ fun MicrophoneButton(
                     Icons.Default.Mic,
                     contentDescription = languageManager.getString("content_desc_record"),
                     modifier = Modifier.size(80.dp),
-                    tint = if (isModelOnDevice) Color.White else Color.LightGray
+                    tint = if (isAppReady) Color.White else Color.LightGray
                 )
             }
         }
@@ -78,15 +82,28 @@ fun ModelNotPresentMessage(
     languageManager: LanguageManager,
     appStateManager: AppStateManager
 ) {
-    val isModelOnDevice by appStateManager.voiceModelReady.collectAsState()
+    val isVoiceReady by appStateManager.voiceModelReady.collectAsState()
+    val isIntentReady by appStateManager.intentModelReady.collectAsState()
 
-    if (!isModelOnDevice) {
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = languageManager.getString("model_not_present"),
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold
-        )
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (!isVoiceReady) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Voice engine not ready (Download model)",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        
+        if (!isIntentReady) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "AI Intent engine not ready (Download model)",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }

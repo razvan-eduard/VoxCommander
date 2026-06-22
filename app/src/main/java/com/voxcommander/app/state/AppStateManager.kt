@@ -125,6 +125,27 @@ class AppStateManager private constructor(
         initialValue = settingsManager.isCurrentVoiceModelReady(context)
     )
 
+    // --- DERIVED READY STATE FOR INTENT ENGINE ---
+    val intentModelReady: StateFlow<Boolean> = combine(
+        aiProcessor,
+        selectedLlamaModelId
+    ) { processor, llamaId ->
+        when (processor) {
+            Strings.AiProcessors.LLAMA_LOCAL -> {
+                settingsManager.isModelDownloaded(llamaId)
+            }
+            Strings.AiProcessors.GEMINI_NATIVE -> {
+                !settingsManager.isGeminiIncompatible()
+            }
+            Strings.AiProcessors.OPENAI -> true // Always ready if internet present
+            else -> false
+        }
+    }.stateIn(
+        scope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
+        started = SharingStarted.Eagerly,
+        initialValue = true
+    )
+
     // --- BENCHMARK & DIAGNOSTIC STATE ---
     private val _benchmarkResults = MutableStateFlow<List<BenchmarkResult>>(emptyList())
     val benchmarkResults: StateFlow<List<BenchmarkResult>> = _benchmarkResults.asStateFlow()
