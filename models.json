@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "engines": {
+    "stt_whisper": [
+      {
+        "id": "whisper-tiny",
+        "label": "Whisper Tiny (Extreme Speed)",
+        "path": "whisper-assets/ggml-tiny.bin",
+        "size_mb": 75,
+        "is_multilingual": true
+      },
+      {
+        "id": "whisper-base",
+        "label": "Whisper Base (Balanced)",
+        "path": "whisper-assets/ggml-base.bin",
+        "size_mb": 145,
+        "is_multilingual": true
+      }
+    ],
+    "wake_vosk": [
+      {
+        "id": "vosk-ro",
+        "label": "Romanian (STT & Wake)",
+        "path": "vosk-assets/vosk-model-small-ro-0.22.zip",
+        "size_mb": 45,
+        "lang_code": "ro"
+      },
+      {
+        "id": "vosk-en",
+        "label": "English (Wake Word Only)",
+        "path": "vosk-assets/vosk-model-small-en-us-0.15.zip",
+        "size_mb": 40,
+        "lang_code": "en"
+      }
+    ],
+    "nlu_llm": [
+      {
+        "id": "qwen2.5-0.5b",
+        "label": "Qwen 2.5 0.5B (Instant JSON)",
+        "path": "nlu-assets/Qwen2.5-0.5B-Instruct_q8.task",
+        "size_mb": 690,
+        "engine_type": "MEDIAPIPE_GENAI"
+      },
+      {
+        "id": "gemma3-1b",
+        "label": "Gemma 3 1B (Google Native)",
+        "path": "nlu-assets/gemma3-1b-it-q4.task",
+        "size_mb": 555,
+        "engine_type": "MEDIAPIPE_GENAI"
+      }
+    ]
+  }
+}
