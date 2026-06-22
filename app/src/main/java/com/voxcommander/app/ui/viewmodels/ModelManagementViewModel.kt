@@ -115,7 +115,14 @@ class ModelManagementViewModel(
         lastDownloadedVoskModelName = name
         lastDownloadType = "vosk"
         appStateManager.setSelectedVoskModelName(name)
-        val id = modelDownloader.downloadVoskModel(lang, url, name)
+        
+        // Resolve dynamic URL if needed
+        val resolvedUrl = if (!url.startsWith("http")) {
+            val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getVoskModels().find { it.id == name }
+            if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
+        } else url
+        
+        val id = modelDownloader.downloadVoskModel(lang, resolvedUrl, name)
         startProgressTracking(id)
     }
 
@@ -126,7 +133,14 @@ class ModelManagementViewModel(
         lastDownloadedWhisperModelId = modelId
         lastDownloadType = "whisper"
         appStateManager.setSelectedWhisperModelId(modelId)
-        val id = modelDownloader.downloadWhisperModel(modelId, url)
+        
+        // Resolve dynamic URL if needed
+        val resolvedUrl = if (!url.startsWith("http")) {
+            val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getWhisperModels().find { it.id == modelId }
+            if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
+        } else url
+        
+        val id = modelDownloader.downloadWhisperModel(modelId, resolvedUrl)
         startProgressTracking(id)
     }
 
@@ -137,7 +151,14 @@ class ModelManagementViewModel(
         lastDownloadedLlamaModelId = modelId
         lastDownloadType = "llama"
         appStateManager.setSelectedLlamaModelId(modelId)
-        val id = modelDownloader.downloadLlamaModel(modelId, url)
+        
+        // Resolve dynamic URL if needed
+        val resolvedUrl = if (!url.startsWith("http")) {
+            val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getLlmModels().find { it.id == modelId }
+            if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
+        } else url
+        
+        val id = modelDownloader.downloadLlamaModel(modelId, resolvedUrl)
         startProgressTracking(id)
     }
 

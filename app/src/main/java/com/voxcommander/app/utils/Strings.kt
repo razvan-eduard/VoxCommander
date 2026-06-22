@@ -59,6 +59,9 @@ object Strings {
         const val KEY_CLOUD_INTELLIGENCE_ENABLED = "cloud_intelligence_enabled"
         const val KEY_AI_PROCESSOR = "ai_processor"
         const val KEY_SELECTED_LLAMA_MODEL_ID = "selected_llama_model_id"
+        const val KEY_MODEL_REPO_BASE_URL = "model_repo_base_url"
+        const val KEY_MODELS_JSON_CACHE = "models_json_cache"
+        const val DEFAULT_MODEL_REPO_URL = "https://github.com/razvan-eduard/VoxCommander"
     }
 
     object Database {

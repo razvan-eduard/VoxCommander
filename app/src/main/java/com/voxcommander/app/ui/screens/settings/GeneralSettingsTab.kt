@@ -2,6 +2,8 @@ package com.voxcommander.app.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -9,6 +11,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
+import kotlinx.coroutines.launch
 
 object GeneralSettingsTabConfig {
     const val SHOW_SAVE_BUTTON = true
@@ -19,8 +22,11 @@ fun GeneralSettingsTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager
 ) {
+    val scope = rememberCoroutineScope()
+    
     // Manage own state
     var apiKey by remember { mutableStateOf(settingsManager.getApiKey() ?: "") }
+    var modelRepoUrl by remember { mutableStateOf(settingsManager.getModelRepoBaseUrl()) }
     var selectedLanguage by remember { mutableStateOf(settingsManager.getLanguage()) }
     var offlineFallbackTimeout by remember { mutableStateOf(settingsManager.getOfflineFallbackTimeout()) }
 
@@ -34,6 +40,28 @@ fun GeneralSettingsTab(
         onValueChange = { apiKey = it; settingsManager.saveApiKey(it) },
         label = { Text(languageManager.getString("api_key")) },
         modifier = Modifier.fillMaxWidth()
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    TextField(
+        value = modelRepoUrl,
+        onValueChange = { 
+            modelRepoUrl = it
+            settingsManager.saveModelRepoBaseUrl(it)
+        },
+        label = { Text("Model Repository Base URL") },
+        placeholder = { Text("https://github.com/user/repo") },
+        modifier = Modifier.fillMaxWidth(),
+        trailingIcon = {
+            IconButton(onClick = { 
+                scope.launch { 
+                    com.voxcommander.app.data.remote.RemoteModelRegistry.fetchJson(settingsManager, force = true)
+                }
+            }) {
+                Icon(Icons.Default.Refresh, contentDescription = "Sync JSON")
+            }
+        }
     )
 
     Text(text = languageManager.getString("language"), style = MaterialTheme.typography.labelLarge)
@@ -57,7 +85,7 @@ fun GeneralSettingsTab(
         }
     }
 
-    HorizontalDivider()
+    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
     Text(text = languageManager.getString("offline_fallback_section"), style = MaterialTheme.typography.titleMedium)
 

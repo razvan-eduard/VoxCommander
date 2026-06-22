@@ -161,7 +161,7 @@ fun SettingsContent(
                 } else {
                     Column(modifier = Modifier.fillMaxSize().padding(top = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         when (page) {
-                            0 -> GeneralSettingsTab_Realtime(languageManager = languageManager, settingsManager = settingsManager)
+                            0 -> GeneralSettingsTab(languageManager = languageManager, settingsManager = settingsManager)
                             1 -> ModelsSettingsTab(
                                 languageManager = languageManager,
                                 settingsManager = settingsManager,
@@ -317,29 +317,6 @@ fun SettingsContent(
             modelToDelete = null
         }
     )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun GeneralSettingsTab_Realtime(languageManager: LanguageManager, settingsManager: SettingsManager) {
-    var apiKey by remember { mutableStateOf(settingsManager.getApiKey() ?: "") }
-    val languages = languageManager.getAvailableLanguages()
-    val appLanguage = settingsManager.getLanguage()
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(text = languageManager.getString("app_settings_section"), style = MaterialTheme.typography.titleMedium)
-        TextField(value = apiKey, onValueChange = { apiKey = it; settingsManager.saveApiKey(it) }, label = { Text(languageManager.getString("api_key")) }, modifier = Modifier.fillMaxWidth())
-        Text(text = languageManager.getString("language"), style = MaterialTheme.typography.labelLarge)
-        Box {
-            var expanded by remember { mutableStateOf(false) }
-            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text(appLanguage.uppercase()) }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                languages.forEach { lang ->
-                    DropdownMenuItem(text = { Text(lang.uppercase()) }, onClick = { settingsManager.saveLanguage(lang); languageManager.loadLanguage(lang); expanded = false })
-                }
-            }
-        }
-    }
 }
 
 @Composable

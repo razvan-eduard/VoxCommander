@@ -288,6 +288,24 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getString(Strings.Preferences.KEY_SELECTED_LLAMA_MODEL_ID, "3.2-1b") ?: "3.2-1b"
     }
 
+    // --- REMOTE REPOSITORY SETTINGS ---
+    fun saveModelRepoBaseUrl(url: String) {
+        sharedPreferences.edit().putString(Strings.Preferences.KEY_MODEL_REPO_BASE_URL, url).apply()
+    }
+
+    fun getModelRepoBaseUrl(): String {
+        return sharedPreferences.getString(Strings.Preferences.KEY_MODEL_REPO_BASE_URL, Strings.Preferences.DEFAULT_MODEL_REPO_URL) 
+            ?: Strings.Preferences.DEFAULT_MODEL_REPO_URL
+    }
+
+    fun saveModelsJsonCache(json: String) {
+        sharedPreferences.edit().putString(Strings.Preferences.KEY_MODELS_JSON_CACHE, json).apply()
+    }
+
+    fun getModelsJsonCache(): String? {
+        return sharedPreferences.getString(Strings.Preferences.KEY_MODELS_JSON_CACHE, null)
+    }
+
     /**
      * VOICE MODEL READY FLAG: Set by dropdown when model is selected.
      * This is the source of truth for MainScreen - dropdown knows if model exists.

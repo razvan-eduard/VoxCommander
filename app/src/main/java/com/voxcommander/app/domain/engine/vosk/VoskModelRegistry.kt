@@ -1,6 +1,6 @@
 package com.voxcommander.app.domain.engine.vosk
 
-import android.util.Log
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.data.remote.VoskModelParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,38 +12,36 @@ data class VoskModelResult(
 )
 
 object VoskModelRegistry {
-    private const val TAG = "VoskModelRegistry"
     private var cachedResult: VoskModelResult? = null
 
+    /**
+     * Fetches Vosk models. Now integrates data from RemoteModelRegistry.
+     */
     suspend fun getModels(forceRefresh: Boolean = false): VoskModelResult = withContext(Dispatchers.IO) {
         if (!forceRefresh && cachedResult != null) {
             return@withContext cachedResult!!
         }
 
-        return@withContext try {
-            val result = VoskModelParser.fetchModels()
-            result.fold(
-                onSuccess = { groups ->
-                    val newResult = VoskModelResult(groups, isOnline = true)
-                    cachedResult = newResult
-                    newResult
-                },
-                onFailure = { error ->
-                    Log.e(TAG, "Failed to fetch Vosk models", error)
-                    VoskModelResult(
-                        groups = emptyList(),
-                        isOnline = false,
-                        errorMessage = error.message
-                    )
-                }
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception fetching Vosk models", e)
-            VoskModelResult(
-                groups = emptyList(),
-                isOnline = false,
-                errorMessage = e.message
+        // Group by language code from JSON
+        val remoteGroups = RemoteModelRegistry.getVoskModels()
+            .groupBy { it.lang_code ?: "unknown" }
+            .map { (lang, items) ->
+                VoskLanguageGroup(lang.uppercase(), items.map { 
+                    VoskModelInfo(it.id, it.path, it.size_label ?: "${it.size_mb} MB")
+                })
+            }
+
+        val result = if (remoteGroups.isNotEmpty()) {
+            VoskModelResult(remoteGroups, isOnline = true)
+        } else {
+            // Fallback to legacy parser if no remote models found in JSON
+            VoskModelParser.fetchModels().fold(
+                onSuccess = { VoskModelResult(it, isOnline = true) },
+                onFailure = { VoskModelResult(emptyList(), isOnline = false, errorMessage = it.message) }
             )
         }
+        
+        cachedResult = result
+        return@withContext result
     }
 }
