@@ -19,24 +19,66 @@
     ],
     "wake_vosk": [
       {
-        "id": "vosk-ro",
-        "label": "Romanian (STT & Wake)",
-        "path": "vosk-assets/vosk-model-small-ro-0.22.zip",
+        "id": "vosk-model-small-ro-0.22",
+        "label": "Romanian Small (Recommended)",
+        "path": "https://alphacephei.com/vosk/models/vosk-model-small-ro-0.22.zip",
         "size_mb": 45,
-        "lang_code": "ro"
+        "lang_code": "ro",
+        "is_remote": true
       },
       {
-        "id": "vosk-en",
-        "label": "English (Wake Word Only)",
-        "path": "vosk-assets/vosk-model-small-en-us-0.15.zip",
+        "id": "vosk-model-small-en-us-0.15",
+        "label": "English US Small (Wake Word)",
+        "path": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
         "size_mb": 40,
-        "lang_code": "en"
+        "lang_code": "en",
+        "is_remote": true
+      },
+      {
+        "id": "vosk-model-en-us-0.22",
+        "label": "English US Large",
+        "path": "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip",
+        "size_mb": 1800,
+        "lang_code": "en",
+        "is_remote": true
+      },
+      {
+        "id": "vosk-model-small-de-0.15",
+        "label": "German Small",
+        "path": "https://alphacephei.com/vosk/models/vosk-model-small-de-0.15.zip",
+        "size_mb": 45,
+        "lang_code": "de",
+        "is_remote": true
+      },
+      {
+        "id": "vosk-model-small-fr-0.22",
+        "label": "French Small",
+        "path": "https://alphacephei.com/vosk/models/vosk-model-small-fr-0.22.zip",
+        "size_mb": 41,
+        "lang_code": "fr",
+        "is_remote": true
+      },
+      {
+        "id": "vosk-model-small-it-0.22",
+        "label": "Italian Small",
+        "path": "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip",
+        "size_mb": 48,
+        "lang_code": "it",
+        "is_remote": true
+      },
+      {
+        "id": "vosk-model-small-es-0.42",
+        "label": "Spanish Small",
+        "path": "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip",
+        "size_mb": 39,
+        "lang_code": "es",
+        "is_remote": true
       }
     ],
     "nlu_llm": [
       {
         "id": "qwen2.5-0.5b",
-        "label": "Qwen 2.5 0.5B (Instant JSON)",
+        "label": "Qwen 2.5 0.5B (Extreme Speed)",
         "path": "nlu-assets/Qwen2.5-0.5B-Instruct_q8.task",
         "size_mb": 690,
         "engine_type": "MEDIAPIPE_GENAI"
