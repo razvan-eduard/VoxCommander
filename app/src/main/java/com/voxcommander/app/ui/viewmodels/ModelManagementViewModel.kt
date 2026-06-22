@@ -12,6 +12,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.ModelDownloader
+import com.voxcommander.app.domain.engine.vosk.VoskLanguageGroup
+import com.voxcommander.app.domain.engine.vosk.VoskModelRegistry
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.FileHelper
 import com.voxcommander.app.utils.Strings
@@ -42,6 +45,19 @@ class ModelManagementViewModel(
     private val _selectionSuccessMessage = MutableStateFlow<String?>(null)
     val selectionSuccessMessage: StateFlow<String?> = _selectionSuccessMessage.asStateFlow()
 
+    // --- VOSK MODEL STATE ---
+    private val _voskGroups = MutableStateFlow<List<VoskLanguageGroup>>(emptyList())
+    val voskGroups: StateFlow<List<VoskLanguageGroup>> = _voskGroups.asStateFlow()
+
+    private val _isVoskLoading = MutableStateFlow(false)
+    val isVoskLoading: StateFlow<Boolean> = _isVoskLoading.asStateFlow()
+
+    private val _isVoskOffline = MutableStateFlow(false)
+    val isVoskOffline: StateFlow<Boolean> = _isVoskOffline.asStateFlow()
+
+    private val _voskError = MutableStateFlow<String?>(null)
+    val voskError: StateFlow<String?> = _voskError.asStateFlow()
+
     // --- VULKAN TEST MODAL STATE ---
     private val _showVulkanError = MutableStateFlow(false)
     val showVulkanError: StateFlow<Boolean> = _showVulkanError.asStateFlow()
@@ -65,6 +81,10 @@ class ModelManagementViewModel(
     private var lastDownloadedWhisperModelId: String? = null
     private var lastDownloadedLlamaModelId: String? = null
     private var lastDownloadType: String? = null // "vosk", "whisper", or "llama"
+
+    // Unified download item state
+    private val _downloadingItem = MutableStateFlow<AppModel?>(null)
+    val downloadingItem: StateFlow<AppModel?> = _downloadingItem.asStateFlow()
 
     // --- BROADCAST RECEIVER FOR DOWNLOAD COMPLETION ---
     private val onDownloadComplete = object : BroadcastReceiver() {
@@ -113,6 +133,20 @@ class ModelManagementViewModel(
             IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
             ContextCompat.RECEIVER_EXPORTED
         )
+        // Initial load
+        viewModelScope.launch { loadVoskModels(force = true) }
+    }
+
+    /**
+     * Reactively loads Vosk models from the registry.
+     */
+    suspend fun loadVoskModels(force: Boolean = false) {
+        _isVoskLoading.value = true
+        val result = VoskModelRegistry.getModels(force)
+        _voskGroups.value = result.groups
+        _isVoskOffline.value = !result.isOnline
+        _voskError.value = result.errorMessage
+        _isVoskLoading.value = false
     }
 
     // --- DOWNLOAD METHODS ---
@@ -123,9 +157,12 @@ class ModelManagementViewModel(
     fun downloadVoskModel(lang: String, url: String, name: String) {
         lastDownloadedVoskModelName = name
         lastDownloadType = "vosk"
+        
+        // Find the model object for UI tracking
+        _downloadingItem.value = _voskGroups.value.flatMap { it.models }.find { it.name == name }
+        
         appStateManager.setSelectedVoskModelName(name)
         
-        // Resolve dynamic URL if needed
         val resolvedUrl = if (!url.startsWith("http")) {
             val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getVoskModels().find { it.id == name }
             if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
@@ -141,9 +178,12 @@ class ModelManagementViewModel(
     fun downloadWhisperModel(modelId: String, url: String) {
         lastDownloadedWhisperModelId = modelId
         lastDownloadType = "whisper"
+        
+        // Find the model object for UI tracking
+        _downloadingItem.value = com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry.getModelById(modelId)
+        
         appStateManager.setSelectedWhisperModelId(modelId)
         
-        // Resolve dynamic URL if needed
         val resolvedUrl = if (!url.startsWith("http")) {
             val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getWhisperModels().find { it.id == modelId }
             if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
@@ -159,9 +199,12 @@ class ModelManagementViewModel(
     fun downloadLlamaModel(modelId: String, url: String) {
         lastDownloadedLlamaModelId = modelId
         lastDownloadType = "llama"
+        
+        // Find model for tracking
+        _downloadingItem.value = com.voxcommander.app.domain.intent.interpreter.LlamaModelRegistry.models.find { it.id == modelId }
+        
         appStateManager.setSelectedLlamaModelId(modelId)
         
-        // Resolve dynamic URL if needed
         val resolvedUrl = if (!url.startsWith("http")) {
             val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getLlmModels().find { it.id == modelId }
             if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
@@ -180,6 +223,7 @@ class ModelManagementViewModel(
             downloadManager?.remove(downloadId)
             progressJob?.cancel()
             _downloadProgress.value = null
+            _downloadingItem.value = null
             currentDownloadId = null
 
             // Delete partial download files
@@ -336,6 +380,7 @@ class ModelManagementViewModel(
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
         if (downloadManager == null) {
             _downloadProgress.value = null
+            _downloadingItem.value = null
             return
         }
 
@@ -357,6 +402,7 @@ class ModelManagementViewModel(
                         downloading = false
                         if (status == DownloadManager.STATUS_FAILED) {
                             _downloadProgress.value = null
+                            _downloadingItem.value = null
                         }
                     }
                 }
@@ -367,6 +413,9 @@ class ModelManagementViewModel(
     }
 
     private fun handleDownloadSuccess() {
+        _downloadProgress.value = null
+        _downloadingItem.value = null
+
         when (lastDownloadType) {
             "whisper" -> {
                 val modelId = lastDownloadedWhisperModelId ?: settingsManager.getSelectedWhisperModelId()

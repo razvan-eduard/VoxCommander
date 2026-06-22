@@ -40,6 +40,7 @@ fun SettingsContent(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
     appStateManager: AppStateManager,
+    modelManagementViewModel: com.voxcommander.app.ui.viewmodels.ModelManagementViewModel,
     onSaveAndClose: () -> Unit,
     onDownloadVoskModel: (String, String, String) -> Unit,
     onDownloadWhisperModel: (String, String) -> Unit,
@@ -63,49 +64,36 @@ fun SettingsContent(
     val voiceLanguage by appStateManager.voiceLanguage.collectAsState()
     val voiceProcessor by appStateManager.voiceProcessor.collectAsState()
     val selectedWhisperId by appStateManager.selectedWhisperModelId.collectAsState()
-    var refreshTrigger by remember { mutableIntStateOf(0) }
+    val refreshTrigger by appStateManager.refreshTrigger.collectAsState()
 
-    var isServiceRunning by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            isServiceRunning = context.getSystemService(Context.ACTIVITY_SERVICE)
-                ?.let { it as ActivityManager }
-                ?.getRunningServices(Integer.MAX_VALUE)
-                ?.any { it.service.className == "com.voxcommander.app.service.WakeWordService" } ?: false
-            delay(1000)
-        }
-    }
+    // Observe service status reactively from AppStateManager
+    val isServiceRunning by appStateManager.isWakeWordServiceListening.collectAsState()
 
-    var voskGroups by remember { mutableStateOf<List<VoskLanguageGroup>>(emptyList()) }
-    var isVoskLoading by remember { mutableStateOf(false) }
-    var isVoskOffline by remember { mutableStateOf(false) }
-    var voskError by remember { mutableStateOf<String?>(null) }
+    // Observe Vosk model state from ViewModel
+    val voskGroups by modelManagementViewModel.voskGroups.collectAsState()
+    val isVoskLoading by modelManagementViewModel.isVoskLoading.collectAsState()
+    val isVoskOffline by modelManagementViewModel.isVoskOffline.collectAsState()
+    val voskError by modelManagementViewModel.voskError.collectAsState()
+    
     var selectedVoskModel by remember { mutableStateOf<VoskModelInfo?>(null) }
-
-    suspend fun loadVoskModels(force: Boolean = false) {
-        isVoskLoading = true
-        val result = VoskModelRegistry.getModels(force)
-        voskGroups = result.groups
-        isVoskOffline = !result.isOnline
-        voskError = result.errorMessage
-        isVoskLoading = false
-        
+    
+    // Auto-update selectedVoskModel when groups or preferences change
+    LaunchedEffect(voskGroups, refreshTrigger) {
         val savedModelName = settingsManager.getSelectedVoskModelName()
-        val allModels = result.groups.flatMap { it.models }
-        val previouslySelected = allModels.find { it.name == savedModelName }
-        if (previouslySelected != null) selectedVoskModel = previouslySelected
+        selectedVoskModel = voskGroups.flatMap { it.models }.find { it.name == savedModelName }
     }
 
-    LaunchedEffect(Unit) { loadVoskModels(force = true) }
-
-    var downloadingItemState by remember { mutableStateOf<Any?>(null) }
-    LaunchedEffect(downloadProgress) {
+    var downloadingItemState by remember { mutableStateOf<AppModel?>(null) }
+    val vmDownloadingItem by modelManagementViewModel.downloadingItem.collectAsState()
+    
+    LaunchedEffect(downloadProgress, vmDownloadingItem) {
         if (downloadProgress == null || downloadProgress >= 1.0f) {
             if (downloadingItemState != null) {
-                refreshTrigger++
                 onRefreshMain()
             }
             downloadingItemState = null
+        } else {
+            downloadingItemState = vmDownloadingItem
         }
     }
 
@@ -169,24 +157,23 @@ fun SettingsContent(
                                 voiceProcessor = voiceProcessor,
                                 onProcessorSelected = {
                                     appStateManager.setVoiceProcessor(it)
-                                    updateVoiceEngine(); onRefreshMain(); refreshTrigger++
+                                    updateVoiceEngine(); onRefreshMain()
                                 },
                                 hasApiKey = settingsManager.getApiKey() != null,
                                 googleSttAvailable = googleSttAvailable,
                                 voiceLanguage = voiceLanguage,
                                 onVoiceLanguageSelected = {
                                     appStateManager.setVoiceLanguage(it)
-                                    updateVoiceEngine(); onRefreshMain(); refreshTrigger++
+                                    updateVoiceEngine(); onRefreshMain()
                                 },
                                 whisperModels = WhisperModelRegistry.models,
                                 selectedWhisperModel = WhisperModelRegistry.models.find { it.id == selectedWhisperId } ?: WhisperModelRegistry.models.firstOrNull(),
                                 onWhisperModelSelected = { model, isDownloaded ->
                                     appStateManager.setSelectedWhisperModelId(model.id)
                                     if (!isDownloaded) {
-                                        downloadingItemState = model
                                         onDownloadWhisperModel(model.id, model.url)
                                     }
-                                    updateVoiceEngine(); onRefreshMain(); refreshTrigger++
+                                    updateVoiceEngine(); onRefreshMain()
                                 },
                                 onSelectCustomWhisperModel = onSelectCustomWhisperModel,
                                 voskGroups = voskGroups,
@@ -195,28 +182,24 @@ fun SettingsContent(
                                 isVoskOffline = isVoskOffline,
                                 isOffline = isVoskOffline,
                                 voskError = voskError,
-                                onRetryConnection = { loadVoskModels(true) },
+                                onRetryConnection = { modelManagementViewModel.loadVoskModels(true) },
                                 onVoskModelSelected = { model, isDownloaded, langCode ->
                                     appStateManager.setVoiceLanguage(langCode)
                                     selectedVoskModel = model
                                     appStateManager.setSelectedVoskModelName(model.name)
                                     if (!isDownloaded) {
-                                        downloadingItemState = model
                                         onDownloadVoskModel(langCode, model.url, model.name)
                                     }
-                                    updateVoiceEngine(); onRefreshMain(); refreshTrigger++
+                                    updateVoiceEngine(); onRefreshMain()
                                 },
                                 onSelectCustomVoskModel = { onSelectCustomVoskModel(voiceLanguage) },
                                 onDownloadWhisperModel = { id, url -> 
-                                    downloadingItemState = WhisperModelRegistry.getModelById(id)
                                     onDownloadWhisperModel(id, url) 
                                 },
                                 onDownloadVoskModel = { code, url, name -> 
-                                    downloadingItemState = voskGroups.flatMap { it.models }.find { it.name == name }
                                     onDownloadVoskModel(code, url, name) 
                                 },
                                 onDownloadLlamaModel = { model ->
-                                    downloadingItemState = model
                                     onDownloadLlamaModel(model as LlamaModelInfo)
                                 },
                                 onDeleteLlamaModel = { model ->
@@ -231,8 +214,8 @@ fun SettingsContent(
                                     modelToDelete = model
                                     showDeleteConfirmDialog = true
                                 },
-                                onFallbackChanged = { refreshTrigger++ },
-                                refreshTrigger = refreshTrigger
+                                onFallbackChanged = { appStateManager.refreshAll() },
+                                refreshTrigger = refreshTrigger.toInt()
                             )
                             2 -> ServiceSettingsTab(
                                 languageManager = languageManager,
@@ -241,32 +224,31 @@ fun SettingsContent(
                                 onWakeWordEnabledChange = {
                                     settingsManager.saveWakeWordEnabled(it)
                                     if (!it && isServiceRunning) WakeWordService.stopService(context)
-                                    refreshTrigger++
+                                    appStateManager.refreshAll()
                                 },
                                 wakeWord = settingsManager.getWakeWord(),
-                                onWakeWordChange = { settingsManager.saveWakeWord(it); refreshTrigger++ },
+                                onWakeWordChange = { settingsManager.saveWakeWord(it); appStateManager.refreshAll() },
                                 voskGroups = voskGroups,
                                 selectedWakeWordModel = voskGroups.flatMap { it.models }.find { it.name == settingsManager.getWakeWordModelPath() },
                                 onWakeWordModelSelected = { model ->
                                     settingsManager.saveWakeWordModelPath(model.name)
                                     if (!settingsManager.isModelDownloaded(model.name)) {
-                                        downloadingItemState = model
                                         onDownloadVoskModel("en", model.url, model.name)
                                     }
-                                    refreshTrigger++
+                                    appStateManager.refreshAll()
                                 },
                                 isServiceRunning = isServiceRunning,
                                 onStartService = { WakeWordService.startService(context) },
                                 onStopService = { WakeWordService.stopService(context) },
                                 downloadedColor = downloadedColor,
-                                onDownloadRequest = { model -> downloadingItemState = model; onDownloadVoskModel("en", model.url, model.name) },
+                                onDownloadRequest = { model -> onDownloadVoskModel("en", model.url, model.name) },
                                 onDeleteRequest = { model -> modelToDelete = model as? AppModel; showDeleteConfirmDialog = true },
                                 onCancelDownload = onCancelDownload,
                                 downloadProgress = downloadProgress,
                                 downloadingItem = downloadingItemState,
                                 voiceLanguage = voiceLanguage,
                                 voiceProcessor = voiceProcessor,
-                                refreshTrigger = refreshTrigger
+                                refreshTrigger = refreshTrigger.toInt()
                             )
                             4 -> AdvancedSettingsTab(
                                 languageManager = languageManager,
@@ -275,11 +257,11 @@ fun SettingsContent(
                                 onCleanupRequest = { showCleanupDialog = true },
                                 onClearDefaultFallback = { 
                                     settingsManager.clearDefaultOfflineFallback()
-                                    refreshTrigger++ 
+                                    appStateManager.refreshAll() 
                                 },
                                 onVerboseLoggingChange = { 
                                     settingsManager.saveVerboseLoggingEnabled(it)
-                                    refreshTrigger++
+                                    appStateManager.refreshAll()
                                 }
                             )
                             5 -> VerboseLoggingTab(languageManager, settingsManager.isVerboseLoggingEnabled())
@@ -296,7 +278,7 @@ fun SettingsContent(
         showDeleteConfirmDialog = showDeleteConfirmDialog,
         modelToDelete = modelToDelete,
         onDismissCleanup = { showCleanupDialog = false },
-        onConfirmCleanup = { onDeleteUnusedModels(); showCleanupDialog = false; refreshTrigger++ },
+        onConfirmCleanup = { onDeleteUnusedModels(); showCleanupDialog = false; appStateManager.refreshAll() },
         onDismissDelete = { showDeleteConfirmDialog = false; modelToDelete = null },
         onConfirmDelete = {
             modelToDelete?.let { m ->
@@ -308,7 +290,7 @@ fun SettingsContent(
                 }
                 settingsManager.setModelDownloaded(m.id, false)
                 appStateManager.refreshAll()
-                onRefreshMain(); refreshTrigger++
+                onRefreshMain()
             }
             showDeleteConfirmDialog = false
             modelToDelete = null

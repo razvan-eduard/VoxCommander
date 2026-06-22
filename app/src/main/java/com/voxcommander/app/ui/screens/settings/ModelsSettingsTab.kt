@@ -88,14 +88,34 @@ fun ModelsSettingsTab(
 
         if (selectedSubTab == 0) {
             VoiceEnginesSubTab(
-                languageManager, settingsManager, voiceProcessor, onProcessorSelected,
-                hasApiKey, googleSttAvailable, voiceLanguage, onVoiceLanguageSelected,
-                whisperModels, selectedWhisperModel, onWhisperModelSelected, onSelectCustomWhisperModel,
-                voskGroups, selectedVoskModel, isVoskLoading, isVoskOffline, isOffline,
-                voskError, onRetryConnection, onVoskModelSelected, onSelectCustomVoskModel,
-                onDownloadWhisperModel, onDownloadVoskModel,
-                downloadProgress, downloadingItem, downloadedColor, onCancelDownload,
-                onDeleteRequest, onFallbackChanged, refreshTrigger
+                languageManager = languageManager,
+                settingsManager,
+                voiceProcessor,
+                onProcessorSelected,
+                hasApiKey,
+                googleSttAvailable,
+                voiceLanguage,
+                onVoiceLanguageSelected,
+                whisperModels,
+                selectedWhisperModel,
+                onWhisperModelSelected,
+                onSelectCustomWhisperModel,
+                voskGroups,
+                selectedVoskModel,
+                isVoskLoading, isVoskOffline, isOffline,
+                voskError,
+                onRetryConnection,
+                onVoskModelSelected,
+                onSelectCustomVoskModel,
+                onDownloadWhisperModel,
+                onDownloadVoskModel,
+                downloadProgress,
+                downloadingItem,
+                downloadedColor,
+                onCancelDownload,
+                onDeleteRequest,
+                onFallbackChanged,
+                refreshTrigger
             )
         } else {
             IntentEnginesSubTab(

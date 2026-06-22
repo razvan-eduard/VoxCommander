@@ -112,7 +112,7 @@ fun GeneralSettingsTab(
 
     // --- VOICE FALLBACK INFO ---
     Text(text = "Voice Fallback: ${languageManager.getString("default_offline_model")}", style = MaterialTheme.typography.labelLarge)
-    val refreshTrigger by appStateManager.refreshTrigger.collectAsState()
+
     val defaultVoiceProcessor = remember(refreshTrigger) { settingsManager.getDefaultVoiceFallbackProcessor() }
     val defaultVoiceModel = remember(refreshTrigger) { settingsManager.getDefaultVoiceFallbackModel() }
     Text(

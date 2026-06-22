@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
                             appStateManager = appContainer.appStateManager,
                             fastMapDao = appContainer.fastMapDao,
                             viewModel = appContainer.mainViewModel,
+                            modelManagementViewModel = appContainer.modelManagementViewModel,
                             onDownloadVoskModel = { lang, url, name ->
                                 appContainer.modelManagementViewModel.downloadVoskModel(lang, url, name)
                             },
