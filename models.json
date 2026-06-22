@@ -3,18 +3,28 @@
   "engines": {
     "stt_whisper": [
       {
-        "id": "whisper-tiny",
+        "id": "tiny",
         "label": "Whisper Tiny (Extreme Speed)",
-        "path": "whisper-assets/ggml-tiny.bin",
+        "path": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
         "size_mb": 75,
-        "is_multilingual": true
+        "is_multilingual": true,
+        "is_remote": true
       },
       {
-        "id": "whisper-base",
+        "id": "base",
         "label": "Whisper Base (Balanced)",
-        "path": "whisper-assets/ggml-base.bin",
+        "path": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
         "size_mb": 145,
-        "is_multilingual": true
+        "is_multilingual": true,
+        "is_remote": true
+      },
+      {
+        "id": "small",
+        "label": "Whisper Small (High Precision)",
+        "path": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
+        "size_mb": 480,
+        "is_multilingual": true,
+        "is_remote": true
       }
     ],
     "wake_vosk": [
@@ -743,16 +753,18 @@
       {
         "id": "qwen2.5-0.5b",
         "label": "Qwen 2.5 0.5B (High Precision q8)",
-        "path": "nlu-assets/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
+        "path": "https://huggingface.co/litert-community/Qwen2.5-0.5B-Instruct-LiteRT/resolve/main/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
         "size_mb": 690,
-        "engine_type": "MEDIAPIPE_GENAI"
+        "engine_type": "MEDIAPIPE_GENAI",
+        "is_remote": true
       },
       {
         "id": "gemma3-1b",
         "label": "Gemma 3 1B (Balanced q4)",
-        "path": "nlu-assets/Gemma3-1B-IT_multi-prefill-seq_q4_block128_ekv1280.task",
+        "path": "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_block128_ekv1280.task",
         "size_mb": 689,
-        "engine_type": "MEDIAPIPE_GENAI"
+        "engine_type": "MEDIAPIPE_GENAI",
+        "is_remote": true
       }
     ]
   }
