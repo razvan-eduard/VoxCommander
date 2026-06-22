@@ -122,7 +122,11 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text(text = if (isProcessing) languageManager.getString("recording_status") else transcription)
+                // Show transcription only, "Recording" status is now handled visually by the button
+                Text(
+                    text = if (isProcessing && transcription.isEmpty()) "" else transcription,
+                    style = MaterialTheme.typography.bodyMedium
+                )
 
                 Spacer(modifier = Modifier.height(32.dp))
 

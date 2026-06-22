@@ -287,6 +287,7 @@ object VoiceManager {
                     withContext(Dispatchers.Main) { 
                         _partialTranscriptionFlow.value = "Transcribing..." 
                         _isListeningFlow.value = false 
+                        appStateManager?.setVoiceState(VoiceState.PROCESSING) // NEW: Switch to processing state
                     }
                     
                     // Flatten chunks into a single ShortArray efficiently
