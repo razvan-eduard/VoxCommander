@@ -72,7 +72,7 @@ fun <T> EngineModelSection(
         },
         onExpandedChange = { showSheet = it },
         onDownloadRequest = { item ->
-            onItemSelected(item, false)
+            // Click on arrow from main button: trigger download, but don't force select/close
             onDownloadRequest(item) 
         },
         onDeleteRequest = { onDeleteRequest(it) },
@@ -98,6 +98,7 @@ fun <T> EngineModelSection(
                 },
                 onDeviceLabel = languageManager.getString("on_device_label"),
                 onItemSelected = { item, isDownloaded ->
+                    // Full row click: select and close
                     onItemSelected(item, isDownloaded)
                     if (!isDownloaded) {
                         onDownloadRequest(item)
@@ -105,9 +106,8 @@ fun <T> EngineModelSection(
                     showSheet = false
                 },
                 onDownloadRequest = { item ->
-                    onItemSelected(item, false)
+                    // Arrow button click: KEEP SHEET OPEN for multiple downloads
                     onDownloadRequest(item)
-                    showSheet = false
                 },
                 onDeleteRequest = { onDeleteRequest(it) },
                 onCancelDownload = onCancelDownload,

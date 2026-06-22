@@ -127,7 +127,10 @@ fun <T> GroupedDropdownContent(
                                             tint = Color(0xFF2E7D32)
                                         )
                                     } else if (onDownloadRequest != null) {
-                                        IconButton(onClick = { onDownloadRequest(item) }) {
+                                        IconButton(onClick = { 
+                                            // Click on arrow: trigger download but DO NOT close the sheet
+                                            onDownloadRequest(item) 
+                                        }) {
                                             Icon(
                                                 Icons.Default.Download,
                                                 contentDescription = "Download",
