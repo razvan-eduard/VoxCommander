@@ -206,7 +206,7 @@ class SettingsManager(context: Context) {
     }
 
     fun getLogLevel(): String {
-        return sharedPreferences.getString(KEY_LOG_LEVEL, "TOAST_AND_LOGCAT") ?: "TOAST_AND_LOGCAT"
+        return sharedPreferences.getString(KEY_LOG_LEVEL, "NONE") ?: "NONE"
     }
 
     fun saveVerboseLoggingEnabled(enabled: Boolean) {
@@ -355,8 +355,8 @@ class SettingsManager(context: Context) {
         private const val DEFAULT_LANGUAGE = Strings.Preferences.DEFAULT_LANGUAGE
         private const val DEFAULT_PROCESSOR = Strings.Processors.WHISPER_NEON // Default to NEON for safety
         private const val DEFAULT_WHISPER_MODEL = Strings.Preferences.DEFAULT_WHISPER_MODEL
-        private const val DEFAULT_WAKE_WORD = "salut vox"
-        private const val DEFAULT_OFFLINE_FALLBACK_TIMEOUT = 30 // 30 seconds
+        private const val DEFAULT_WAKE_WORD = "hi vosk"
+        private const val DEFAULT_OFFLINE_FALLBACK_TIMEOUT = 10 // Default to 10 seconds
         private const val DEFAULT_OFFLINE_MODEL = "tiny" // Default to tiny Whisper model
 
         private const val KEY_API_KEY = Strings.Preferences.KEY_API_KEY

@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
@@ -44,20 +45,26 @@ fun VoiceInputTextField(
     }
 
     val isRecording = isGloballyListening && startedRecordingHere
+    var isFocused by remember { mutableStateOf(false) }
 
     OutlinedTextField(
         value = if (isRecording) languageManager.getString("recording_status") else value,
         onValueChange = onValueChange,
         label = label,
         placeholder = placeholder,
-        modifier = modifier.fillMaxWidth(),
-        colors = if (isRecording) {
-            OutlinedTextFieldDefaults.colors(
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { isFocused = it.isFocused },
+        colors = when {
+            isRecording -> OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Color.Red,
                 unfocusedBorderColor = Color.Red
             )
-        } else {
-            OutlinedTextFieldDefaults.colors()
+            !isFocused -> OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                unfocusedBorderColor = Color.Transparent
+            )
+            else -> OutlinedTextFieldDefaults.colors()
         },
         trailingIcon = {
             IconButton(
