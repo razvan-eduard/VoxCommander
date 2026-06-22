@@ -26,20 +26,16 @@ fun ModelsSettingsTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
     appStateManager: AppStateManager,
-    voiceProcessor: String,
     onProcessorSelected: (String) -> Unit,
     hasApiKey: Boolean,
     googleSttAvailable: Boolean,
-    voiceLanguage: String,
     onVoiceLanguageSelected: (String) -> Unit,
     whisperModels: List<WhisperModelInfo>,
-    selectedWhisperModel: WhisperModelInfo?,
     onWhisperModelSelected: (WhisperModelInfo, Boolean) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
     voskGroups: List<VoskLanguageGroup>,
     selectedVoskModel: VoskModelInfo?,
     isVoskLoading: Boolean,
-    isVoskOffline: Boolean,
     isOffline: Boolean,
     voskError: String?,
     onRetryConnection: suspend () -> Unit,
@@ -54,8 +50,7 @@ fun ModelsSettingsTab(
     onDownloadLlamaModel: (AppModel) -> Unit,
     onDeleteLlamaModel: (AppModel) -> Unit,
     onDeleteRequest: (AppModel) -> Unit,
-    onFallbackChanged: () -> Unit = {},
-    refreshTrigger: Int = 0
+    onFallbackChanged: () -> Unit = {}
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) }
     
@@ -89,33 +84,31 @@ fun ModelsSettingsTab(
         if (selectedSubTab == 0) {
             VoiceEnginesSubTab(
                 languageManager = languageManager,
-                settingsManager,
-                voiceProcessor,
-                onProcessorSelected,
-                hasApiKey,
-                googleSttAvailable,
-                voiceLanguage,
-                onVoiceLanguageSelected,
-                whisperModels,
-                selectedWhisperModel,
-                onWhisperModelSelected,
-                onSelectCustomWhisperModel,
-                voskGroups,
-                selectedVoskModel,
-                isVoskLoading, isVoskOffline, isOffline,
-                voskError,
-                onRetryConnection,
-                onVoskModelSelected,
-                onSelectCustomVoskModel,
-                onDownloadWhisperModel,
-                onDownloadVoskModel,
-                downloadProgress,
-                downloadingItem,
-                downloadedColor,
-                onCancelDownload,
-                onDeleteRequest,
-                onFallbackChanged,
-                refreshTrigger
+                settingsManager = settingsManager,
+                appStateManager = appStateManager,
+                onProcessorSelected = onProcessorSelected,
+                hasApiKey = hasApiKey,
+                googleSttAvailable = googleSttAvailable,
+                onVoiceLanguageSelected = onVoiceLanguageSelected,
+                whisperModels = whisperModels,
+                onWhisperModelSelected = onWhisperModelSelected,
+                onSelectCustomWhisperModel = onSelectCustomWhisperModel,
+                voskGroups = voskGroups,
+                selectedVoskModel = selectedVoskModel,
+                isVoskLoading = isVoskLoading,
+                isOffline = isOffline,
+                voskError = voskError,
+                onRetryConnection = onRetryConnection,
+                onVoskModelSelected = onVoskModelSelected,
+                onSelectCustomVoskModel = onSelectCustomVoskModel,
+                onDownloadWhisperModel = onDownloadWhisperModel,
+                onDownloadVoskModel = onDownloadVoskModel,
+                downloadProgress = downloadProgress,
+                downloadingItem = downloadingItem as? AppModel,
+                downloadedColor = downloadedColor,
+                onCancelDownload = onCancelDownload,
+                onDeleteRequest = onDeleteRequest,
+                onFallbackChanged = onFallbackChanged
             )
         } else {
             IntentEnginesSubTab(
@@ -125,10 +118,9 @@ fun ModelsSettingsTab(
                 onDownloadLlamaModel = onDownloadLlamaModel,
                 onDeleteLlamaModel = onDeleteLlamaModel,
                 downloadProgress = downloadProgress,
-                downloadingItem = downloadingItem,
+                downloadingItem = downloadingItem as? AppModel,
                 onCancelDownload = onCancelDownload,
-                onFallbackChanged = onFallbackChanged,
-                refreshTrigger = refreshTrigger
+                onFallbackChanged = onFallbackChanged
             )
         }
     }

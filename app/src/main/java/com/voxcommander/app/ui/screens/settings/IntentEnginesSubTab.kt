@@ -27,14 +27,15 @@ fun IntentEnginesSubTab(
     onDownloadLlamaModel: (AppModel) -> Unit,
     onDeleteLlamaModel: (AppModel) -> Unit,
     downloadProgress: Float?,
-    downloadingItem: Any?,
+    downloadingItem: AppModel?,
     onCancelDownload: () -> Unit,
-    onFallbackChanged: () -> Unit = {},
-    refreshTrigger: Int
+    onFallbackChanged: () -> Unit = {}
 ) {
     val cloudEnabled by appStateManager.cloudIntelligenceEnabled.collectAsState()
     val aiProcessor by appStateManager.aiProcessor.collectAsState()
     val selectedLlamaId by appStateManager.selectedLlamaModelId.collectAsState()
+    val refreshTriggerRaw by appStateManager.refreshTrigger.collectAsState()
+    val refreshTrigger = refreshTriggerRaw.toInt()
 
     val selectedModel = remember(selectedLlamaId) {
         LlamaModelRegistry.models.find { it.id == selectedLlamaId } ?: LlamaModelRegistry.models.first()

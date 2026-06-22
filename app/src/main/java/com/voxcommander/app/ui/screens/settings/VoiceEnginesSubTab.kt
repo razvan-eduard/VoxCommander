@@ -23,20 +23,17 @@ import com.voxcommander.app.utils.Strings
 fun VoiceEnginesSubTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
-    voiceProcessor: String,
+    appStateManager: com.voxcommander.app.state.AppStateManager,
     onProcessorSelected: (String) -> Unit,
     hasApiKey: Boolean,
     googleSttAvailable: Boolean,
-    voiceLanguage: String,
     onVoiceLanguageSelected: (String) -> Unit,
     whisperModels: List<WhisperModelInfo>,
-    selectedWhisperModel: WhisperModelInfo?,
     onWhisperModelSelected: (WhisperModelInfo, Boolean) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
     voskGroups: List<VoskLanguageGroup>,
     selectedVoskModel: VoskModelInfo?,
     isVoskLoading: Boolean,
-    isVoskOffline: Boolean,
     isOffline: Boolean,
     voskError: String?,
     onRetryConnection: suspend () -> Unit,
@@ -45,13 +42,22 @@ fun VoiceEnginesSubTab(
     onDownloadWhisperModel: (String, String) -> Unit,
     onDownloadVoskModel: (String, String, String) -> Unit,
     downloadProgress: Float?,
-    downloadingItem: Any? = null,
+    downloadingItem: AppModel? = null,
     downloadedColor: Color,
     onCancelDownload: () -> Unit,
     onDeleteRequest: (AppModel) -> Unit, 
-    onFallbackChanged: () -> Unit = {},
-    refreshTrigger: Int = 0
+    onFallbackChanged: () -> Unit = {}
 ) {
+    // REALTIME STATE from AppStateManager
+    val voiceProcessor by appStateManager.voiceProcessor.collectAsState()
+    val voiceLanguage by appStateManager.voiceLanguage.collectAsState()
+    val selectedWhisperId by appStateManager.selectedWhisperModelId.collectAsState()
+    val refreshTriggerRaw by appStateManager.refreshTrigger.collectAsState()
+    val refreshTrigger = refreshTriggerRaw.toInt()
+
+    val selectedWhisperModel = remember(selectedWhisperId, whisperModels) { 
+        whisperModels.find { it.id == selectedWhisperId } ?: whisperModels.firstOrNull() 
+    }
     // 1. Processor Selection
     Text(text = languageManager.getString("voice_processor_section"), style = MaterialTheme.typography.titleMedium)
     Box {

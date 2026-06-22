@@ -154,20 +154,17 @@ fun SettingsContent(
                                 languageManager = languageManager,
                                 settingsManager = settingsManager,
                                 appStateManager = appStateManager,
-                                voiceProcessor = voiceProcessor,
                                 onProcessorSelected = {
                                     appStateManager.setVoiceProcessor(it)
                                     updateVoiceEngine(); onRefreshMain()
                                 },
                                 hasApiKey = settingsManager.getApiKey() != null,
                                 googleSttAvailable = googleSttAvailable,
-                                voiceLanguage = voiceLanguage,
                                 onVoiceLanguageSelected = {
                                     appStateManager.setVoiceLanguage(it)
                                     updateVoiceEngine(); onRefreshMain()
                                 },
                                 whisperModels = WhisperModelRegistry.models,
-                                selectedWhisperModel = WhisperModelRegistry.models.find { it.id == selectedWhisperId } ?: WhisperModelRegistry.models.firstOrNull(),
                                 onWhisperModelSelected = { model, isDownloaded ->
                                     appStateManager.setSelectedWhisperModelId(model.id)
                                     if (!isDownloaded) {
@@ -179,7 +176,6 @@ fun SettingsContent(
                                 voskGroups = voskGroups,
                                 selectedVoskModel = selectedVoskModel,
                                 isVoskLoading = isVoskLoading,
-                                isVoskOffline = isVoskOffline,
                                 isOffline = isVoskOffline,
                                 voskError = voskError,
                                 onRetryConnection = { modelManagementViewModel.loadVoskModels(true) },
@@ -214,8 +210,7 @@ fun SettingsContent(
                                     modelToDelete = model
                                     showDeleteConfirmDialog = true
                                 },
-                                onFallbackChanged = { appStateManager.refreshAll() },
-                                refreshTrigger = refreshTrigger.toInt()
+                                onFallbackChanged = { appStateManager.refreshAll() }
                             )
                             2 -> ServiceSettingsTab(
                                 languageManager = languageManager,
