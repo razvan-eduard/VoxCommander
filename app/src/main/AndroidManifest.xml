@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
+        android:name=".VoxApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -42,6 +43,14 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- Runs the Vulkan GPU self-test in an isolated process so a native GPU crash
+             cannot take down the main app. -->
+        <service
+            android:name=".domain.diagnostic.VulkanProbeService"
+            android:enabled="true"
+            android:exported="false"
+            android:process=":vulkanprobe" />
     </application>
 
 </manifest>

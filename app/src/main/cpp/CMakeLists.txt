@@ -56,6 +56,8 @@ target_link_libraries(
     whisper_final
     PRIVATE
     whisper
+    ggml-vulkan
+    ggml-base
     ${log-lib}
     ${android-lib}
 )
