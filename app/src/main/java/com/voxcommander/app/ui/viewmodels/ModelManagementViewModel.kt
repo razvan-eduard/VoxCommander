@@ -42,11 +42,20 @@ class ModelManagementViewModel(
     private val _selectionSuccessMessage = MutableStateFlow<String?>(null)
     val selectionSuccessMessage: StateFlow<String?> = _selectionSuccessMessage.asStateFlow()
 
+    // --- VULKAN TEST MODAL STATE ---
     private val _showVulkanError = MutableStateFlow(false)
     val showVulkanError: StateFlow<Boolean> = _showVulkanError.asStateFlow()
 
     fun dismissVulkanError() {
         _showVulkanError.value = false
+    }
+
+    // Expose Vulkan test state from AppStateManager
+    val vulkanTestState = appStateManager.vulkanTestState
+    val vulkanTestPassed = appStateManager.vulkanTestPassed
+
+    fun dismissVulkanTestResult() {
+        appStateManager.dismissVulkanTestResult()
     }
 
     // --- DOWNLOAD TRACKING ---

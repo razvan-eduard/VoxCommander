@@ -9,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +25,7 @@ import com.voxcommander.app.ui.components.MicrophoneButton
 import com.voxcommander.app.ui.components.ModelNotPresentMessage
 import com.voxcommander.app.ui.components.TopHeaderContainer
 import com.voxcommander.app.ui.components.TopHeaderMode
+import com.voxcommander.app.ui.components.VulkanTestModal
 import com.voxcommander.app.ui.viewmodels.MainViewModel
 import com.voxcommander.app.utils.Strings
 import java.io.File
@@ -55,6 +55,8 @@ fun MainScreen(
     val isProcessing by viewModel.isProcessing.collectAsState()
     val transcription by viewModel.transcription.collectAsState()
     val isListening by VoiceManager.isListeningFlow.collectAsState()
+    val voiceProcessor by appStateManager.voiceProcessor.collectAsState()
+    val voiceLanguage by appStateManager.voiceLanguage.collectAsState()
 
     var currentHeaderMode by remember { mutableStateOf(TopHeaderMode.NONE) }
     
@@ -109,7 +111,7 @@ fun MainScreen(
                             if (isProcessing) {
                                 viewModel.stopVoiceCommand()
                             } else {
-                                viewModel.processVoiceCommand(settingsManager.getVoiceLanguage(), settingsManager.getVoiceProcessor())
+                                viewModel.processVoiceCommand(voiceLanguage, voiceProcessor)
                             }
                         }
                     )
@@ -176,6 +178,13 @@ fun MainScreen(
             selectionSuccessMessage = selectionSuccessMessage,
             googleSttAvailable = googleSttAvailable,
             updateVoiceEngine = updateVoiceEngine
+        )
+
+        // --- VULKAN TEST MODAL ---
+        VulkanTestModal(
+            vulkanTestState = appStateManager.vulkanTestState.collectAsState().value,
+            vulkanTestPassed = appStateManager.vulkanTestPassed.collectAsState().value,
+            onDismiss = { appStateManager.dismissVulkanTestResult() }
         )
     }
 }

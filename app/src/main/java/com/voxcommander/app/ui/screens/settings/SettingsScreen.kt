@@ -59,10 +59,10 @@ fun SettingsContent(
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { 6 })
 
-    // REALTIME STATE
-    var voiceLanguage by remember { mutableStateOf(settingsManager.getVoiceLanguage()) }
-    var voiceProcessor by remember { mutableStateOf(settingsManager.getVoiceProcessor()) }
-    var selectedWhisperId by remember { mutableStateOf(settingsManager.getSelectedWhisperModelId()) }
+    // REALTIME STATE - observe AppStateManager flows for reactive updates
+    val voiceLanguage by appStateManager.voiceLanguage.collectAsState()
+    val voiceProcessor by appStateManager.voiceProcessor.collectAsState()
+    val selectedWhisperId by appStateManager.selectedWhisperModelId.collectAsState()
     var refreshTrigger by remember { mutableIntStateOf(0) }
 
     var isServiceRunning by remember { mutableStateOf(false) }
@@ -161,14 +161,13 @@ fun SettingsContent(
                 } else {
                     Column(modifier = Modifier.fillMaxSize().padding(top = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         when (page) {
-                            0 -> GeneralSettingsTab(languageManager = languageManager, settingsManager = settingsManager)
+                            0 -> GeneralSettingsTab(languageManager = languageManager, settingsManager = settingsManager, appStateManager = appStateManager)
                             1 -> ModelsSettingsTab(
                                 languageManager = languageManager,
                                 settingsManager = settingsManager,
                                 appStateManager = appStateManager,
                                 voiceProcessor = voiceProcessor,
                                 onProcessorSelected = {
-                                    voiceProcessor = it
                                     appStateManager.setVoiceProcessor(it)
                                     updateVoiceEngine(); onRefreshMain(); refreshTrigger++
                                 },
@@ -176,14 +175,12 @@ fun SettingsContent(
                                 googleSttAvailable = googleSttAvailable,
                                 voiceLanguage = voiceLanguage,
                                 onVoiceLanguageSelected = {
-                                    voiceLanguage = it
                                     appStateManager.setVoiceLanguage(it)
                                     updateVoiceEngine(); onRefreshMain(); refreshTrigger++
                                 },
                                 whisperModels = WhisperModelRegistry.models,
                                 selectedWhisperModel = WhisperModelRegistry.models.find { it.id == selectedWhisperId } ?: WhisperModelRegistry.models.firstOrNull(),
                                 onWhisperModelSelected = { model, isDownloaded ->
-                                    selectedWhisperId = model.id
                                     appStateManager.setSelectedWhisperModelId(model.id)
                                     if (!isDownloaded) {
                                         downloadingItemState = model
@@ -200,7 +197,6 @@ fun SettingsContent(
                                 voskError = voskError,
                                 onRetryConnection = { loadVoskModels(true) },
                                 onVoskModelSelected = { model, isDownloaded, langCode ->
-                                    voiceLanguage = langCode
                                     appStateManager.setVoiceLanguage(langCode)
                                     selectedVoskModel = model
                                     appStateManager.setSelectedVoskModelName(model.name)
@@ -311,6 +307,7 @@ fun SettingsContent(
                     if (m.id == settingsManager.getDefaultVoiceFallbackModel()) settingsManager.clearDefaultVoiceFallback()
                 }
                 settingsManager.setModelDownloaded(m.id, false)
+                appStateManager.refreshAll()
                 onRefreshMain(); refreshTrigger++
             }
             showDeleteConfirmDialog = false

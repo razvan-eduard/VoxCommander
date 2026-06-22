@@ -1,9 +1,7 @@
 package com.voxcommander.app.state
 
 import android.content.Context
-import androidx.room.Room
 import com.voxcommander.app.data.preferences.SettingsManager
-import com.voxcommander.app.domain.intent.model.FastMapRule
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.*
@@ -13,7 +11,7 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * State Management Hub for Vox Commander.
- * Centralizes all reactive states (Voice, Benchmark, Native Libs).
+ * Centralizes all reactive states (Voice, Intent, Benchmark, Native Libs).
  */
 enum class VoiceState {
     IDLE,               // Waiting for user
@@ -40,6 +38,12 @@ data class NativeLibStatus(
     val description: String,
     val isIncompatible: Boolean = false
 )
+
+enum class VulkanTestState {
+    IDLE,
+    RUNNING,
+    RESULT
+}
 
 class AppStateManager private constructor(
     private val settingsManager: SettingsManager,
@@ -93,14 +97,26 @@ class AppStateManager private constructor(
     private val _selectedLlamaModelId = MutableStateFlow(settingsManager.getSelectedLlamaModelId())
     val selectedLlamaModelId: StateFlow<String> = _selectedLlamaModelId.asStateFlow()
 
+    // --- REFRESH TRIGGER (Forces re-evaluation of disk status) ---
+    private val _refreshTrigger = MutableStateFlow(0L)
+    val refreshTrigger: StateFlow<Long> = _refreshTrigger.asStateFlow()
+
     // --- DERIVED READY STATE (The Source of Truth for "Selected model on device") ---
     val voiceModelReady: StateFlow<Boolean> = combine(
         voiceProcessor,
         voiceLanguage,
         selectedWhisperModelId,
         selectedVoskModelName,
-        customWhisperModelPath
-    ) { processor, language, whisperId, voskName, customWhisper ->
+        customWhisperModelPath,
+        _refreshTrigger
+    ) { args ->
+        val processor = args[0] as String
+        val language = args[1] as String
+        val whisperId = args[2] as String
+        val voskName = args[3] as? String
+        val customWhisper = args[4] as? String
+        // args[5] is the trigger, used only to force re-computation
+
         when (processor) {
             Strings.Processors.WHISPER_CPP,
             Strings.Processors.WHISPER_VULKAN,
@@ -128,8 +144,13 @@ class AppStateManager private constructor(
     // --- DERIVED READY STATE FOR INTENT ENGINE ---
     val intentModelReady: StateFlow<Boolean> = combine(
         aiProcessor,
-        selectedLlamaModelId
-    ) { processor, llamaId ->
+        selectedLlamaModelId,
+        _refreshTrigger
+    ) { args ->
+        val processor = args[0] as String
+        val llamaId = args[1] as String
+        // args[2] is the trigger
+
         when (processor) {
             Strings.AiProcessors.LLAMA_LOCAL -> {
                 settingsManager.isModelDownloaded(llamaId)
@@ -153,12 +174,20 @@ class AppStateManager private constructor(
     private val _nativeLibsStatus = MutableStateFlow<List<NativeLibStatus>>(emptyList())
     val nativeLibsStatus: StateFlow<List<NativeLibStatus>> = _nativeLibsStatus.asStateFlow()
 
+    // --- VULKAN TEST STATE ---
+    private val _vulkanTestState = MutableStateFlow(VulkanTestState.IDLE)
+    val vulkanTestState: StateFlow<VulkanTestState> = _vulkanTestState.asStateFlow()
+
+    private val _vulkanTestPassed = MutableStateFlow<Boolean?>(null)
+    val vulkanTestPassed: StateFlow<Boolean?> = _vulkanTestPassed.asStateFlow()
+
     private val _systemInfo = MutableStateFlow<String>("")
     val systemInfo: StateFlow<String> = _systemInfo.asStateFlow()
 
     init {
         loadCustomVoskPaths()
         refreshNativeLibsStatus()
+        setupVulkanTestTrigger()
     }
 
     // Secure access to native resources
@@ -254,13 +283,21 @@ class AppStateManager private constructor(
     }
 
     fun onWhisperDownloadComplete(modelId: String) {
-        settingsManager.setModelDownloaded(modelId, true)
-        _selectedWhisperModelId.value = modelId
+        handleModelDownload(modelId) { id ->
+            _selectedWhisperModelId.value = id
+        }
     }
 
     fun onVoskDownloadComplete(modelName: String) {
-        settingsManager.setModelDownloaded(modelName, true)
-        _selectedVoskModelName.value = modelName
+        handleModelDownload(modelName) { name ->
+            _selectedVoskModelName.value = name
+        }
+    }
+
+    private inline fun handleModelDownload(modelId: String, updateState: (String) -> Unit) {
+        settingsManager.setModelDownloaded(modelId, true)
+        updateState(modelId)
+        refreshAll()
     }
 
     // Diagnostic Helpers
@@ -372,6 +409,76 @@ class AppStateManager private constructor(
         _selectedLlamaModelId.value = settingsManager.getSelectedLlamaModelId()
         loadCustomVoskPaths()
         refreshNativeLibsStatus()
+        
+        // Atomic increment to force re-evaluation of combined flows
+        _refreshTrigger.value++
+    }
+
+    // --- VULKAN TEST TRIGGER ---
+    private fun setupVulkanTestTrigger() {
+        combine(
+            voiceProcessor,
+            voiceModelReady,
+            _vulkanTestState
+        ) { processor, modelReady, testState ->
+            Triple(processor, modelReady, testState)
+        }.onEach { (processor, modelReady, testState) ->
+            if (testState == VulkanTestState.IDLE &&
+                processor == Strings.Processors.WHISPER_VULKAN &&
+                modelReady &&
+                !settingsManager.isVulkanProbeDone() &&
+                !settingsManager.isVulkanIncompatible()) {
+                startVulkanTest()
+            }
+        }.launchIn(CoroutineScope(Dispatchers.Default + SupervisorJob()))
+    }
+
+    private fun startVulkanTest() {
+        _vulkanTestState.value = VulkanTestState.RUNNING
+        _vulkanTestPassed.value = null
+
+        val modelId = _selectedWhisperModelId.value
+        // FIX: Models are in getExternalFilesDir(null), NOT context.filesDir
+        val modelPath = java.io.File(context.getExternalFilesDir(null), "whisper-model-$modelId.bin").absolutePath
+
+        Logger.log("Starting Vulkan compatibility test with model: $modelPath", "VulkanTest")
+
+        com.voxcommander.app.domain.diagnostic.VulkanProbe(
+            context = context,
+            modelPath = modelPath
+        ) { outcome ->
+            when (outcome) {
+                com.voxcommander.app.domain.diagnostic.VulkanProbe.Outcome.COMPATIBLE -> {
+                    Logger.log("Vulkan test PASSED", "VulkanTest")
+                    _vulkanTestState.value = VulkanTestState.RESULT
+                    _vulkanTestPassed.value = true
+                    settingsManager.setVulkanProbeDone(true)
+                }
+                com.voxcommander.app.domain.diagnostic.VulkanProbe.Outcome.INCOMPATIBLE -> {
+                    Logger.log("Vulkan test FAILED - switching to NEON", "VulkanTest")
+                    _vulkanTestState.value = VulkanTestState.RESULT
+                    _vulkanTestPassed.value = false
+                    settingsManager.setVulkanIncompatible(true)
+                    settingsManager.setVulkanProbeDone(true)
+                    
+                    // Force switch to NEON on Main thread
+                    CoroutineScope(Dispatchers.Main).launch {
+                        setVoiceProcessor(Strings.Processors.WHISPER_NEON)
+                        refreshAll()
+                    }
+                }
+                com.voxcommander.app.domain.diagnostic.VulkanProbe.Outcome.UNDECIDED -> {
+                    Logger.log("Vulkan test UNDECIDED - will retry later", "VulkanTest")
+                    _vulkanTestState.value = VulkanTestState.IDLE
+                    _vulkanTestPassed.value = null
+                }
+            }
+        }.start()
+    }
+
+    fun dismissVulkanTestResult() {
+        _vulkanTestState.value = VulkanTestState.IDLE
+        _vulkanTestPassed.value = null
     }
 
     companion object {

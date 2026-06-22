@@ -20,7 +20,8 @@ object GeneralSettingsTabConfig {
 @Composable
 fun GeneralSettingsTab(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager
+    settingsManager: SettingsManager,
+    appStateManager: com.voxcommander.app.state.AppStateManager
 ) {
     val scope = rememberCoroutineScope()
     
@@ -29,6 +30,9 @@ fun GeneralSettingsTab(
     var modelRepoUrl by remember { mutableStateOf(settingsManager.getModelRepoBaseUrl()) }
     var selectedLanguage by remember { mutableStateOf(settingsManager.getLanguage()) }
     var offlineFallbackTimeout by remember { mutableStateOf(settingsManager.getOfflineFallbackTimeout()) }
+
+    // REACTIVE FALLBACK INFO (re-renders when appStateManager.refreshAll is called)
+    val refreshTrigger by appStateManager.refreshTrigger.collectAsState()
 
     var expanded by remember { mutableStateOf(false) }
     val languages = languageManager.getAvailableLanguages()
@@ -108,13 +112,14 @@ fun GeneralSettingsTab(
 
     // --- VOICE FALLBACK INFO ---
     Text(text = "Voice Fallback: ${languageManager.getString("default_offline_model")}", style = MaterialTheme.typography.labelLarge)
-    val defaultVoiceProcessor = settingsManager.getDefaultVoiceFallbackProcessor()
-    val defaultVoiceModel = settingsManager.getDefaultVoiceFallbackModel()
+    val refreshTrigger by appStateManager.refreshTrigger.collectAsState()
+    val defaultVoiceProcessor = remember(refreshTrigger) { settingsManager.getDefaultVoiceFallbackProcessor() }
+    val defaultVoiceModel = remember(refreshTrigger) { settingsManager.getDefaultVoiceFallbackModel() }
     Text(
         text = if (defaultVoiceProcessor != null && defaultVoiceModel != null) {
             "$defaultVoiceProcessor: $defaultVoiceModel"
         } else {
-            "None"
+            "" // Empty as requested
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.secondary
@@ -124,13 +129,13 @@ fun GeneralSettingsTab(
 
     // --- INTENT FALLBACK INFO ---
     Text(text = "Intent Fallback: ${languageManager.getString("default_offline_model")}", style = MaterialTheme.typography.labelLarge)
-    val defaultIntentProcessor = settingsManager.getDefaultIntentFallbackProcessor()
-    val defaultIntentModel = settingsManager.getDefaultIntentFallbackModel()
+    val defaultIntentProcessor = remember(refreshTrigger) { settingsManager.getDefaultIntentFallbackProcessor() }
+    val defaultIntentModel = remember(refreshTrigger) { settingsManager.getDefaultIntentFallbackModel() }
     Text(
         text = if (defaultIntentProcessor != null && defaultIntentModel != null) {
             "$defaultIntentProcessor: $defaultIntentModel"
         } else {
-            "None"
+            "" // Empty as requested
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.secondary

@@ -10,24 +10,26 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import android.util.Log
-import com.voxcommander.app.data.preferences.SettingsManager
 
 /**
- * Orchestrates the isolated Vulkan GPU self-test. Binds to [VulkanProbeService] (which
- * runs in a separate process), asks it to run a real GPU workload, and decides Vulkan
- * compatibility based on the outcome:
+ * Orchestrates a one-shot, isolated Vulkan GPU compatibility test. Binds to
+ * [VulkanProbeService] (separate process) and asks it to run a real Whisper GPU
+ * inference on the user's downloaded model, reporting the outcome via [onResult]:
  *
- *  - result ok=true  -> compatible
- *  - result ok=false -> incompatible (GPU produced wrong/non-finite output)
- *  - process died before replying -> incompatible (native crash, isolated safely)
- *  - timeout         -> undecided, retried on next launch
+ *  - result ok=true            -> COMPATIBLE
+ *  - result ok=false           -> INCOMPATIBLE (GPU produced an error)
+ *  - process died before reply -> INCOMPATIBLE (native crash, isolated safely)
+ *  - bind failed / timeout     -> UNDECIDED (caller may retry later)
  *
- * Runs at most once per install (gated by the probe-done flag).
+ * The probe persists nothing itself; the caller decides what to store based on [Outcome].
  */
 class VulkanProbe(
     private val context: Context,
-    private val settingsManager: SettingsManager
+    private val modelPath: String,
+    private val onResult: (Outcome) -> Unit
 ) {
+    enum class Outcome { COMPATIBLE, INCOMPATIBLE, UNDECIDED }
+
     private val handler = Handler(Looper.getMainLooper())
     private var finished = false
     private var gotResult = false
@@ -36,7 +38,7 @@ class VulkanProbe(
         override fun handleMessage(msg: Message) {
             if (msg.what == VulkanProbeService.MSG_RESULT) {
                 gotResult = true
-                finish(supported = msg.arg1 == 1, reason = "result")
+                finish(if (msg.arg1 == 1) Outcome.COMPATIBLE else Outcome.INCOMPATIBLE, "result")
             }
         }
     })
@@ -50,69 +52,39 @@ class VulkanProbe(
             } catch (e: Exception) {
                 // Couldn't even start the test; don't penalize the device.
                 Log.e(TAG, "Failed to start self-test: ${e.message}")
-                finishUndecided("send-failed")
+                finish(Outcome.UNDECIDED, "send-failed")
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            // Process lost. If no result was received, the self-test crashed it natively.
-            if (!gotResult) finish(supported = false, reason = "process-crash")
+            // Process lost. If no result was received, the GPU workload crashed it natively.
+            if (!gotResult) finish(Outcome.INCOMPATIBLE, "process-crash")
         }
     }
 
     fun start() {
-        if (settingsManager.isVulkanProbeDone()) return
         try {
             val intent = Intent(context, VulkanProbeService::class.java)
-            // Pass the Whisper model path for full inference test
-            val modelPath = getWhisperModelPath()
-            if (modelPath == null) {
-                Log.w(TAG, "No Whisper model available for Vulkan probe")
-                finishUndecided("no-model")
-                return
-            }
             intent.putExtra(VulkanProbeService.EXTRA_MODEL_PATH, modelPath)
             val bound = context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
             if (!bound) {
                 Log.w(TAG, "Could not bind VulkanProbeService")
-                finishUndecided("bind-failed")
+                finish(Outcome.UNDECIDED, "bind-failed")
                 return
             }
-            handler.postDelayed({ if (!finished) finishUndecided("timeout") }, TIMEOUT_MS)
+            handler.postDelayed({ if (!finished) finish(Outcome.UNDECIDED, "timeout") }, TIMEOUT_MS)
         } catch (e: Exception) {
             Log.e(TAG, "start() failed: ${e.message}")
+            finish(Outcome.UNDECIDED, "start-exception")
         }
     }
 
-    private fun getWhisperModelPath(): String? {
-        val customPath = settingsManager.getCustomWhisperModelPath()
-        if (!customPath.isNullOrBlank()) {
-            val file = java.io.File(customPath)
-            if (file.exists()) return customPath
-        }
-        val selectedModelId = settingsManager.getSelectedWhisperModelId()
-        val file = java.io.File(
-            context.getExternalFilesDir(null),
-            "whisper-model-$selectedModelId.bin"
-        )
-        return if (file.exists()) file.absolutePath else null
-    }
-
-    private fun finish(supported: Boolean, reason: String) {
+    private fun finish(outcome: Outcome, reason: String) {
         if (finished) return
         finished = true
-        if (!supported) settingsManager.setVulkanIncompatible(true)
-        settingsManager.setVulkanProbeDone(true)
-        Log.d(TAG, "Vulkan self-test done: supported=$supported reason=$reason incompatible=${settingsManager.isVulkanIncompatible()}")
+        Log.d(TAG, "Vulkan self-test done: outcome=$outcome reason=$reason")
         unbind()
-    }
-
-    private fun finishUndecided(reason: String) {
-        if (finished) return
-        finished = true
-        // Leave probe-done unset so we can retry on a future launch.
-        Log.w(TAG, "Vulkan self-test undecided ($reason); will retry next launch")
-        unbind()
+        onResult(outcome)
     }
 
     private fun unbind() {

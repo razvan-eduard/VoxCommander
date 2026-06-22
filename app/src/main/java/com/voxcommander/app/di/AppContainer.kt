@@ -10,7 +10,6 @@ import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
 import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
 import com.voxcommander.app.domain.intent.interpreter.OpenAiInterpreter
 import com.voxcommander.app.domain.intent.interpreter.GeminiNanoInterpreter
-import com.voxcommander.app.domain.diagnostic.VulkanProbe
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
@@ -65,7 +64,6 @@ class AppContainer(context: Context) {
     init {
         android.util.Log.d("AppContainer", "AppContainer init - starting compatibility checks")
         checkVulkanCrashCookie()
-        detectVulkanSupport()
         detectGeminiSupport()
     }
 
@@ -104,35 +102,6 @@ class AppContainer(context: Context) {
         }
     }
 
-    /**
-     * Proactively detects real Vulkan GPU support at startup. A cheap in-process check
-     * confirms the ggml-vulkan backend can initialize; if it can, an isolated self-test
-     * (in the :vulkanprobe process) runs a real GPU matmul workload. If that workload
-     * crashes the process natively, only the isolated process dies and the client marks
-     * the device incompatible - keeping the main app safe.
-     *
-     * The probe runs once per install (cached via the probe-done flag) since hardware
-     * capability does not change. Sticky: never auto-clears a known incompatibility.
-     */
-    private fun detectVulkanSupport() {
-        android.util.Log.d("VulkanProbe", "detectVulkanSupport: probeDone=${settingsManager.isVulkanProbeDone()}")
-        if (settingsManager.isVulkanProbeDone()) return
-        CoroutineScope(Dispatchers.Default + SupervisorJob()).launch {
-            val available = WhisperLib.isVulkanSupported()
-            android.util.Log.d("VulkanProbe", "detectVulkanSupport: available=$available")
-            if (!available) {
-                settingsManager.setVulkanIncompatible(true)
-                settingsManager.setVulkanProbeDone(true)
-                android.util.Log.d("VulkanProbe", "ggml-vulkan backend unavailable -> incompatible")
-                return@launch
-            }
-            // Backend is available; run the real GPU workload in the isolated process.
-            kotlinx.coroutines.withContext(Dispatchers.Main) {
-                android.util.Log.d("VulkanProbe", "Starting isolated VulkanProbe")
-                VulkanProbe(appContext, settingsManager).start()
-            }
-        }
-    }
 
     // --- VOICE MANAGER INITIALIZATION ---
     fun initVoiceManager(context: Context, voiceIntentLauncher: com.voxcommander.app.utils.VoiceIntentLauncher) {
