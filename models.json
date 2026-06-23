@@ -63,16 +63,24 @@
       {
         "id": "qwen2.5-1.5b-q8",
         "label": "Qwen 2.5 1.5B (High Precision q8)",
-        "path": "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct-LiteRT/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
-        "size_mb": 1650,
+        "path": "https://github.com/razvan-eduard/VoxCommander/releases/download/nlu-assets/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
+        "size_mb": 1490,
         "engine_type": "MEDIAPIPE_GENAI",
         "is_remote": true
       },
       {
         "id": "qwen2.5-0.5b-q8",
         "label": "Qwen 2.5 0.5B (Fastest q8)",
-        "path": "https://huggingface.co/litert-community/Qwen2.5-0.5B-Instruct-LiteRT/resolve/main/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
-        "size_mb": 690,
+        "path": "https://github.com/razvan-eduard/VoxCommander/releases/download/nlu-assets/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task",
+        "size_mb": 521,
+        "engine_type": "MEDIAPIPE_GENAI",
+        "is_remote": true
+      },
+      {
+        "id": "DeepSeek-R1-Distill-Qwen-1.5B",
+        "label": "DeepSeek R1 Distill (Qwen-1.5B)",
+        "path": "https://github.com/razvan-eduard/VoxCommander/releases/download/nlu-assets/DeepSeek-R1-Distill-Qwen-1.5B_multi-prefill-seq_q8_ekv1280.task",
+        "size_mb": 1730,
         "engine_type": "MEDIAPIPE_GENAI",
         "is_remote": true
       }
