@@ -20,6 +20,7 @@ import com.voxcommander.app.ui.components.VoiceInputTextField
 fun ServiceSettingsTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
+    appStateManager: com.voxcommander.app.state.AppStateManager,
     wakeWordEnabled: Boolean,
     onWakeWordEnabledChange: (Boolean) -> Unit,
     wakeWord: String,
@@ -35,11 +36,13 @@ fun ServiceSettingsTab(
     onDeleteRequest: (VoskModelInfo) -> Unit,
     onCancelDownload: () -> Unit,
     downloadProgress: Float?,
-    downloadingItem: Any? = null,
-    voiceLanguage: String,
-    voiceProcessor: String,
-    refreshTrigger: Int = 0 
+    downloadingItem: Any? = null
 ) {
+    val voiceLanguage by appStateManager.voiceLanguage.collectAsState()
+    val voiceProcessor by appStateManager.voiceProcessor.collectAsState()
+    val refreshTriggerRaw by appStateManager.refreshTrigger.collectAsState()
+    val refreshTrigger = refreshTriggerRaw.toInt()
+
     var showModelSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 

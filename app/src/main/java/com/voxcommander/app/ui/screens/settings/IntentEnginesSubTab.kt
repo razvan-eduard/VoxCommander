@@ -9,8 +9,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
-import com.voxcommander.app.domain.intent.interpreter.LlamaModelInfo
-import com.voxcommander.app.domain.intent.interpreter.LlamaModelRegistry
+import com.voxcommander.app.data.remote.RemoteModelRegistry
+import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
@@ -37,13 +37,26 @@ fun IntentEnginesSubTab(
     val refreshTriggerRaw by appStateManager.refreshTrigger.collectAsState()
     val refreshTrigger = refreshTriggerRaw.toInt()
 
-    val selectedModel = remember(selectedLlamaId) {
-        LlamaModelRegistry.models.find { it.id == selectedLlamaId } ?: LlamaModelRegistry.models.first()
+    // Dynamically build model list from Remote Registry
+    val llmModels = remember(refreshTrigger) {
+        RemoteModelRegistry.getLlmModels().map {
+            LlmModelInfo(
+                id = it.id,
+                label = it.label,
+                url = it.path,
+                sizeDescription = "${it.size_mb} MB",
+                engineTypeTag = it.engine_type ?: "MEDIAPIPE_GENAI"
+            )
+        }
     }
 
-    val llamaGroups = remember {
+    val selectedModel = remember(selectedLlamaId, llmModels) {
+        llmModels.find { it.id == selectedLlamaId } ?: llmModels.firstOrNull()
+    }
+
+    val nluGroups = remember(llmModels) {
         listOf(
-            DropdownGroup("LLAMA 3.2 MODELS", LlamaModelRegistry.models)
+            DropdownGroup("AVAILABLE NLU MODELS", llmModels)
         )
     }
 
@@ -92,7 +105,7 @@ fun IntentEnginesSubTab(
 
                     val aiOptions = listOf(
                         Strings.AiProcessors.OPENAI to "OpenAI (Cloud)",
-                        Strings.AiProcessors.LLAMA_LOCAL to "Llama 3.2 (Local)",
+                        Strings.AiProcessors.LLAMA_LOCAL to "NLU AI (Local)",
                         Strings.AiProcessors.GEMINI_NATIVE to "Gemini Nano (System)"
                     )
 
@@ -140,13 +153,13 @@ fun IntentEnginesSubTab(
             }
         }
 
-        // --- LLAMA MODEL SELECTION ---
+        // --- NLU MODEL SELECTION ---
         if (cloudEnabled && aiProcessor == Strings.AiProcessors.LLAMA_LOCAL) {
             EngineModelSection(
-                title = "Llama Model Selection",
+                title = "NLU Model Selection",
                 languageManager = languageManager,
                 settingsManager = settingsManager,
-                groups = llamaGroups,
+                groups = nluGroups,
                 selectedItem = selectedModel,
                 itemLabel = { "${it.label} (${it.sizeDescription})" },
                 modelIdProvider = { it.id },
@@ -167,12 +180,14 @@ fun IntentEnginesSubTab(
                 refreshTrigger = refreshTrigger
             )
             
-            Text(
-                text = "Requires: ${selectedModel.ramRequirement}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
+            if (selectedModel != null) {
+                Text(
+                    text = "Engine: ${selectedModel.engineTypeTag}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
         }
     }
 }

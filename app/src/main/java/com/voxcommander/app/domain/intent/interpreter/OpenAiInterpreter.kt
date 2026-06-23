@@ -32,24 +32,15 @@ class OpenAiInterpreter(
             return@withContext null
         }
 
-        val systemPrompt = """
-            Mapare intenții sistem Vox Commander. Reguli:
-            1. category: Alege STRICT din ["audio", "settings", "maps", "home", "app"].
-            2. actionType: Alege STRICT din:
-               - audio: ["audio_youtube", "audio_spotify", "media_pause", "media_play", "media_next", "media_prev"]
-               - settings: ["vol_up", "vol_down", "wifi_toggle", "bluetooth_toggle"]
-               - maps: ["waze_nav", "maps_nav"]
-            3. DACĂ este muzică și nu se specifică platforma, setează implicit actionType="audio_youtube".
-            4. SINTAXĂ: "track de la artist" -> category="audio", track=track, artist=artist.
-            5. Returnează EXCLUSIV un obiect JSON cu aceste 6 chei: category, actionType, artist, track, album, destination.
-        """.trimIndent()
+        val systemPrompt = PromptProvider.getNluPrompt("") // Template instructions
+        val userPrompt = spokenText
 
         val jsonBody = JSONObject().apply {
             put("model", "gpt-4o-mini")
-            put("temperature", 0.0) // Match MacroDroid precision
+            put("temperature", 0.0) // Match precision
             put("messages", JSONArray().apply {
                 put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
-                put(JSONObject().apply { put("role", "user"); put("content", spokenText) })
+                put(JSONObject().apply { put("role", "user"); put("content", userPrompt) })
             })
             put("response_format", JSONObject().apply { put("type", "json_object") })
         }

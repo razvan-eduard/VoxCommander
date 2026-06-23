@@ -14,6 +14,7 @@ import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.domain.engine.vosk.VoskLanguageGroup
 import com.voxcommander.app.domain.engine.vosk.VoskModelRegistry
+import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.FileHelper
@@ -201,7 +202,15 @@ class ModelManagementViewModel(
         lastDownloadType = "llama"
         
         // Find model for tracking
-        _downloadingItem.value = com.voxcommander.app.domain.intent.interpreter.LlamaModelRegistry.models.find { it.id == modelId }
+        _downloadingItem.value = com.voxcommander.app.data.remote.RemoteModelRegistry.getLlmModels().find { it.id == modelId }?.let {
+            LlmModelInfo(
+                id = it.id,
+                label = it.label,
+                url = it.path,
+                sizeDescription = "${it.size_mb} MB",
+                engineTypeTag = it.engine_type ?: "MEDIAPIPE_GENAI"
+            )
+        }
         
         appStateManager.setSelectedLlamaModelId(modelId)
         

@@ -45,18 +45,10 @@ class LocalLlmInterpreter(
         setupLlm()
         val engine = llmInference ?: return@withContext null
 
-        val systemPrompt = """
-            Mapare intenții sistem. Reguli:
-            1. category: ["audio", "settings", "maps", "home", "app"].
-            2. actionType: ["audio_youtube", "audio_spotify", "media_pause", "media_play", "media_next", "media_prev", "vol_up", "vol_down", "wifi_toggle", "bluetooth_toggle", "waze_nav", "maps_nav"].
-            3. Returnează EXCLUSIV JSON: category, actionType, artist, track, album, destination.
-            
-            Input: "$spokenText"
-            JSON:
-        """.trimIndent()
+        val hydratedPrompt = PromptProvider.getNluPrompt(spokenText)
 
         try {
-            val response = engine.generateResponse(systemPrompt)
+            val response = engine.generateResponse(hydratedPrompt)
             Log.d(TAG, "Llama response: $response")
 
             // Basic cleaning to ensure we have only JSON

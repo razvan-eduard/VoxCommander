@@ -26,8 +26,7 @@ import com.voxcommander.app.domain.engine.vosk.VoskModelRegistry
 import com.voxcommander.app.service.WakeWordService
 import com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry
 import com.voxcommander.app.domain.engine.whisper.WhisperModelInfo
-import com.voxcommander.app.domain.intent.interpreter.LlamaModelInfo
-import com.voxcommander.app.domain.intent.interpreter.LlamaModelRegistry
+import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Strings
@@ -45,7 +44,7 @@ fun SettingsContent(
     onSelectCustomVoskModel: (String) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
     onDeleteUnusedModels: () -> Unit,
-    onDownloadLlamaModel: (LlamaModelInfo) -> Unit,
+    onDownloadLlamaModel: (LlmModelInfo) -> Unit,
     onCancelDownload: () -> Unit = {},
     onRefreshMain: () -> Unit = {},
     downloadProgress: Float? = null,
@@ -57,9 +56,6 @@ fun SettingsContent(
     val pagerState = rememberPagerState(pageCount = { 6 })
 
     // REALTIME STATE - observe AppStateManager flows for reactive updates
-    val voiceLanguage by appStateManager.voiceLanguage.collectAsState()
-    val voiceProcessor by appStateManager.voiceProcessor.collectAsState()
-    val selectedWhisperId by appStateManager.selectedWhisperModelId.collectAsState()
     val refreshTrigger by appStateManager.refreshTrigger.collectAsState()
 
     // Observe service status reactively from AppStateManager
@@ -76,7 +72,17 @@ fun SettingsContent(
     // Auto-update selectedVoskModel when groups or preferences change
     LaunchedEffect(voskGroups, refreshTrigger) {
         val savedModelName = settingsManager.getSelectedVoskModelName()
-        selectedVoskModel = voskGroups.flatMap { it.models }.find { it.name == savedModelName }
+        val allModels = voskGroups.flatMap { it.models }
+        val found = allModels.find { it.name == savedModelName }
+        
+        if (found != null) {
+            selectedVoskModel = found
+        } else if (allModels.isNotEmpty()) {
+            // FALLBACK: Auto-select first model if none saved or found
+            val firstModel = allModels.first()
+            selectedVoskModel = firstModel
+            appStateManager.setSelectedVoskModelName(firstModel.name)
+        }
     }
 
     var downloadingItemState by remember { mutableStateOf<AppModel?>(null) }
@@ -184,7 +190,7 @@ fun SettingsContent(
                                     }
                                     updateVoiceEngine(); onRefreshMain()
                                 },
-                                onSelectCustomVoskModel = { onSelectCustomVoskModel(voiceLanguage) },
+                                onSelectCustomVoskModel = { onSelectCustomVoskModel(appStateManager.voiceLanguage.value) },
                                 onDownloadWhisperModel = { id, url -> 
                                     onDownloadWhisperModel(id, url) 
                                 },
@@ -192,7 +198,7 @@ fun SettingsContent(
                                     onDownloadVoskModel(code, url, name) 
                                 },
                                 onDownloadLlamaModel = { model ->
-                                    onDownloadLlamaModel(model as LlamaModelInfo)
+                                    onDownloadLlamaModel(model as LlmModelInfo)
                                 },
                                 onDeleteLlamaModel = { model ->
                                     modelToDelete = model
@@ -211,6 +217,7 @@ fun SettingsContent(
                             2 -> ServiceSettingsTab(
                                 languageManager = languageManager,
                                 settingsManager = settingsManager,
+                                appStateManager = appStateManager,
                                 wakeWordEnabled = settingsManager.isWakeWordEnabled(),
                                 onWakeWordEnabledChange = {
                                     settingsManager.saveWakeWordEnabled(it)
@@ -236,10 +243,7 @@ fun SettingsContent(
                                 onDeleteRequest = { model -> modelToDelete = model as? AppModel; showDeleteConfirmDialog = true },
                                 onCancelDownload = onCancelDownload,
                                 downloadProgress = downloadProgress,
-                                downloadingItem = downloadingItemState,
-                                voiceLanguage = voiceLanguage,
-                                voiceProcessor = voiceProcessor,
-                                refreshTrigger = refreshTrigger.toInt()
+                                downloadingItem = downloadingItemState
                             )
                             4 -> AdvancedSettingsTab(
                                 languageManager = languageManager,

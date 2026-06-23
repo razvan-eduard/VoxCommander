@@ -12,6 +12,7 @@ import java.net.URL
  */
 data class RemoteModelSchema(
     val schema_version: Int,
+    val prompts: Map<String, String>? = null,
     val engines: RemoteEngines
 )
 
@@ -92,6 +93,8 @@ object RemoteModelRegistry {
     fun getWhisperModels(): List<RemoteModelItem> = cachedSchema?.engines?.stt_whisper ?: emptyList()
     fun getVoskModels(): List<RemoteModelItem> = cachedSchema?.engines?.wake_vosk ?: emptyList()
     fun getLlmModels(): List<RemoteModelItem> = cachedSchema?.engines?.nlu_llm ?: emptyList()
+
+    fun getPrompt(id: String): String? = cachedSchema?.prompts?.get(id)
 
     /**
      * Resolves the final download URL.
