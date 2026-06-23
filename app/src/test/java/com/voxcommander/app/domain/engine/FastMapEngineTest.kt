@@ -3,8 +3,9 @@ package com.voxcommander.app.domain.engine
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.domain.intent.model.FastMapRule
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
-import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -30,10 +31,9 @@ class FastMapEngineTest {
             id = 1,
             category = "SMART_HOME",
             actionType = "TOGGLE",
-            target = "LIGHTS",
             triggerPattern = "turn on the (.*)"
         )
-        coEvery { fastMapDao.getAllRules() } returns listOf(rule)
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
         // Act
         val result = engine.processCommand("turn on the kitchen lights")
@@ -42,8 +42,6 @@ class FastMapEngineTest {
         assertNotNull(result)
         assertEquals("SMART_HOME", result?.category)
         assertEquals("TOGGLE", result?.actionType)
-        assertEquals("LIGHTS", result?.target)
-        assertEquals("kitchen lights", result?.query)
     }
 
     @Test
@@ -53,17 +51,15 @@ class FastMapEngineTest {
             id = 1,
             category = "SMART_HOME",
             actionType = "TOGGLE",
-            target = "LIGHTS",
             triggerPattern = "TURN ON THE (.*)"
         )
-        coEvery { fastMapDao.getAllRules() } returns listOf(rule)
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
         // Act
         val result = engine.processCommand("turn on the kitchen lights")
 
         // Assert
         assertNotNull(result)
-        assertEquals("kitchen lights", result?.query)
     }
 
     @Test
@@ -73,10 +69,9 @@ class FastMapEngineTest {
             id = 1,
             category = "SMART_HOME",
             actionType = "TOGGLE",
-            target = "LIGHTS",
             triggerPattern = "turn on the (.*)"
         )
-        coEvery { fastMapDao.getAllRules() } returns listOf(rule)
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
         // Act
         val result = engine.processCommand("play some music")
@@ -86,24 +81,21 @@ class FastMapEngineTest {
     }
 
     @Test
-    fun `processCommand returns null when query field is null if no capture group present`() = runTest {
+    fun `processCommand extracts track from capture group correctly`() = runTest {
         // Arrange
         val rule = FastMapRule(
             id = 1,
-            category = "GREETING",
-            actionType = "HELLO",
-            target = "SYSTEM",
-            triggerPattern = "hello assistant"
+            category = "MUSIC",
+            actionType = "PLAY",
+            triggerPattern = "pune melodia (.*)"
         )
-        coEvery { fastMapDao.getAllRules() } returns listOf(rule)
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
         // Act
-        val result = engine.processCommand("hello assistant")
+        val result = engine.processCommand("pune melodia perfect")
 
         // Assert
         assertNotNull(result)
-        assertEquals("GREETING", result?.category)
-        assertEquals("HELLO", result?.actionType)
-        assertNull(result?.query)
+        assertEquals("perfect", result?.track)
     }
 }

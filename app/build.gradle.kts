@@ -92,6 +92,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core:1.6.1")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -100,7 +102,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-// Înregistrează o sarcină de execuție pentru scriptul Bash
+// Înregistrează o sarcină de execuție pentru scriptul Bash Whisper
 val autoCompileWhisper = tasks.register<Exec>("autoCompileWhisper") {
     group = "build"
     description = "Verifică upstream-ul whisper.cpp și recompilează prin CMake dacă este necesar."
@@ -108,8 +110,17 @@ val autoCompileWhisper = tasks.register<Exec>("autoCompileWhisper") {
     commandLine("sh", "${project.rootDir}/scripts/check_whisper.sh")
 }
 
-// Forțează procesul de build al aplicației să ruleze acest script chiar la început
+// Înregistrează o sarcină de execuție pentru verificarea versiunii Vosk
+val autoCheckVosk = tasks.register<Exec>("autoCheckVosk") {
+    group = "verification"
+    description = "Verifică dacă a apărut o versiune mai nouă de Vosk pe JitPack."
+    
+    commandLine("sh", "${project.rootDir}/scripts/check_vosk_version.sh")
+}
+
+// Forțează procesul de build al aplicației să ruleze aceste scripturi chiar la început
 tasks.named("preBuild") {
     dependsOn(autoCompileWhisper)
+    dependsOn(autoCheckVosk)
 }
 
