@@ -23,7 +23,7 @@ object Strings {
 
     object AiProcessors {
         const val OPENAI = "OPENAI"
-        const val LLAMA_LOCAL = "LLAMA_LOCAL"
+        const val NLU_LOCAL = "NLU_LOCAL"
         const val GEMINI_NATIVE = "GEMINI_NATIVE"
     }
 

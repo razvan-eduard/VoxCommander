@@ -4,6 +4,9 @@ import android.util.Log
 import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.net.URL
 
@@ -43,14 +46,19 @@ object RemoteModelRegistry {
     private val gson = Gson()
     private var cachedSchema: RemoteModelSchema? = null
 
+    // Reactive signal that the registry has updated
+    private val _registryUpdateSignal = MutableStateFlow(0L)
+    val registryUpdateSignal: StateFlow<Long> = _registryUpdateSignal.asStateFlow()
+
     /**
      * Fetches models.json from the configured base URL.
      * Uses RAW content URL for GitHub automatically.
      */
     suspend fun fetchJson(settingsManager: SettingsManager, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        // Only return early if NOT forcing and we have memory cache
         if (!force && cachedSchema != null) return@withContext true
         
-        // Use cached string if available and not forcing
+        // If not forcing, try to use persistent disk cache
         if (!force) {
             settingsManager.getModelsJsonCache()?.let {
                 try {
@@ -65,14 +73,15 @@ object RemoteModelRegistry {
         val baseUrl = settingsManager.getModelRepoBaseUrl()
         
         // Logic: Transform normal GitHub URL to RAW if needed
-        // From: https://github.com/user/repo
-        // To:   https://raw.githubusercontent.com/user/repo/main/models.json
-        val rawUrl = if (baseUrl.contains("github.com") && !baseUrl.contains("raw.githubusercontent.com")) {
+        val rawUrlBase = if (baseUrl.contains("github.com") && !baseUrl.contains("raw.githubusercontent.com")) {
             baseUrl.replace("github.com", "raw.githubusercontent.com")
                 .removeSuffix("/") + "/main/models.json"
         } else {
             if (baseUrl.endsWith("/")) "${baseUrl}models.json" else "$baseUrl/models.json"
         }
+        
+        // CACHE BUSTER: Append timestamp to bypass CDN caching
+        val rawUrl = "$rawUrlBase?t=${System.currentTimeMillis()}"
 
         Log.d(TAG, "Fetching remote registry from: $rawUrl")
 
@@ -82,6 +91,7 @@ object RemoteModelRegistry {
             if (schema != null) {
                 cachedSchema = schema
                 settingsManager.saveModelsJsonCache(jsonText)
+                _registryUpdateSignal.value++
                 true
             } else false
         } catch (e: Exception) {

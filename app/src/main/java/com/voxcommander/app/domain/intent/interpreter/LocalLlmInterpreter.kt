@@ -26,7 +26,7 @@ class LocalLlmInterpreter(
         if (llmInference != null) return
 
         val modelId = settingsManager.getSelectedLlamaModelId()
-        val modelPath = File(context.getExternalFilesDir(null), "llama-model-$modelId.bin").absolutePath
+        val modelPath = File(context.getExternalFilesDir(null), "nlu-model-$modelId.bin").absolutePath
 
         if (!File(modelPath).exists()) {
             Log.e(TAG, "Llama model not found at $modelPath. Make sure it is downloaded.")

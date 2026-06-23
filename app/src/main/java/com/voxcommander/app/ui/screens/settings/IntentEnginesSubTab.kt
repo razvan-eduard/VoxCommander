@@ -105,7 +105,7 @@ fun IntentEnginesSubTab(
 
                     val aiOptions = listOf(
                         Strings.AiProcessors.OPENAI to "OpenAI (Cloud)",
-                        Strings.AiProcessors.LLAMA_LOCAL to "NLU AI (Local)",
+                        Strings.AiProcessors.NLU_LOCAL to "NLU AI (Local)",
                         Strings.AiProcessors.GEMINI_NATIVE to "Gemini Nano (System)"
                     )
 
@@ -116,7 +116,7 @@ fun IntentEnginesSubTab(
                             onClick = { expanded = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            val currentLabel = aiOptions.find { it.first == aiProcessor }?.second ?: "Select..."
+                            val currentLabel = aiOptions.find { it.first == aiProcessor }?.second ?: "NLU AI (Local)"
                             Text(text = currentLabel)
                         }
                         
@@ -154,7 +154,7 @@ fun IntentEnginesSubTab(
         }
 
         // --- NLU MODEL SELECTION ---
-        if (cloudEnabled && aiProcessor == Strings.AiProcessors.LLAMA_LOCAL) {
+        if (cloudEnabled && aiProcessor == Strings.AiProcessors.NLU_LOCAL) {
             EngineModelSection(
                 title = "NLU Model Selection",
                 languageManager = languageManager,

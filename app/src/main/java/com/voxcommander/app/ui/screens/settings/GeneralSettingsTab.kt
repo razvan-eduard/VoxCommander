@@ -86,7 +86,10 @@ fun GeneralSettingsTab(
             trailingIcon = {
                 IconButton(onClick = { 
                     scope.launch { 
-                        com.voxcommander.app.data.remote.RemoteModelRegistry.fetchJson(settingsManager, force = true)
+                        val success = com.voxcommander.app.data.remote.RemoteModelRegistry.fetchJson(settingsManager, force = true)
+                        if (success) {
+                            appStateManager.refreshAll()
+                        }
                     }
                 }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Sync JSON")

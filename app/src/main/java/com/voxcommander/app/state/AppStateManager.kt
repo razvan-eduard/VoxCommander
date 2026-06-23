@@ -152,7 +152,7 @@ class AppStateManager private constructor(
         // args[2] is the trigger
 
         when (processor) {
-            Strings.AiProcessors.LLAMA_LOCAL -> {
+            Strings.AiProcessors.NLU_LOCAL -> {
                 settingsManager.isModelDownloaded(llamaId)
             }
             Strings.AiProcessors.GEMINI_NATIVE -> {
@@ -344,7 +344,7 @@ class AppStateManager private constructor(
                     isActive = true
                     adjustedDesc = desc
                 }
-                name.contains("llm") && settingsManager.getAiProcessor() == Strings.AiProcessors.LLAMA_LOCAL -> {
+                name.contains("llm") && settingsManager.getAiProcessor() == Strings.AiProcessors.NLU_LOCAL -> {
                     isActive = true
                     adjustedDesc = desc
                 }

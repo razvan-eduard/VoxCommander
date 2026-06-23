@@ -18,9 +18,9 @@ class VoxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         
-        // Initial fetch of the remote model registry
+        // Initial fetch of the remote model registry - Force update on start to bypass CDN caching
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            com.voxcommander.app.data.remote.RemoteModelRegistry.fetchJson(container.settingsManager)
+            com.voxcommander.app.data.remote.RemoteModelRegistry.fetchJson(container.settingsManager, force = true)
         }
     }
 }

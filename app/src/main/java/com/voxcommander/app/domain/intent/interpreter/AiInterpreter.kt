@@ -18,7 +18,7 @@ class AiInterpreter(
     private val TAG = "AiInterpreter"
     
     // We'll lazy-load these as needed
-    private val llamaInterpreter by lazy { LocalLlmInterpreter(context, settingsManager) }
+    private val nluInterpreter by lazy { LocalLlmInterpreter(context, settingsManager) }
     private val openAiInterpreter by lazy { OpenAiInterpreter(settingsManager) }
     // private val geminiInterpreter by lazy { GeminiInterpreter(context) }
 
@@ -29,7 +29,7 @@ class AiInterpreter(
         Log.d(TAG, "🤖 Dispatching L2 command to: $processor")
 
         return when (processor) {
-            Strings.AiProcessors.LLAMA_LOCAL -> llamaInterpreter.processCommand(spokenText)
+            Strings.AiProcessors.NLU_LOCAL -> nluInterpreter.processCommand(spokenText)
             Strings.AiProcessors.OPENAI -> openAiInterpreter.processCommand(spokenText)
             // Strings.AiProcessors.GEMINI_NATIVE -> geminiInterpreter.processCommand(spokenText)
             else -> {

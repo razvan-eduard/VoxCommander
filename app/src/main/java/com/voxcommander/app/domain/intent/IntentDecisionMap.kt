@@ -46,7 +46,7 @@ class IntentDecisionMap(
                 Strings.AiProcessors.OPENAI -> {
                     if (isCloudIntelligenceEnabled) l2CloudEngine.processCommand(spokenText) else null
                 }
-                Strings.AiProcessors.LLAMA_LOCAL -> {
+                Strings.AiProcessors.NLU_LOCAL -> {
                     l3LocalEngine.processCommand(spokenText)
                 }
                 Strings.AiProcessors.GEMINI_NATIVE -> {
@@ -76,7 +76,7 @@ class IntentDecisionMap(
             } else {
                 Log.d(TAG, "🏠 L2 Miss/Failure. Triggering L3 Offline Fallback ($fallbackProcessor)...")
                 val l3Result = when (fallbackProcessor) {
-                    Strings.AiProcessors.LLAMA_LOCAL -> l3LocalEngine.processCommand(spokenText)
+                    Strings.AiProcessors.NLU_LOCAL -> l3LocalEngine.processCommand(spokenText)
                     // Currently only Llama is supported for local intent fallback
                     else -> null
                 }

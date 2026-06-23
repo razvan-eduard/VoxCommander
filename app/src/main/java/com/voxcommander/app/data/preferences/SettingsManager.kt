@@ -277,7 +277,7 @@ class SettingsManager(context: Context) {
     }
 
     fun getAiProcessor(): String {
-        return sharedPreferences.getString(Strings.Preferences.KEY_AI_PROCESSOR, Strings.AiProcessors.OPENAI) ?: Strings.AiProcessors.OPENAI
+        return sharedPreferences.getString(Strings.Preferences.KEY_AI_PROCESSOR, Strings.AiProcessors.NLU_LOCAL) ?: Strings.AiProcessors.NLU_LOCAL
     }
 
     fun saveSelectedLlamaModelId(modelId: String) {

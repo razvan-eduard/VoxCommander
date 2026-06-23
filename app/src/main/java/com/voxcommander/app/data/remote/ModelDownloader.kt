@@ -33,12 +33,12 @@ class ModelDownloader(private val context: Context) {
         return downloadManager.enqueue(request)
     }
 
-    fun downloadLlamaModel(modelId: String, url: String): Long {
+    fun downloadNluModel(modelId: String, url: String): Long {
         val request = DownloadManager.Request(Uri.parse(url))
-            .setTitle("Downloading Llama $modelId")
-            .setDescription("Downloading local AI brain")
+            .setTitle("Downloading NLU Model: $modelId")
+            .setDescription("NLU Engine processing model")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(context, null, "llama-model-$modelId.bin")
+            .setDestinationInExternalFilesDir(context, null, "nlu-model-$modelId.bin")
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
 
@@ -128,13 +128,13 @@ class ModelDownloader(private val context: Context) {
             }
             
             // 3. Llama Protection (Files)
-            if (name.startsWith(LLAMA_MODEL_FILENAME_PREFIX) && name.endsWith(LLAMA_MODEL_EXTENSION)) {
-                val modelId = name.removePrefix(LLAMA_MODEL_FILENAME_PREFIX).removeSuffix(LLAMA_MODEL_EXTENSION)
+            if (name.startsWith(NLU_MODEL_FILENAME_PREFIX) && name.endsWith(NLU_MODEL_EXTENSION)) {
+                val modelId = name.removePrefix(NLU_MODEL_FILENAME_PREFIX).removeSuffix(NLU_MODEL_EXTENSION)
                 val protectedModel = protectedLlamaModels.contains(modelId)
-                Log.d(CLEANUP_TAG, "LLAMA file '$name' id='$modelId' protected=$protectedModel size=${file.length()}")
+                Log.d(CLEANUP_TAG, "NLU file '$name' id='$modelId' protected=$protectedModel size=${file.length()}")
                 if (!protectedModel) {
                     val deleted = file.delete()
-                    Log.d(CLEANUP_TAG, "LLAMA delete '$name' result=$deleted exists=${file.exists()}")
+                    Log.d(CLEANUP_TAG, "NLU delete '$name' result=$deleted exists=${file.exists()}")
                 }
             }
         }
@@ -148,7 +148,7 @@ class ModelDownloader(private val context: Context) {
         private const val VOSK_MODEL_ZIP_PREFIX = "vosk-model-"
         private const val VOSK_MODEL_DIR_PREFIX = "vosk-model-"
         private const val ZIP_EXTENSION = ".zip"
-        private const val LLAMA_MODEL_FILENAME_PREFIX = "llama-model-"
-        private const val LLAMA_MODEL_EXTENSION = ".bin"
+        private const val NLU_MODEL_FILENAME_PREFIX = "nlu-model-"
+        private const val NLU_MODEL_EXTENSION = ".bin"
     }
 }

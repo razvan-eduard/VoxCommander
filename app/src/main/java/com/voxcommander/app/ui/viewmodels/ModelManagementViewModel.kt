@@ -219,12 +219,13 @@ class ModelManagementViewModel(
             if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
         } else url
         
-        val id = modelDownloader.downloadLlamaModel(modelId, resolvedUrl)
+        val id = modelDownloader.downloadNluModel(modelId, resolvedUrl)
         startProgressTracking(id)
     }
 
     /**
      * Cancels the current download.
+     * Agnostic implementation using AppModel interface properties.
      */
     fun cancelDownload() {
         currentDownloadId?.let { downloadId ->
@@ -232,21 +233,26 @@ class ModelManagementViewModel(
             downloadManager?.remove(downloadId)
             progressJob?.cancel()
             _downloadProgress.value = null
+            
+            // AGNOSTIC CLEANUP using the current downloading item
+            val item = _downloadingItem.value
+            if (item != null) {
+                val root = context.getExternalFilesDir(null)
+                val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                
+                when (item.engineType) {
+                    "Whisper" -> root?.let { File(it, "whisper-model-${item.id}.bin").delete() }
+                    "Llama", "NLU_LLM" -> root?.let { File(it, "nlu-model-${item.id}.bin").delete() }
+                    "Vosk" -> downloadsDir?.let { File(it, "vosk-model-${item.id}.zip").delete() }
+                }
+            }
+
             _downloadingItem.value = null
             currentDownloadId = null
-
-            // Delete partial download files
-            lastDownloadedVoskModelName?.let { modelName ->
-                FileHelper.deletePartialDownload(context, "vosk-model-$modelName.zip")
-            }
-            lastDownloadedWhisperModelId?.let { modelId ->
-                FileHelper.deleteModelFile(context, modelId, "whisper")
-            }
-            lastDownloadedLlamaModelId?.let { modelId ->
-                FileHelper.deleteModelFile(context, modelId, "llama")
-            }
-
             lastDownloadType = null
+            
+            // Force UI refresh to reset buttons immediately
+            appStateManager.refreshAll()
         }
     }
 
@@ -358,9 +364,9 @@ class ModelManagementViewModel(
             }
         }
 
-        // Intent (Llama) fallback.
+        // Intent (NLU) fallback.
         if (isModelPresent("llama", selectedLlama)) {
-            settingsManager.saveDefaultIntentFallback(Strings.AiProcessors.LLAMA_LOCAL, selectedLlama)
+            settingsManager.saveDefaultIntentFallback(Strings.AiProcessors.NLU_LOCAL, selectedLlama)
         } else {
             settingsManager.clearDefaultIntentFallback()
         }
@@ -373,7 +379,7 @@ class ModelManagementViewModel(
         val root = context.getExternalFilesDir(null) ?: return false
         val target = when (type) {
             "whisper" -> File(root, "whisper-model-$id.bin")
-            "llama" -> File(root, "llama-model-$id.bin")
+            "llama" -> File(root, "nlu-model-$id.bin")
             "vosk" -> File(root, "vosk-model-$id")
             else -> return false
         }
@@ -466,13 +472,13 @@ class ModelManagementViewModel(
             }
             "llama" -> {
                 val modelId = lastDownloadedLlamaModelId ?: settingsManager.getSelectedLlamaModelId()
-                val file = File(context.getExternalFilesDir(null), "llama-model-$modelId.bin")
+                val file = File(context.getExternalFilesDir(null), "nlu-model-$modelId.bin")
                 if (file.exists()) {
                     settingsManager.setModelDownloaded(modelId, true)
                     appStateManager.refreshAll()
-                    showSuccessMessage("Llama Model $modelId ready!")
+                    showSuccessMessage("NLU Model $modelId ready!")
                 } else {
-                    showSuccessMessage("File missing after Llama download")
+                    showSuccessMessage("File missing after NLU download")
                 }
             }
         }
