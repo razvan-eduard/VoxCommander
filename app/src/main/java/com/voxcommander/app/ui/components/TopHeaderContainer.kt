@@ -64,18 +64,15 @@ fun TopHeaderContainer(
                         settingsManager = settingsManager,
                         appStateManager = appStateManager,
                         modelManagementViewModel = modelManagementViewModel,
-                        onSaveAndClose = onDismissRequest,
                         onDownloadVoskModel = onDownloadVoskModel,
                         onDownloadWhisperModel = onDownloadWhisperModel,
                         onSelectCustomVoskModel = onSelectCustomVoskModel,
                         onSelectCustomWhisperModel = onSelectCustomWhisperModel,
                         onDeleteUnusedModels = onDeleteUnusedModels,
                         onDownloadLlamaModel = onDownloadLlamaModel,
-                        onDeleteLlamaModel = onDeleteLlamaModel,
                         onCancelDownload = onCancelDownload,
                         onRefreshMain = onRefreshMain,
                         downloadProgress = downloadProgress,
-                        selectionSuccessMessage = selectionSuccessMessage,
                         googleSttAvailable = googleSttAvailable,
                         updateVoiceEngine = updateVoiceEngine
                     )

@@ -267,6 +267,14 @@ class ModelManagementViewModel(
     // --- MODEL MANAGEMENT ---
 
     /**
+     * Clears all default offline fallbacks for both Voice and Intent.
+     */
+    fun clearDefaultOfflineFallback() {
+        settingsManager.clearDefaultOfflineFallback()
+        appStateManager.refreshAll()
+    }
+
+    /**
      * Deletes unused models, keeping ONLY the currently selected models (plus the
      * wake-word model, which powers a separate feature).
      *
@@ -390,19 +398,27 @@ class ModelManagementViewModel(
                 val query = DownloadManager.Query().setFilterById(downloadId)
                 val cursor = downloadManager.query(query)
                 if (cursor.moveToFirst()) {
-                    val bytesDownloaded = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                    val bytesTotal = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    val bytesDownloadedIndex = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                    val bytesTotalIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
 
-                    if (bytesTotal > 0) {
-                        _downloadProgress.value = bytesDownloaded.toFloat() / bytesTotal.toFloat()
+                    if (bytesDownloadedIndex != -1 && bytesTotalIndex != -1) {
+                        val bytesDownloaded = cursor.getLong(bytesDownloadedIndex)
+                        val bytesTotal = cursor.getLong(bytesTotalIndex)
+
+                        if (bytesTotal > 0) {
+                            _downloadProgress.value = bytesDownloaded.toFloat() / bytesTotal.toFloat()
+                        }
                     }
 
-                    val status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))
-                    if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
-                        downloading = false
-                        if (status == DownloadManager.STATUS_FAILED) {
-                            _downloadProgress.value = null
-                            _downloadingItem.value = null
+                    if (statusIndex != -1) {
+                        val status = cursor.getInt(statusIndex)
+                        if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
+                            downloading = false
+                            if (status == DownloadManager.STATUS_FAILED) {
+                                _downloadProgress.value = null
+                                _downloadingItem.value = null
+                            }
                         }
                     }
                 }

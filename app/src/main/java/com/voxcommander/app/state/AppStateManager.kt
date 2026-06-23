@@ -209,15 +209,7 @@ class AppStateManager private constructor(
         _wakeWordDetected.value = false
     }
 
-    fun canStartWakeWord(): Boolean = _voiceState.value == VoiceState.IDLE
-    fun canStartCommand(): Boolean = _voiceState.value == VoiceState.IDLE
-
     // State Update Methods
-    fun setVoiceModelReady(ready: Boolean) {
-        // Now handled reactively, but we keep the preference update for legacy reasons
-        settingsManager.setVoiceModelReady(ready)
-    }
-
     fun setVoiceProcessor(processor: String) {
         settingsManager.saveVoiceProcessor(processor)
         _voiceProcessor.value = processor

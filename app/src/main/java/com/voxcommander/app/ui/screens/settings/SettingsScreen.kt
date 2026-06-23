@@ -1,6 +1,5 @@
 package com.voxcommander.app.ui.screens.settings
 
-import android.app.ActivityManager
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -41,18 +40,15 @@ fun SettingsContent(
     settingsManager: SettingsManager,
     appStateManager: AppStateManager,
     modelManagementViewModel: com.voxcommander.app.ui.viewmodels.ModelManagementViewModel,
-    onSaveAndClose: () -> Unit,
     onDownloadVoskModel: (String, String, String) -> Unit,
     onDownloadWhisperModel: (String, String) -> Unit,
     onSelectCustomVoskModel: (String) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
     onDeleteUnusedModels: () -> Unit,
     onDownloadLlamaModel: (LlamaModelInfo) -> Unit,
-    onDeleteLlamaModel: (AppModel) -> Unit,
     onCancelDownload: () -> Unit = {},
     onRefreshMain: () -> Unit = {},
     downloadProgress: Float? = null,
-    selectionSuccessMessage: String? = null,
     googleSttAvailable: Boolean = true,
     updateVoiceEngine: () -> Unit = {}
 ) {
@@ -251,8 +247,7 @@ fun SettingsContent(
                                 appStateManager = appStateManager,
                                 onCleanupRequest = { showCleanupDialog = true },
                                 onClearDefaultFallback = { 
-                                    settingsManager.clearDefaultOfflineFallback()
-                                    appStateManager.refreshAll() 
+                                    modelManagementViewModel.clearDefaultOfflineFallback()
                                 },
                                 onVerboseLoggingChange = { 
                                     settingsManager.saveVerboseLoggingEnabled(it)

@@ -3,8 +3,8 @@ package com.voxcommander.app.domain.intent
 import android.util.Log
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.intent.interpreter.AssistantEngine
-import com.voxcommander.app.domain.intent.model.IntentPayload
 import com.voxcommander.app.utils.Strings
+import com.voxcommander.app.testutil.TestDataFactory
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -56,7 +56,7 @@ class IntentDecisionMapTest {
     fun `when L1 engine matches, should return result immediately without calling other engines`() = runTest {
         // Arrange
         val command = "pune muzica"
-        val expectedPayload = IntentPayload(category = "music", actionType = "play")
+        val expectedPayload = TestDataFactory.createMusicPayload()
         
         coEvery { l1Engine.processCommand(command) } returns expectedPayload
         
@@ -74,7 +74,7 @@ class IntentDecisionMapTest {
     fun `when L1 misses and primary is OpenAI, should call L2 Cloud engine`() = runTest {
         // Arrange
         val command = "vreau la brasov"
-        val expectedPayload = IntentPayload(category = "navigation", actionType = "navigate", destination = "brasov")
+        val expectedPayload = TestDataFactory.createNavigationPayload(destination = "brasov")
         
         coEvery { l1Engine.processCommand(command) } returns null
         coEvery { l2CloudEngine.processCommand(command) } returns expectedPayload
@@ -93,7 +93,7 @@ class IntentDecisionMapTest {
     fun `when L2 Cloud fails and fallback is Llama, should call L3 fallback`() = runTest {
         // Arrange
         val command = "cat e ceasul"
-        val expectedPayload = IntentPayload(category = "system", actionType = "time")
+        val expectedPayload = TestDataFactory.createIntentPayload(category = "system", actionType = "time")
         
         coEvery { l1Engine.processCommand(command) } returns null
         coEvery { l2CloudEngine.processCommand(command) } returns null // Cloud fail (e.g. no internet)
