@@ -165,6 +165,7 @@
   "ww_paused_app_listening": "Wake Word paused (App is listening)",
   "ww_paused_ai_thinking": "Wake Word paused (AI is thinking...)",
   "ww_paused_diagnostics": "Wake Word paused (Running Diagnostics)",
+  "ww_paused": "Paused",
   "tab_permissions": "Permissions",
   "permissions_section": "System Permissions",
   "permission_mic_title": "Microphone",
@@ -174,5 +175,10 @@
   "overlay_permission_title": "System Overlay",
   "overlay_permission_desc": "Display microphone overlay over other apps and menus.",
   "overlay_permission_granted": "Permission Granted",
-  "overlay_permission_required": "Permission Required"
+  "overlay_permission_required": "Permission Required",
+  "notification_start": "Start",
+  "notification_pause": "Pause",
+  "notification_resume": "Resume",
+  "notification_stop": "Stop",
+  "notification_exit": "Exit"
 }

@@ -22,6 +22,7 @@ jna = "5.13.0"
 jsoup = "1.18.3"
 whisperCpp = "0.2.1"
 mediapipeGenai = "0.10.35"
+androidxMedia = "1.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -66,6 +67,7 @@ jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 whisper-android = { group = "com.github.PavelDoichev", name = "whisper-android", version = "v1.1.0" }
 mediapipe-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeGenai" }
+androidx-media = { group = "androidx.media", name = "media", version.ref = "androidxMedia" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

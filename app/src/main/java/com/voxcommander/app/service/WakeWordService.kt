@@ -9,6 +9,7 @@ import android.media.SoundPool
 import android.os.*
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.media.app.NotificationCompat as MediaNotificationCompat
 import com.voxcommander.app.MainActivity
 import com.voxcommander.app.R
 import com.voxcommander.app.data.preferences.SettingsManager
@@ -87,7 +88,10 @@ class WakeWordService : Service() {
 
         when (action) {
             ACTION_START -> startWakeWordDetection()
-            ACTION_STOP -> {
+            ACTION_PAUSE -> pauseWakeWordDetection()
+            ACTION_RESUME -> resumeWakeWordDetection()
+            ACTION_STOP -> stopWakeWordDetectionLocally()
+            ACTION_EXIT -> {
                 stopWakeWordDetection()
                 stopSelf()
             }
@@ -165,10 +169,33 @@ class WakeWordService : Service() {
     }
 
     private fun stopWakeWordDetection() {
-        Logger.log("Stopping wake word detection", TAG)
+        Logger.log("Stopping wake word detection and releasing", TAG)
         wakeWordEngine?.stopService()
         wakeWordEngine?.release()
         wakeWordEngine = null
+    }
+
+    private fun stopWakeWordDetectionLocally() {
+        Logger.log("Stopping wake word detection (Service stays alive)", TAG)
+        wakeWordEngine?.stopService()
+        wakeWordEngine?.release()
+        wakeWordEngine = null
+        updateNotification(languageManager.getString("service_stopped"))
+    }
+
+    private fun pauseWakeWordDetection() {
+        Logger.log("Pausing wake word detection", TAG)
+        wakeWordEngine?.stopListening()
+        appStateManager.setWakeWordServiceListening(false)
+        updateNotification(languageManager.getString("ww_paused"))
+    }
+
+    private fun resumeWakeWordDetection() {
+        Logger.log("Resuming wake word detection", TAG)
+        val wakeWord = settingsManager.getWakeWord()
+        wakeWordEngine?.startListening()
+        updateNotification(languageManager.getString("ww_listening_for").format(wakeWord))
+        appStateManager.setWakeWordServiceListening(true)
     }
 
     private fun onWakeWordDetected() {
@@ -186,18 +213,23 @@ class WakeWordService : Service() {
         val currentUiState = appStateManager.uiState.value
         Logger.log("handleVoiceStateChange: $state, serviceListeningProp: ${currentUiState.isWakeWordServiceListening}", TAG)
         
+        // If engine is null, the service is globally "Stopped" in notification
+        val isServiceActive = wakeWordEngine != null
+
         when (state) {
             VoiceState.IDLE -> {
-                // Resume listening if service is logically active
-                if (wakeWordEngine != null && currentUiState.isWakeWordServiceListening) {
+                // Resume listening ONLY if service was NOT manually paused/stopped
+                if (isServiceActive && currentUiState.isWakeWordServiceListening) {
                     val wakeWord = settingsManager.getWakeWord()
                     wakeWordEngine?.startListening()
-                    updateNotification(languageManager.getString("ww_listening_for").format(wakeWord))
+                    updateNotification() // Will automatically use "Listening for..." or "Paused" logic
                 }
             }
             VoiceState.LISTENING_WAKEWORD -> {
-                // Active listening state, keep it running
-                updateNotification(languageManager.getString("ww_listening_for").format(settingsManager.getWakeWord()))
+                // Already listening, just ensuring notification is correct
+                if (currentUiState.isWakeWordServiceListening) {
+                    updateNotification()
+                }
             }
             VoiceState.LISTENING_COMMAND -> {
                 wakeWordEngine?.stopListening()
@@ -212,7 +244,6 @@ class WakeWordService : Service() {
                 updateNotification(languageManager.getString("ww_paused_diagnostics"))
             }
             else -> {
-                // For CLEANING or other states, keep it paused but alive
                 wakeWordEngine?.stopListening()
             }
         }
@@ -241,43 +272,77 @@ class WakeWordService : Service() {
         }
     }
 
-    private fun createNotification(): Notification {
+    private fun createNotification(contentText: String? = null): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent,
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val uiState = appStateManager.uiState.value
+        val isListening = uiState.isWakeWordServiceListening
+        val isServiceActive = wakeWordEngine != null
+
+        val finalContentText = contentText ?: when {
+            isListening -> languageManager.getString("ww_listening_for").format(settingsManager.getWakeWord())
+            isServiceActive -> languageManager.getString("ww_paused")
+            else -> languageManager.getString("service_stopped")
+        }
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Vox Commander")
-            .setContentText("Wake Word Service is active")
+            .setContentText(finalContentText)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .build()
+            .setStyle(MediaNotificationCompat.MediaStyle().setShowActionsInCompactView(0, 1))
+
+        // Action Buttons logic
+        if (isServiceActive) {
+            if (isListening) {
+                // ACTIVE -> Show [Pause] [Stop]
+                val pauseIntent = Intent(this, WakeWordService::class.java).apply { action = ACTION_PAUSE }
+                val pausePendingIntent = PendingIntent.getService(this, 1, pauseIntent, PendingIntent.FLAG_IMMUTABLE)
+                builder.addAction(android.R.drawable.ic_media_pause, languageManager.getString("notification_pause"), pausePendingIntent)
+            } else {
+                // PAUSED -> Show [Resume] [Stop]
+                val resumeIntent = Intent(this, WakeWordService::class.java).apply { action = ACTION_RESUME }
+                val resumePendingIntent = PendingIntent.getService(this, 2, resumeIntent, PendingIntent.FLAG_IMMUTABLE)
+                builder.addAction(android.R.drawable.ic_media_play, languageManager.getString("notification_resume"), resumePendingIntent)
+            }
+            
+            // Stop button (local stop, keeps service alive)
+            val stopIntent = Intent(this, WakeWordService::class.java).apply { action = ACTION_STOP }
+            val stopPendingIntent = PendingIntent.getService(this, 3, stopIntent, PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, languageManager.getString("notification_stop"), stopPendingIntent)
+        } else {
+            // STOPPED -> Show [Start] [Exit]
+            val runIntent = Intent(this, WakeWordService::class.java).apply { action = ACTION_START }
+            val runPendingIntent = PendingIntent.getService(this, 4, runIntent, PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(android.R.drawable.ic_media_play, languageManager.getString("notification_start"), runPendingIntent)
+
+            val exitIntent = Intent(this, WakeWordService::class.java).apply { action = ACTION_EXIT }
+            val exitPendingIntent = PendingIntent.getService(this, 5, exitIntent, PendingIntent.FLAG_IMMUTABLE)
+            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, languageManager.getString("notification_exit"), exitPendingIntent)
+            
+            // For stopped state, maybe different compact actions
+            builder.setStyle(MediaNotificationCompat.MediaStyle().setShowActionsInCompactView(0, 1))
+        }
+
+        return builder.build()
     }
 
-    private fun updateNotification(text: String) {
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Vox Commander")
-            .setContentText(text)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .build()
-
+    private fun updateNotification(text: String? = null) {
+        val notification = createNotification(text)
         notificationManager?.notify(NOTIFICATION_ID, notification)
     }
 
     companion object {
         const val ACTION_START = "com.voxcommander.app.action.START_WAKE_WORD"
         const val ACTION_STOP = "com.voxcommander.app.action.STOP_WAKE_WORD"
+        const val ACTION_PAUSE = "com.voxcommander.app.action.PAUSE_WAKE_WORD"
+        const val ACTION_RESUME = "com.voxcommander.app.action.RESUME_WAKE_WORD"
+        const val ACTION_EXIT = "com.voxcommander.app.action.EXIT_SERVICE"
 
         fun startService(context: Context) {
             val intent = Intent(context, WakeWordService::class.java).apply {

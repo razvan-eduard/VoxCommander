@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.vosk.android)
     implementation(libs.jsoup)
     implementation(libs.mediapipe.genai)
+    implementation(libs.androidx.media)
     // Gemini Nano (Google AI Edge) - System LLM SDK
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
     // STT Engines (Whisper.cpp integration)

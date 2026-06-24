@@ -163,6 +163,7 @@
   "ww_paused_app_listening": "Wake Word în pauză (Aplicația ascultă)",
   "ww_paused_ai_thinking": "Wake Word în pauză (AI procesează...)",
   "ww_paused_diagnostics": "Wake Word în pauză (Rulează diagnostice)",
+  "ww_paused": "În pauză",
   "tab_permissions": "Permisiuni",
   "permissions_section": "Permisiuni de Sistem",
   "permission_mic_title": "Microfon",
@@ -172,5 +173,10 @@
   "overlay_permission_title": "Overlay de Sistem",
   "overlay_permission_desc": "Afișează microfonul peste alte aplicații și meniuri.",
   "overlay_permission_granted": "Permisiune Acordată",
-  "overlay_permission_required": "Permisiune Necesară"
+  "overlay_permission_required": "Permisiune Necesară",
+  "notification_start": "Pornire",
+  "notification_pause": "Pauză",
+  "notification_resume": "Resumare",
+  "notification_stop": "Oprire",
+  "notification_exit": "Ieșire"
 }
