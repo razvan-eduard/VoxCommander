@@ -25,7 +25,6 @@ import com.voxcommander.app.ui.theme.VoxCommanderTheme
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import com.voxcommander.app.utils.VoiceIntentLauncher
-import kotlinx.coroutines.delay
 
 /**
  * MainActivity: Thin UI Container.
@@ -108,20 +107,8 @@ class MainActivity : ComponentActivity() {
                 val successMessage by appContainer.modelManagementViewModel.selectionSuccessMessage.collectAsStateWithLifecycle()
                 val showVulkanError by appContainer.modelManagementViewModel.showVulkanError.collectAsStateWithLifecycle()
 
-                // --- WAKE WORD DETECTION LISTENER ---
-                val uiState by appContainer.appStateManager.uiState.collectAsStateWithLifecycle()
-                LaunchedEffect(uiState.wakeWordDetected) {
-                    if (uiState.wakeWordDetected) {
-                        Logger.log("MainActivity: Wake word detected! (via StateFlow)")
-                        appContainer.mainViewModel.processVoiceCommand(
-                            uiState.voiceLanguage,
-                            uiState.voiceProcessor
-                        )
-                        // Add a small delay to ensure processing starts before reset
-                        delay(500)
-                        appContainer.appStateManager.resetWakeWordDetection()
-                    }
-                }
+                // --- UI STATE OBSERVERS ---
+                // Background trigger logic is now handled in WakeWordService for system-wide reliability.
 
                 if (showVulkanError) {
                     AlertDialog(

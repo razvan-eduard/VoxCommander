@@ -14,10 +14,14 @@ import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.VoiceState
 import com.voxcommander.app.utils.Logger
+import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -54,16 +58,36 @@ class WakeWordService : Service() {
             }
         }
 
+        // --- VISIBILITY CONTROLLER ---
         serviceScope.launch {
             VoiceManager.isListeningFlow.collectLatest { isListening ->
                 val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     android.provider.Settings.canDrawOverlays(this@WakeWordService)
                 } else true
-
+                
                 if (isListening && canDraw) {
                     voiceOverlayManager.show()
                 } else {
                     voiceOverlayManager.hide()
+                }
+            }
+        }
+
+        // --- BACKGROUND TRIGGER (MOVED FROM MAINACTIVITY) ---
+        serviceScope.launch {
+            appStateManager.uiState.map { it.wakeWordDetected }.distinctUntilChanged().collectLatest { detected ->
+                if (detected) {
+                    Logger.log("WakeWordService: Background trigger activated!", TAG)
+                    val uiState = appStateManager.uiState.value
+                    
+                    val container = (application as com.voxcommander.app.VoxApplication).container
+                    container.mainViewModel.processVoiceCommand(
+                        uiState.voiceLanguage,
+                        uiState.voiceProcessor
+                    )
+                    
+                    delay(500)
+                    appStateManager.resetWakeWordDetection()
                 }
             }
         }
@@ -275,11 +299,11 @@ class WakeWordService : Service() {
     }
 
     companion object {
-        const val ACTION_START = "com.voxcommander.app.action.START_WAKE_WORD"
-        const val ACTION_STOP = "com.voxcommander.app.action.STOP_WAKE_WORD"
-        const val ACTION_PAUSE = "com.voxcommander.app.action.PAUSE_WAKE_WORD"
-        const val ACTION_RESUME = "com.voxcommander.app.action.RESUME_WAKE_WORD"
-        const val ACTION_EXIT = "com.voxcommander.app.action.EXIT_SERVICE"
+        const val ACTION_START = Strings.Actions.START_WAKE_WORD
+        const val ACTION_STOP = Strings.Actions.STOP_WAKE_WORD
+        const val ACTION_PAUSE = Strings.Actions.PAUSE_WAKE_WORD
+        const val ACTION_RESUME = Strings.Actions.RESUME_WAKE_WORD
+        const val ACTION_EXIT = Strings.Actions.EXIT_SERVICE
 
         fun startService(context: Context) {
             val intent = Intent(context, WakeWordService::class.java).apply { action = ACTION_START }
