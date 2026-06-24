@@ -1,9 +1,13 @@
 package com.voxcommander.app.service
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.util.Log
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.state.AppStateManager
@@ -12,6 +16,7 @@ import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -31,7 +36,8 @@ class WakeWordEngine(
     private var audioRecord: AudioRecord? = null
     private var isListening = false
 
-    val listening: Boolean get() = isListening
+   private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     private val sampleRate = 16000
     private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2
@@ -39,29 +45,28 @@ class WakeWordEngine(
     suspend fun initialize(modelPath: String, wakeWord: String): Boolean = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Init model: $modelPath")
-            
-            // Secure cleanup of previous instances
+
             appStateManager.executeSecureVoiceAction {
                 recognizer?.close()
                 model?.close()
                 recognizer = null
                 model = null
             }
-            
+
             val dir = File(modelPath)
-            val actualPath = if (File(dir, "am").exists()) dir.absolutePath 
-                             else dir.listFiles()?.find { File(it, "am").exists() }?.absolutePath ?: modelPath
+            val actualPath = if (File(dir, "am").exists()) dir.absolutePath
+            else dir.listFiles()?.find { File(it, "am").exists() }?.absolutePath ?: modelPath
 
             val newModel = Model(actualPath)
-            
-            // Build vocabulary for static grammar
+
             val wakeWordClean = wakeWord.lowercase().trim()
             val individualWords = wakeWordClean.split(Regex("\\s+"))
-            val vocab = mutableSetOf<String>()
-            vocab.addAll(individualWords)
-            vocab.addAll(listOf("hey", "vox", "wake", "up", "commander", "[unknown]"))
+            val vocab = mutableSetOf<String>().apply {
+                addAll(individualWords)
+                addAll(listOf("hey", "vox", "wake", "up", "commander", "[unknown]"))
+            }
             val grammarJson = vocab.joinToString(prefix = "[", postfix = "]", separator = ", ") { "\"$it\"" }
-            
+
             appStateManager.executeSecureVoiceAction {
                 model = newModel
                 recognizer = Recognizer(newModel, sampleRate.toFloat(), grammarJson)
@@ -74,27 +79,72 @@ class WakeWordEngine(
         }
     }
 
+    private fun requestAudioFocus(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener { focusChange ->
+                    if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                        Log.d(TAG, "Audio focus lost. Pausing listening.")
+                        stopListening()
+                    }
+                }.build()
+
+            audioManager.requestAudioFocus(audioFocusRequest!!) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
+            ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(null)
+        }
+    }
+
     fun startListening(): Boolean {
         if (isListening) return true
         try {
             if (context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 return false
             }
-            
+
+            if (!requestAudioFocus()) {
+                Log.w(TAG, "Could not gain audio focus. Cannot start listening.")
+                return false
+            }
+
             audioRecord?.release()
             audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
-            
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) return false
+
+            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                abandonAudioFocus()
+                return false
+            }
 
             isListening = true
             appStateManager.setWakeWordServiceListening(true)
             appStateManager.setVoiceState(VoiceState.LISTENING_WAKEWORD)
             audioRecord?.startRecording()
-            
+
             CoroutineScope(Dispatchers.IO).launch { listenLoop() }
             return true
         } catch (e: Exception) {
+            Log.e(TAG, "Exception starting AudioRecord", e)
             isListening = false
+            abandonAudioFocus()
             return false
         }
     }
@@ -102,6 +152,7 @@ class WakeWordEngine(
     private suspend fun listenLoop() {
         val buffer = ByteArray(bufferSize)
         val shortBuffer = ShortArray(bufferSize / 2)
+        var consecutiveErrors = 0 // Anti CPU Burn logic
 
         while (isListening) {
             val currentAudioRecord = audioRecord ?: break
@@ -114,12 +165,13 @@ class WakeWordEngine(
             }
 
             if (read > 0 && isListening) {
+                consecutiveErrors = 0 // Reset errors on successful read
+
                 // Little Endian conversion
                 for (i in 0 until read / 2) {
                     shortBuffer[i] = ((buffer[i * 2 + 1].toInt() shl 8) or (buffer[i * 2].toInt() and 0xFF)).toShort()
                 }
 
-                // CRITICAL: Synchronize with Mutex to prevent processing while closing
                 appStateManager.executeSecureVoiceAction {
                     if (isListening && recognizer != null) {
                         try {
@@ -133,7 +185,18 @@ class WakeWordEngine(
                         }
                     }
                 }
-            } else if (read < 0 || !isListening) break
+            } else if (read < 0) {
+                consecutiveErrors++
+                Log.e(TAG, "Audio read error count: $consecutiveErrors")
+                if (consecutiveErrors > 5) {
+                    Log.e(TAG, "Too many audio read errors. Aborting loop to prevent CPU burn.")
+                    stopListening()
+                    break
+                }
+                delay(50) // Pauză pentru a nu prăji CPU-ul
+            } else if (!isListening) {
+                break
+            }
         }
         Log.d(TAG, "WakeWord loop exited cleanly")
     }
@@ -149,10 +212,10 @@ class WakeWordEngine(
     private fun handlePartial(json: String?) {
         val partial = json?.let { JSONObject(it).optString("partial", "") } ?: ""
         if (partial.isNotBlank()) {
-            Logger.log("WW Partial: $partial")
             if (isValidWakeWordMatch(partial)) {
+                Logger.log("WW Partial Match: $partial")
                 onWakeWordDetected()
-                recognizer?.reset()
+                recognizer?.reset() // Reset after partial match to prevent duplicate triggers
             }
         }
     }
@@ -163,15 +226,11 @@ class WakeWordEngine(
             .replace("[unknown]", "")
             .replace(Regex("\\s+"), " ")
             .trim()
-        
+
         if (cleanHeard.isBlank()) return false
         return cleanHeard == target
     }
 
-    /**
-     * Pauses the wake word engine (e.g. during a command), 
-     * but DOES NOT mark the service as globally stopped.
-     */
     fun stopListening() {
         if (!isListening) return
         Log.d(TAG, "Pausing WakeWordEngine listening")
@@ -189,12 +248,10 @@ class WakeWordEngine(
             Log.e(TAG, "Error stopping AudioRecord", e)
         } finally {
             audioRecord = null
+            abandonAudioFocus()
         }
     }
 
-    /**
-     * Marks the service as globally stopped (User clicked STOP in UI).
-     */
     fun stopService() {
         stopListening()
         appStateManager.setWakeWordServiceListening(false)
@@ -203,8 +260,7 @@ class WakeWordEngine(
 
     fun release() {
         stopService()
-        
-        // SECURE NATIVE CLEANUP
+
         CoroutineScope(Dispatchers.IO).launch {
             appStateManager.executeSecureVoiceAction {
                 Log.d(TAG, "Releasing native resources...")
