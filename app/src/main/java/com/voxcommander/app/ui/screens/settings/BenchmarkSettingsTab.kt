@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,10 +39,10 @@ fun BenchmarkSettingsTab(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val uiState by appStateManager.uiState.collectAsState()
-    val benchmarkResults by appStateManager.benchmarkResults.collectAsState()
-    val nativeLibsStatus by appStateManager.nativeLibsStatus.collectAsState()
-    val systemInfo by appStateManager.systemInfo.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
+    val benchmarkResults by appStateManager.benchmarkResults.collectAsStateWithLifecycle()
+    val nativeLibsStatus by appStateManager.nativeLibsStatus.collectAsStateWithLifecycle()
+    val systemInfo by appStateManager.systemInfo.collectAsStateWithLifecycle()
     
     val settingsManager = remember { com.voxcommander.app.data.preferences.SettingsManager(context) }
     val benchmarkEngine = remember { BenchmarkEngine(context, settingsManager, appStateManager) }

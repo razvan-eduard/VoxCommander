@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,10 +26,10 @@ fun ListeningScreen(
     appStateManager: AppStateManager,
     onStop: () -> Unit = { VoiceManager.stopListening() }
 ) {
-    val isListening by VoiceManager.isListeningFlow.collectAsState()
-    val partialTranscription by VoiceManager.partialTranscriptionFlow.collectAsState()
-    val volume by VoiceManager.volumeFlow.collectAsState()
-    val uiState by appStateManager.uiState.collectAsState()
+    val isListening by VoiceManager.isListeningFlow.collectAsStateWithLifecycle()
+    val partialTranscription by VoiceManager.partialTranscriptionFlow.collectAsStateWithLifecycle()
+    val volume by VoiceManager.volumeFlow.collectAsStateWithLifecycle()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     // GOOGLE VOICE EXCLUSION: Google provides its own native overlay.
     // We hide our custom overlay to avoid UI clutter.

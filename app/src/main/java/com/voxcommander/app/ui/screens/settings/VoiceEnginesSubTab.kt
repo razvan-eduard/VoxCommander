@@ -3,6 +3,7 @@ package com.voxcommander.app.ui.screens.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -51,7 +52,7 @@ fun VoiceEnginesSubTab(
     refreshTrigger: Int = 0
 ) {
     // REALTIME STATE from AppStateManager
-    val uiState by appStateManager.uiState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     val selectedWhisperModel = remember(uiState.selectedWhisperModelId, whisperModels) { 
         whisperModels.find { it.id == uiState.selectedWhisperModelId } ?: whisperModels.firstOrNull() 

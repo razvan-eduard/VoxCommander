@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -59,15 +60,15 @@ fun SettingsContent(
     val scope = rememberCoroutineScope()
 
     // REALTIME STATE - observe AppStateManager uiState for reactive updates
-    val uiState by appStateManager.uiState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
     
     val pagerState = rememberPagerState(pageCount = { 7 })
 
     // Observe Vosk model state from ViewModel
-    val voskGroups by modelManagementViewModel.voskGroups.collectAsState()
-    val isVoskLoading by modelManagementViewModel.isVoskLoading.collectAsState()
-    val isVoskOffline by modelManagementViewModel.isVoskOffline.collectAsState()
-    val voskError by modelManagementViewModel.voskError.collectAsState()
+    val voskGroups by modelManagementViewModel.voskGroups.collectAsStateWithLifecycle()
+    val isVoskLoading by modelManagementViewModel.isVoskLoading.collectAsStateWithLifecycle()
+    val isVoskOffline by modelManagementViewModel.isVoskOffline.collectAsStateWithLifecycle()
+    val voskError by modelManagementViewModel.voskError.collectAsStateWithLifecycle()
     
     var selectedVoskModel by remember { mutableStateOf<VoskModelInfo?>(null) }
     
@@ -88,7 +89,7 @@ fun SettingsContent(
     }
 
     var downloadingItemState by remember { mutableStateOf<AppModel?>(null) }
-    val vmDownloadingItem by modelManagementViewModel.downloadingItem.collectAsState()
+    val vmDownloadingItem by modelManagementViewModel.downloadingItem.collectAsStateWithLifecycle()
     
     LaunchedEffect(downloadProgress, vmDownloadingItem) {
         if (downloadProgress == null || downloadProgress >= 1.0f) {

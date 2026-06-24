@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,11 +56,11 @@ fun MainScreen(
     onRequestMicrophonePermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit
 ) {
-    val lastIntent by viewModel.currentIntent.collectAsState()
-    val isProcessing by viewModel.isProcessing.collectAsState()
-    val transcription by viewModel.transcription.collectAsState()
-    val isListening by VoiceManager.isListeningFlow.collectAsState()
-    val uiState by appStateManager.uiState.collectAsState()
+    val lastIntent by viewModel.currentIntent.collectAsStateWithLifecycle()
+    val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
+    val transcription by viewModel.transcription.collectAsStateWithLifecycle()
+    val isListening by VoiceManager.isListeningFlow.collectAsStateWithLifecycle()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     var currentHeaderMode by remember { mutableStateOf(TopHeaderMode.NONE) }
     
@@ -187,8 +188,8 @@ fun MainScreen(
 
         // --- VULKAN TEST MODAL ---
         VulkanTestModal(
-            vulkanTestState = appStateManager.vulkanTestState.collectAsState().value,
-            vulkanTestPassed = appStateManager.vulkanTestPassed.collectAsState().value,
+            vulkanTestState = appStateManager.vulkanTestState.collectAsStateWithLifecycle().value,
+            vulkanTestPassed = appStateManager.vulkanTestPassed.collectAsStateWithLifecycle().value,
             onDismiss = { appStateManager.dismissVulkanTestResult() }
         )
     }

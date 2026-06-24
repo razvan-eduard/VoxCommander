@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,8 +26,8 @@ fun VoiceOverlay(
     volumeFlow: StateFlow<Float>,
     partialTranscriptionFlow: StateFlow<String>
 ) {
-    val volume by volumeFlow.collectAsState()
-    val partialText by partialTranscriptionFlow.collectAsState()
+    val volume by volumeFlow.collectAsStateWithLifecycle()
+    val partialText by partialTranscriptionFlow.collectAsStateWithLifecycle()
 
     AnimatedVisibility(
         visible = isListening,

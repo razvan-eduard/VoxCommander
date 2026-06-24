@@ -6,7 +6,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,7 +32,7 @@ fun VoiceInputTextField(
     onVoiceResult: ((String) -> Unit)? = null // Add this callback
 ) {
     // Collect the global listening state to keep UI in sync
-    val isGloballyListening by VoiceManager.isListeningFlow.collectAsState()
+    val isGloballyListening by VoiceManager.isListeningFlow.collectAsStateWithLifecycle()
     
     // Local state to track IF this specific field started the recording
     var startedRecordingHere by remember { mutableStateOf(false) }

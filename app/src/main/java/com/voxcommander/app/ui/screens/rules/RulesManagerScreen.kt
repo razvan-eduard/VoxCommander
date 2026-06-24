@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,7 +40,7 @@ fun RulesManagerContent(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
-    val rules by fastMapDao.getAllRules().collectAsState(initial = emptyList())
+    val rules by fastMapDao.getAllRules().collectAsStateWithLifecycle(initialValue = emptyList())
     
     var triggerPattern by remember { mutableStateOf("") }
     var artist by remember { mutableStateOf("") }
@@ -70,7 +71,7 @@ fun RulesManagerContent(
         }
     }
 
-    val uiState by appStateManager.uiState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
     val voiceLanguage = uiState.voiceLanguage
     val voiceProcessor = uiState.voiceProcessor
 

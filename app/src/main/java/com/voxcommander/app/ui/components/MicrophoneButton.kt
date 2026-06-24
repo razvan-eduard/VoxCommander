@@ -11,7 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,7 +30,7 @@ fun MicrophoneButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by appStateManager.uiState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
     
     val isCurrentlyProcessing = uiState.voiceState == VoiceState.PROCESSING || isProcessing
     val isRecording = uiState.voiceState == VoiceState.LISTENING_COMMAND
@@ -80,7 +80,7 @@ fun ModelNotPresentMessage(
     languageManager: LanguageManager,
     appStateManager: AppStateManager
 ) {
-    val uiState by appStateManager.uiState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         if (!uiState.voiceModelReady) {

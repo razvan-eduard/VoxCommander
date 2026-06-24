@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -30,7 +31,7 @@ fun GeneralSettingsTab(
     val focusManager = LocalFocusManager.current
     
     // REACTIVE STATE (observed first)
-    val uiState by appStateManager.uiState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     // Manage own state, synchronized with uiState
     var apiKey by remember(uiState.apiKey) { mutableStateOf(uiState.apiKey ?: "") }

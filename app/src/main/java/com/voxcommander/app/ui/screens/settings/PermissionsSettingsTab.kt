@@ -3,7 +3,7 @@ package com.voxcommander.app.ui.screens.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,7 +20,7 @@ fun PermissionsSettingsTab(
     onRequestNotification: () -> Unit,
     onRequestOverlay: () -> Unit
 ) {
-    val uiState by appStateManager.uiState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(

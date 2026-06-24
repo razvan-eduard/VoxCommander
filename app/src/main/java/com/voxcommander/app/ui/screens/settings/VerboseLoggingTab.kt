@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -25,7 +26,7 @@ fun VerboseLoggingTab(
     verboseLoggingEnabled: Boolean // HOISTED STATE
 ) {
     val context = LocalContext.current
-    val logs by Logger.verboseLogs.collectAsState()
+    val logs by Logger.verboseLogs.collectAsStateWithLifecycle()
     val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     Text(text = languageManager.getString("verbose_logging_section"), style = MaterialTheme.typography.titleMedium)

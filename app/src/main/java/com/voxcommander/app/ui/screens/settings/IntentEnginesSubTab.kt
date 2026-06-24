@@ -3,6 +3,7 @@ package com.voxcommander.app.ui.screens.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -32,7 +33,7 @@ fun IntentEnginesSubTab(
     onFallbackChanged: () -> Unit = {},
     refreshTrigger: Int = 0
 ) {
-    val uiState by appStateManager.uiState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     // Dynamically build model list from Remote Registry
     val llmModels = remember {

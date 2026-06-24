@@ -3,6 +3,7 @@ package com.voxcommander.app.ui.screens.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -75,7 +76,7 @@ fun AdvancedSettingsTab(
     }
 
     // Keep subscription active
-    val _uiState by appStateManager.uiState.collectAsState()
+    val _uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     // Initialize Logger
     LaunchedEffect(Unit) {

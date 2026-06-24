@@ -12,6 +12,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
@@ -103,12 +104,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             VoxCommanderTheme {
                 val navController = rememberNavController()
-                val currentProgress by appContainer.modelManagementViewModel.downloadProgress.collectAsState()
-                val successMessage by appContainer.modelManagementViewModel.selectionSuccessMessage.collectAsState()
-                val showVulkanError by appContainer.modelManagementViewModel.showVulkanError.collectAsState()
+                val currentProgress by appContainer.modelManagementViewModel.downloadProgress.collectAsStateWithLifecycle()
+                val successMessage by appContainer.modelManagementViewModel.selectionSuccessMessage.collectAsStateWithLifecycle()
+                val showVulkanError by appContainer.modelManagementViewModel.showVulkanError.collectAsStateWithLifecycle()
 
                 // --- WAKE WORD DETECTION LISTENER ---
-                val uiState by appContainer.appStateManager.uiState.collectAsState()
+                val uiState by appContainer.appStateManager.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(uiState.wakeWordDetected) {
                     if (uiState.wakeWordDetected) {
                         Logger.log("MainActivity: Wake word detected! (via StateFlow)")
