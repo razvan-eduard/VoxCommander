@@ -50,14 +50,16 @@ fun MainScreen(
     downloadProgress: Float?,
     selectionSuccessMessage: String?,
     googleSttAvailable: Boolean,
-    updateVoiceEngine: () -> Unit
+    updateVoiceEngine: () -> Unit,
+    onRequestOverlayPermission: () -> Unit,
+    onRequestMicrophonePermission: () -> Unit,
+    onRequestNotificationPermission: () -> Unit
 ) {
     val lastIntent by viewModel.currentIntent.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
     val transcription by viewModel.transcription.collectAsState()
     val isListening by VoiceManager.isListeningFlow.collectAsState()
-    val voiceProcessor by appStateManager.voiceProcessor.collectAsState()
-    val voiceLanguage by appStateManager.voiceLanguage.collectAsState()
+    val uiState by appStateManager.uiState.collectAsState()
 
     var currentHeaderMode by remember { mutableStateOf(TopHeaderMode.NONE) }
     
@@ -112,7 +114,7 @@ fun MainScreen(
                             if (isProcessing) {
                                 viewModel.stopVoiceCommand()
                             } else {
-                                viewModel.processVoiceCommand(voiceLanguage, voiceProcessor)
+                                viewModel.processVoiceCommand(uiState.voiceLanguage, uiState.voiceProcessor)
                             }
                         }
                     )
@@ -156,8 +158,6 @@ fun MainScreen(
             }
         }
 
-        ListeningScreen(languageManager = languageManager)
-
         // --- UNIFIED TOP HEADER CONTAINER ---
         TopHeaderContainer(
             mode = currentHeaderMode,
@@ -179,7 +179,10 @@ fun MainScreen(
             downloadProgress = downloadProgress,
             selectionSuccessMessage = selectionSuccessMessage,
             googleSttAvailable = googleSttAvailable,
-            updateVoiceEngine = updateVoiceEngine
+            updateVoiceEngine = updateVoiceEngine,
+            onRequestOverlayPermission = onRequestOverlayPermission,
+            onRequestMicrophonePermission = onRequestMicrophonePermission,
+            onRequestNotificationPermission = onRequestNotificationPermission
         )
 
         // --- VULKAN TEST MODAL ---

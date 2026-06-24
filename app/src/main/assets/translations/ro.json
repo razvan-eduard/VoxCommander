@@ -158,5 +158,19 @@
   "stop_recording_button": "Oprește Înregistrarea",
   "delete_default_fallback_warning": "Această setare va fi resetată.",
   "delete_active_wake_word_warning": "Atenție: Sunteți pe cale să ștergeți modelul Wake Word activ. Serviciul va fi oprit.",
-  "model_not_present": "Modelul selectat nu este prezent pe dispozitiv"
+  "model_not_present": "Modelul selectat nu este prezent pe dispozitiv",
+  "ww_listening_for": "Ascult pentru '%s'...",
+  "ww_paused_app_listening": "Wake Word în pauză (Aplicația ascultă)",
+  "ww_paused_ai_thinking": "Wake Word în pauză (AI procesează...)",
+  "ww_paused_diagnostics": "Wake Word în pauză (Rulează diagnostice)",
+  "tab_permissions": "Permisiuni",
+  "permissions_section": "Permisiuni de Sistem",
+  "permission_mic_title": "Microfon",
+  "permission_mic_desc": "Necesar pentru a înregistra și procesa comenzile vocale.",
+  "permission_notif_title": "Notificări",
+  "permission_notif_desc": "Necesar pentru a afișa starea serviciului în fundal.",
+  "overlay_permission_title": "Overlay de Sistem",
+  "overlay_permission_desc": "Afișează microfonul peste alte aplicații și meniuri.",
+  "overlay_permission_granted": "Permisiune Acordată",
+  "overlay_permission_required": "Permisiune Necesară"
 }

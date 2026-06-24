@@ -25,7 +25,8 @@ fun AdvancedSettingsTab(
     appStateManager: AppStateManager,
     onCleanupRequest: () -> Unit,
     onClearDefaultFallback: () -> Unit,
-    onVerboseLoggingChange: (Boolean) -> Unit
+    onVerboseLoggingChange: (Boolean) -> Unit,
+    refreshTrigger: Int = 0
 ) {
     val context = LocalContext.current
 
@@ -42,17 +43,29 @@ fun AdvancedSettingsTab(
             )
         )
     }
-    var verboseLoggingEnabled by remember {
-        mutableStateOf(settingsManager.isVerboseLoggingEnabled())
+    var verboseLoggingEnabled by remember(loggingFlags.logcatEnabled) {
+        mutableStateOf(
+            if (loggingFlags.logcatEnabled) {
+                settingsManager.isVerboseLoggingEnabled()
+            } else {
+                false
+            }
+        )
     }
 
-    // Reset verbose logging when logcat is not enabled
-    LaunchedEffect(loggingFlags) {
+    // Reset verbose logging when logcat is not enabled, restore it when enabled
+    LaunchedEffect(loggingFlags.logcatEnabled) {
         if (!loggingFlags.logcatEnabled) {
             verboseLoggingEnabled = false
             settingsManager.saveVerboseLoggingEnabled(false)
             Logger.setVerboseLoggingEnabled(false)
             onVerboseLoggingChange(false)
+        } else {
+            // Restore verbose logging setting from SettingsManager when logcat is enabled
+            val savedVerbose = settingsManager.isVerboseLoggingEnabled()
+            verboseLoggingEnabled = savedVerbose
+            Logger.setVerboseLoggingEnabled(savedVerbose)
+            onVerboseLoggingChange(savedVerbose)
         }
     }
 
@@ -62,7 +75,7 @@ fun AdvancedSettingsTab(
     }
 
     // Keep subscription active
-    val _state by appStateManager.voiceState.collectAsState()
+    val _uiState by appStateManager.uiState.collectAsState()
 
     // Initialize Logger
     LaunchedEffect(Unit) {

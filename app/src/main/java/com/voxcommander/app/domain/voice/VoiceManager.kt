@@ -102,10 +102,17 @@ object VoiceManager {
         val hub = appStateManager ?: return
         
         stateObservationJob = scope.launch {
-            hub.voiceProcessor.collectLatest { processor ->
-                Log.d(TAG, "Processor change detected: $processor. Updating engines...")
-                reinitializeEngines(processor)
-            }
+            hub.uiState
+                .map { 
+                    Triple(it.voiceProcessor, it.voiceLanguage, it.selectedWhisperModelId) to 
+                    Pair(it.selectedVoskModelName, it.customWhisperModelPath) 
+                }
+                .distinctUntilChanged()
+                .collectLatest { 
+                    val uiState = hub.uiState.value
+                    Log.d(TAG, "Engine-related change detected: ${uiState.voiceProcessor}. Updating engines...")
+                    reinitializeEngines(uiState.voiceProcessor)
+                }
         }
     }
 
@@ -255,6 +262,7 @@ object VoiceManager {
                 val buffer = ShortArray(bufferSize / 2)
                 var totalShorts = 0
                 var lastVoiceTime = System.currentTimeMillis()
+                var maxRmsDetected = 0f
 
                 // Loop continues as long as isListening is true
                 while (isListening) {
@@ -266,6 +274,7 @@ object VoiceManager {
                         
                         val rms = calculateRms(buffer, read)
                         _volumeFlow.value = rms
+                        if (rms > maxRmsDetected) maxRmsDetected = rms
                         
                         if (rms > SILENCE_THRESHOLD) {
                             lastVoiceTime = System.currentTimeMillis()
@@ -282,12 +291,12 @@ object VoiceManager {
                 audioRecord.stop()
                 audioRecord.release()
 
-                // Finalize STT
-                if (audioChunks.isNotEmpty()) {
+                // Finalize STT - ONLY if we actually heard something
+                if (audioChunks.isNotEmpty() && maxRmsDetected > SILENCE_THRESHOLD) {
                     withContext(Dispatchers.Main) { 
                         _partialTranscriptionFlow.value = "Transcribing..." 
                         _isListeningFlow.value = false 
-                        appStateManager?.setVoiceState(VoiceState.PROCESSING) // NEW: Switch to processing state
+                        appStateManager?.setVoiceState(VoiceState.PROCESSING)
                     }
                     
                     // Flatten chunks into a single ShortArray efficiently

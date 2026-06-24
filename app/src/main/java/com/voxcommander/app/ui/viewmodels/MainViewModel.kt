@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class MainViewModel(
-    private val assistantEngine: AssistantEngine
+    private val assistantEngine: AssistantEngine,
+    private val appStateManager: com.voxcommander.app.state.AppStateManager
 ) : ViewModel() {
 
     private val _currentIntent = MutableStateFlow<IntentPayload?>(null)
@@ -30,17 +31,20 @@ class MainViewModel(
             
             if (cleanText.isBlank() || cleanText.startsWith("Error:")) {
                 _isProcessing.value = false
+                appStateManager.setVoiceState(com.voxcommander.app.state.VoiceState.IDLE)
                 return@startListening
             }
 
             viewModelScope.launch {
                 try {
+                    appStateManager.setVoiceState(com.voxcommander.app.state.VoiceState.PROCESSING)
                     val result = assistantEngine.processCommand(cleanText)
                     _currentIntent.value = result
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
                     _isProcessing.value = false
+                    appStateManager.setVoiceState(com.voxcommander.app.state.VoiceState.IDLE)
                 }
             }
         }
@@ -54,6 +58,7 @@ class MainViewModel(
         _transcription.value = text
         viewModelScope.launch {
             _isProcessing.value = true
+            appStateManager.setVoiceState(com.voxcommander.app.state.VoiceState.PROCESSING)
             try {
                 val result = assistantEngine.processCommand(text)
                 _currentIntent.value = result
@@ -61,6 +66,7 @@ class MainViewModel(
                 e.printStackTrace()
             } finally {
                 _isProcessing.value = false
+                appStateManager.setVoiceState(com.voxcommander.app.state.VoiceState.IDLE)
             }
         }
     }

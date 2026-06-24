@@ -35,6 +35,7 @@ class AppContainer(context: Context) {
     val appStateManager = AppStateManager.getInstance(settingsManager, appContext)
     val modelDownloader = ModelDownloader(appContext)
     val languageManager = LanguageManager(appContext)
+    val voiceOverlayManager = com.voxcommander.app.ui.components.VoiceOverlayManager(appContext, languageManager, appStateManager)
 
     // --- DATABASE ---
     val database = Room.databaseBuilder(
@@ -53,7 +54,7 @@ class AppContainer(context: Context) {
     val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, l3Engine, geminiEngine, settingsManager)
 
     // --- VIEW MODELS ---
-    val mainViewModel = MainViewModel(masterIntentEngine)
+    val mainViewModel = MainViewModel(masterIntentEngine, appStateManager)
     val modelManagementViewModel = ModelManagementViewModel(
         settingsManager,
         appStateManager,

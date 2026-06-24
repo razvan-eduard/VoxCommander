@@ -42,7 +42,10 @@ fun TopHeaderContainer(
     downloadProgress: Float?,
     selectionSuccessMessage: String?,
     googleSttAvailable: Boolean,
-    updateVoiceEngine: () -> Unit
+    updateVoiceEngine: () -> Unit,
+    onRequestOverlayPermission: () -> Unit,
+    onRequestMicrophonePermission: () -> Unit,
+    onRequestNotificationPermission: () -> Unit
 ) {
     if (mode == TopHeaderMode.NONE) return
 
@@ -74,13 +77,17 @@ fun TopHeaderContainer(
                         onRefreshMain = onRefreshMain,
                         downloadProgress = downloadProgress,
                         googleSttAvailable = googleSttAvailable,
-                        updateVoiceEngine = updateVoiceEngine
+                        updateVoiceEngine = updateVoiceEngine,
+                        onRequestOverlayPermission = onRequestOverlayPermission,
+                        onRequestMicrophonePermission = onRequestMicrophonePermission,
+                        onRequestNotificationPermission = onRequestNotificationPermission
                     )
                 }
                 TopHeaderMode.RULES -> {
                     RulesManagerContent(
                         languageManager = languageManager,
                         settingsManager = settingsManager,
+                        appStateManager = appStateManager,
                         fastMapDao = fastMapDao,
                         onSaveAndClose = onDismissRequest
                     )

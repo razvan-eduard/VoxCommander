@@ -27,9 +27,17 @@ class AppStateManagerTest {
         every { settingsManager.getVoiceProcessor() } returns Strings.Processors.WHISPER_NEON
         every { settingsManager.getVoiceLanguage() } returns "en"
         every { settingsManager.getSelectedWhisperModelId() } returns "base"
+        every { settingsManager.getSelectedVoskModelName() } returns null
+        every { settingsManager.getCustomWhisperModelPath() } returns null
         every { settingsManager.getAiProcessor() } returns Strings.AiProcessors.OPENAI
         every { settingsManager.getSelectedLlamaModelId() } returns "3.2-1b"
-        every { settingsManager.isCurrentVoiceModelReady(any()) } returns false
+        every { settingsManager.isCloudIntelligenceEnabled() } returns true
+        every { settingsManager.getWakeWord() } returns "hello"
+        every { settingsManager.isWakeWordEnabled() } returns false
+        every { settingsManager.getApiKey() } returns null
+        every { settingsManager.isModelDownloaded(any()) } returns false
+        every { settingsManager.isGeminiIncompatible() } returns false
+        every { settingsManager.getCustomVoskModelPath(any()) } returns null
 
         // Reset singleton
         val field = AppStateManager::class.java.getDeclaredField("instance")
@@ -40,47 +48,113 @@ class AppStateManagerTest {
     }
 
     @Test
-    fun `when voice processor is updated, flow emits new value`() = runTest {
-        stateManager.voiceProcessor.test {
-            assertEquals(Strings.Processors.WHISPER_NEON, awaitItem())
-            stateManager.setVoiceProcessor(Strings.Processors.VOSK)
-            assertEquals(Strings.Processors.VOSK, awaitItem())
-        }
-    }
-
-    @Test
-    fun `when language is changed, StateFlow reflects it instantly`() = runTest {
-        stateManager.voiceLanguage.test {
-            assertEquals("en", awaitItem())
-            stateManager.setVoiceLanguage("ro")
-            assertEquals("ro", awaitItem())
-        }
-    }
-
-    @Test
-    fun `refreshTrigger increments on each refreshAll call`() = runTest {
-        stateManager.refreshTrigger.test {
+    fun `when voice processor is updated, uiState emits new value`() = runTest {
+        stateManager.uiState.test {
             val initial = awaitItem()
+            assertEquals(Strings.Processors.WHISPER_NEON, initial.voiceProcessor)
+            
+            stateManager.setVoiceProcessor(Strings.Processors.VOSK)
+            val updated = awaitItem()
+            assertEquals(Strings.Processors.VOSK, updated.voiceProcessor)
+        }
+    }
+
+    @Test
+    fun `when language is changed, uiState reflects it instantly`() = runTest {
+        stateManager.uiState.test {
+            val initial = awaitItem()
+            assertEquals("en", initial.voiceLanguage)
+            
+            stateManager.setVoiceLanguage("ro")
+            val updated = awaitItem()
+            assertEquals("ro", updated.voiceLanguage)
+        }
+    }
+
+    @Test
+    fun `refreshAll reloads all state from SettingsManager`() = runTest {
+        stateManager.uiState.test {
+            val initial = awaitItem()
+            assertEquals(Strings.Processors.WHISPER_NEON, initial.voiceProcessor)
+            
+            // Change mock values
+            every { settingsManager.getVoiceProcessor() } returns Strings.Processors.VOSK
+            every { settingsManager.getVoiceLanguage() } returns "ro"
+            
             stateManager.refreshAll()
-            assertEquals(initial + 1, awaitItem())
+            val updated = awaitItem()
+            assertEquals(Strings.Processors.VOSK, updated.voiceProcessor)
+            assertEquals("ro", updated.voiceLanguage)
         }
     }
 
     @Test
     fun `intentModelReady reflects AI processor changes reactively`() = runTest {
-        stateManager.intentModelReady.test {
-            // 1. Initial OpenAI
-            assertTrue(awaitItem())
+        stateManager.uiState.test {
+            // 1. Initial OpenAI (always ready)
+            val initial = awaitItem()
+            assertTrue(initial.intentModelReady)
 
-            // 2. Switch to Llama (Not ready)
+            // 2. Switch to NLU_LOCAL (Not ready - model not downloaded)
             every { settingsManager.isModelDownloaded("3.2-1b") } returns false
-            stateManager.setAiProcessor(Strings.AiProcessors.LLAMA_LOCAL)
-            assertFalse(awaitItem())
+            stateManager.setAiProcessor(Strings.AiProcessors.NLU_LOCAL)
+            val updated = awaitItem()
+            assertFalse(updated.intentModelReady)
             
-            // 3. Download and Refresh
+            // 3. Mark model as downloaded and refresh
             every { settingsManager.isModelDownloaded("3.2-1b") } returns true
             stateManager.refreshAll()
-            assertTrue(awaitItem())
+            val refreshed = awaitItem()
+            assertTrue(refreshed.intentModelReady)
+        }
+    }
+
+    @Test
+    fun `voiceModelReady reflects processor and model changes`() = runTest {
+        stateManager.uiState.test {
+            // 1. Initial WHISPER_NEON with no model downloaded
+            val initial = awaitItem()
+            assertFalse(initial.voiceModelReady)
+
+            // 2. Mark model as downloaded
+            every { settingsManager.isModelDownloaded("base") } returns true
+            stateManager.refreshAll()
+            val updated = awaitItem()
+            assertTrue(updated.voiceModelReady)
+
+            // 3. Switch to VOSK with no model
+            every { settingsManager.getSelectedVoskModelName() } returns null
+            every { settingsManager.isModelDownloaded(any()) } returns false
+            stateManager.setVoiceProcessor(Strings.Processors.VOSK)
+            val voskState = awaitItem()
+            assertFalse(voskState.voiceModelReady)
+
+            // 4. Switch to GOOGLE (always ready)
+            stateManager.setVoiceProcessor(Strings.Processors.GOOGLE)
+            val googleState = awaitItem()
+            assertTrue(googleState.voiceModelReady)
+        }
+    }
+
+    @Test
+    fun `multiple state updates are atomic`() = runTest {
+        stateManager.uiState.test {
+            val initial = awaitItem()
+            
+            // Perform multiple updates
+            stateManager.setVoiceProcessor(Strings.Processors.VOSK)
+            stateManager.setVoiceLanguage("ro")
+            stateManager.setCloudIntelligenceEnabled(false)
+            
+            // Each update should emit a new state
+            val state1 = awaitItem()
+            assertEquals(Strings.Processors.VOSK, state1.voiceProcessor)
+            
+            val state2 = awaitItem()
+            assertEquals("ro", state2.voiceLanguage)
+            
+            val state3 = awaitItem()
+            assertFalse(state3.cloudIntelligenceEnabled)
         }
     }
 }

@@ -92,6 +92,4 @@ fun VoiceInputTextField(
             }
         }
     )
-
-    ListeningScreen(languageManager = languageManager)
 }

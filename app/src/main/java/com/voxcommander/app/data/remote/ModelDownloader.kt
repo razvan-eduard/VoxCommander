@@ -92,52 +92,62 @@ class ModelDownloader(private val context: Context) {
         protectedWhisperModels: Set<String>,
         protectedLlamaModels: Set<String>
     ) {
-        val rootDir = context.getExternalFilesDir(null) ?: run {
-            Log.w(CLEANUP_TAG, "rootDir (getExternalFilesDir) is null; aborting cleanup")
-            return
-        }
+        val rootDir = context.getExternalFilesDir(null)
+        val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
 
-        Log.d(CLEANUP_TAG, "Cleanup start. rootDir=${rootDir.absolutePath}")
-        Log.d(CLEANUP_TAG, "Protected -> vosk=$protectedVoskModels whisper=$protectedWhisperModels llama=$protectedLlamaModels")
-        val allNames = rootDir.listFiles()?.map { it.name } ?: emptyList()
-        Log.d(CLEANUP_TAG, "Files in rootDir (${allNames.size}): $allNames")
+        Log.d(CLEANUP_TAG, "Cleanup start. Protected -> vosk=$protectedVoskModels whisper=$protectedWhisperModels llama=$protectedLlamaModels")
 
-        rootDir.listFiles()?.forEach { file ->
+        // 1. Clean root directory (folders and .bin files)
+        rootDir?.listFiles()?.forEach { file ->
             val name = file.name
             
-            // 1. Vosk Protection (Directories)
+            // Vosk Folders
             if (name.startsWith(VOSK_MODEL_DIR_PREFIX) && file.isDirectory) {
                 val modelName = name.removePrefix(VOSK_MODEL_DIR_PREFIX)
-                val protectedModel = protectedVoskModels.contains(modelName)
-                Log.d(CLEANUP_TAG, "VOSK dir '$name' id='$modelName' protected=$protectedModel")
-                if (!protectedModel) {
-                    val deleted = file.deleteRecursively()
-                    Log.d(CLEANUP_TAG, "VOSK delete '$name' result=$deleted")
+                if (!protectedVoskModels.contains(modelName)) {
+                    file.deleteRecursively()
+                    Log.d(CLEANUP_TAG, "Deleted unused VOSK dir: $name")
                 }
             }
             
-            // 2. Whisper Protection (Files)
+            // Whisper Files
             if (name.startsWith(WHISPER_MODEL_FILENAME_PREFIX) && name.endsWith(WHISPER_MODEL_EXTENSION)) {
                 val modelId = name.removePrefix(WHISPER_MODEL_FILENAME_PREFIX).removeSuffix(WHISPER_MODEL_EXTENSION)
-                val protectedModel = protectedWhisperModels.contains(modelId)
-                Log.d(CLEANUP_TAG, "WHISPER file '$name' id='$modelId' protected=$protectedModel")
-                if (!protectedModel) {
-                    val deleted = file.delete()
-                    Log.d(CLEANUP_TAG, "WHISPER delete '$name' result=$deleted exists=${file.exists()}")
+                if (!protectedWhisperModels.contains(modelId)) {
+                    file.delete()
+                    Log.d(CLEANUP_TAG, "Deleted unused WHISPER file: $name")
                 }
             }
             
-            // 3. Llama Protection (Files)
+            // NLU (New prefix)
             if (name.startsWith(NLU_MODEL_FILENAME_PREFIX) && name.endsWith(NLU_MODEL_EXTENSION)) {
                 val modelId = name.removePrefix(NLU_MODEL_FILENAME_PREFIX).removeSuffix(NLU_MODEL_EXTENSION)
-                val protectedModel = protectedLlamaModels.contains(modelId)
-                Log.d(CLEANUP_TAG, "NLU file '$name' id='$modelId' protected=$protectedModel size=${file.length()}")
-                if (!protectedModel) {
-                    val deleted = file.delete()
-                    Log.d(CLEANUP_TAG, "NLU delete '$name' result=$deleted exists=${file.exists()}")
+                if (!protectedLlamaModels.contains(modelId)) {
+                    file.delete()
+                    Log.d(CLEANUP_TAG, "Deleted unused NLU file: $name")
+                }
+            }
+
+            // Legacy Llama files cleanup (always delete if not protected, using same set as NLU)
+            if (name.startsWith("llama-model-") && name.endsWith(".bin")) {
+                val modelId = name.removePrefix("llama-model-").removeSuffix(".bin")
+                if (!protectedLlamaModels.contains(modelId)) {
+                    file.delete()
+                    Log.d(CLEANUP_TAG, "Deleted legacy LLAMA file: $name")
                 }
             }
         }
+
+        // 2. Clean Downloads directory (Vosk ZIPs)
+        downloadsDir?.listFiles()?.forEach { file ->
+            val name = file.name
+            if (name.startsWith(VOSK_MODEL_ZIP_PREFIX) && name.endsWith(ZIP_EXTENSION)) {
+                // Delete ALL zip files in cleanup, as unzipped folders are already in rootDir
+                file.delete()
+                Log.d(CLEANUP_TAG, "Deleted VOSK zip from downloads: $name")
+            }
+        }
+
         Log.d(CLEANUP_TAG, "Cleanup done.")
     }
 

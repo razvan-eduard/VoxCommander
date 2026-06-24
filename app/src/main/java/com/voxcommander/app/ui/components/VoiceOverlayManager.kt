@@ -1,0 +1,114 @@
+package com.voxcommander.app.ui.components
+
+import android.content.Context
+import android.graphics.PixelFormat
+import android.os.Build
+import android.view.Gravity
+import android.view.WindowManager
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.ui.screens.main.ListeningScreen
+import com.voxcommander.app.ui.theme.VoxCommanderTheme
+
+/**
+ * Manages a system-level overlay for the listening UI.
+ * This allows the microphone to appear over ANY app, including BottomSheets and Home screen.
+ */
+class VoiceOverlayManager(
+    private val context: Context, 
+    private val languageManager: LanguageManager,
+    private val appStateManager: AppStateManager
+) {
+
+    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private var composeView: ComposeView? = null
+
+    fun show() {
+        if (composeView != null) return
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.CENTER
+            // Allows the window to extend outside of the screen if needed
+            flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        }
+
+        val view = ComposeView(context).apply {
+            setContent {
+                VoxCommanderTheme {
+                    ListeningScreen(
+                        languageManager = languageManager,
+                        appStateManager = appStateManager
+                    )
+                }
+            }
+        }
+
+        // --- CRITICAL: Add Lifecycle support to ComposeView in WindowManager ---
+        val lifecycleOwner = object : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+            private val lifecycleRegistry = LifecycleRegistry(this)
+            private val store = ViewModelStore()
+            private val savedStateRegistryController = SavedStateRegistryController.create(this)
+
+            override val lifecycle: Lifecycle get() = lifecycleRegistry
+            override val viewModelStore: ViewModelStore get() = store
+            override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+
+            fun onCreate() {
+                savedStateRegistryController.performRestore(null)
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            }
+
+            fun onDestroy() {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            }
+        }
+
+        lifecycleOwner.onCreate()
+        view.setViewTreeLifecycleOwner(lifecycleOwner)
+        view.setViewTreeViewModelStoreOwner(lifecycleOwner)
+        view.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+
+        try {
+            windowManager.addView(view, params)
+            composeView = view
+        } catch (e: Exception) {
+            android.util.Log.e("VoiceOverlayManager", "Failed to add overlay view", e)
+        }
+    }
+
+    fun hide() {
+        composeView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                // View might already be removed
+            }
+            composeView = null
+        }
+    }
+}

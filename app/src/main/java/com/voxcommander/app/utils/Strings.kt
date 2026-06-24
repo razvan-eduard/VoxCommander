@@ -98,4 +98,9 @@ object Strings {
     object Languages {
         const val DEFAULT = "en"
     }
+
+    object FallbackCategories {
+        const val VOICE = "voice"
+        const val INTENT = "intent"
+    }
 }

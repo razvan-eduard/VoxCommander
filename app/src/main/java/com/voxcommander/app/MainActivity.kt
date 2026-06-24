@@ -39,10 +39,20 @@ class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            Toast.makeText(this, "Permission granted", Toast.LENGTH_SHORT).show()
-        }
+    ) { _ ->
+        appContainer.appStateManager.refreshPermissions()
+    }
+
+    private val multiplePermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        appContainer.appStateManager.refreshPermissions()
+    }
+
+    private val overlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { _ ->
+        appContainer.appStateManager.refreshPermissions()
     }
 
     private val customVoskModelLauncher = registerForActivityResult(
@@ -87,6 +97,7 @@ class MainActivity : ComponentActivity() {
         val googleSttAvailable = android.speech.SpeechRecognizer.isRecognitionAvailable(this)
 
         checkPermissions()
+        appContainer.appStateManager.refreshPermissions()
 
         enableEdgeToEdge()
         setContent {
@@ -97,13 +108,13 @@ class MainActivity : ComponentActivity() {
                 val showVulkanError by appContainer.modelManagementViewModel.showVulkanError.collectAsState()
 
                 // --- WAKE WORD DETECTION LISTENER ---
-                val wakeWordDetected by appContainer.appStateManager.wakeWordDetected.collectAsState()
-                LaunchedEffect(wakeWordDetected) {
-                    if (wakeWordDetected) {
+                val uiState by appContainer.appStateManager.uiState.collectAsState()
+                LaunchedEffect(uiState.wakeWordDetected) {
+                    if (uiState.wakeWordDetected) {
                         Logger.log("MainActivity: Wake word detected! (via StateFlow)")
                         appContainer.mainViewModel.processVoiceCommand(
-                            appContainer.settingsManager.getVoiceLanguage(),
-                            appContainer.settingsManager.getVoiceProcessor()
+                            uiState.voiceLanguage,
+                            uiState.voiceProcessor
                         )
                         // Add a small delay to ensure processing starts before reset
                         delay(500)
@@ -164,12 +175,28 @@ class MainActivity : ComponentActivity() {
                             downloadProgress = currentProgress,
                             selectionSuccessMessage = successMessage,
                             googleSttAvailable = googleSttAvailable,
-                            updateVoiceEngine = { /* Handled reactively by VoiceManager */ }
+                            updateVoiceEngine = { /* Handled reactively by VoiceManager */ },
+                            onRequestOverlayPermission = {
+                                overlayPermissionLauncher.launch(com.voxcommander.app.utils.PermissionUtils.getOverlayPermissionIntent(this@MainActivity))
+                            },
+                            onRequestMicrophonePermission = {
+                                requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            },
+                            onRequestNotificationPermission = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }
                         )
                     }
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        appContainer.appStateManager.refreshPermissions()
     }
 
     override fun onDestroy() {
@@ -179,18 +206,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkPermissions() {
-        val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-
-        val missingPermissions = permissions.filter {
+        val missingPermissions = com.voxcommander.app.utils.PermissionUtils.getRequiredRuntimePermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
         if (missingPermissions.isNotEmpty()) {
-            requestPermissionLauncher.launch(missingPermissions.first())
+            multiplePermissionsLauncher.launch(missingPermissions.toTypedArray())
         }
     }
 

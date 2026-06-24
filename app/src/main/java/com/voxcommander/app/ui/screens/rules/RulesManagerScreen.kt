@@ -20,6 +20,7 @@ import com.voxcommander.app.domain.intent.model.FastMapRule
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.intent.registry.IntentRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.components.VoiceInputTextField
 import com.voxcommander.app.utils.RegexGenerator
 import kotlinx.coroutines.launch
@@ -30,6 +31,7 @@ import java.io.File
 fun RulesManagerContent(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
+    appStateManager: AppStateManager,
     fastMapDao: FastMapDao,
     onSaveAndClose: () -> Unit,
     onChangesDetected: (Boolean) -> Unit = {}
@@ -68,18 +70,18 @@ fun RulesManagerContent(
         }
     }
 
-    val voiceLanguage = remember { settingsManager.getVoiceLanguage() }
-    val voiceProcessor = remember { settingsManager.getVoiceProcessor() }
+    val uiState by appStateManager.uiState.collectAsState()
+    val voiceLanguage = uiState.voiceLanguage
+    val voiceProcessor = uiState.voiceProcessor
 
     // Check if default voice model is on device
     val isDefaultModelOnDevice = remember(voiceProcessor, voiceLanguage) {
         when (voiceProcessor) {
             "WHISPER_CPP", "WHISPER_VULKAN", "WHISPER_NEON" -> {
-                val selectedModel = settingsManager.getSelectedWhisperModelId()
-                settingsManager.isModelDownloaded(selectedModel)
+                settingsManager.isModelDownloaded(uiState.selectedWhisperModelId)
             }
             "VOSK" -> {
-                val customPath = settingsManager.getCustomVoskModelPath(voiceLanguage)
+                val customPath = uiState.customVoskModelPaths[voiceLanguage]
                 if (!customPath.isNullOrBlank()) {
                     File(customPath).exists()
                 } else {

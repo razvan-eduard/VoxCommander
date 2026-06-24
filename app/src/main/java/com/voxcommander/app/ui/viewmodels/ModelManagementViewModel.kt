@@ -87,11 +87,20 @@ class ModelManagementViewModel(
     private val _downloadingItem = MutableStateFlow<AppModel?>(null)
     val downloadingItem: StateFlow<AppModel?> = _downloadingItem.asStateFlow()
 
+    // Flag to prevent duplicate handling of the same download
+    private var handledDownloadIds = mutableSetOf<Long>()
+
     // --- BROADCAST RECEIVER FOR DOWNLOAD COMPLETION ---
     private val onDownloadComplete = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) ?: -1
             if (id != -1L) {
+                // Prevent duplicate handling
+                if (handledDownloadIds.contains(id)) {
+                    return
+                }
+                handledDownloadIds.add(id)
+
                 _downloadProgress.value = null
                 progressJob?.cancel()
 

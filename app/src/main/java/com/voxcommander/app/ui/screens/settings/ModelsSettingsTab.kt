@@ -50,7 +50,8 @@ fun ModelsSettingsTab(
     onDownloadLlamaModel: (AppModel) -> Unit,
     onDeleteLlamaModel: (AppModel) -> Unit,
     onDeleteRequest: (AppModel) -> Unit,
-    onFallbackChanged: () -> Unit = {}
+    onFallbackChanged: () -> Unit = {},
+    refreshTrigger: Int = 0
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) }
     
@@ -108,7 +109,8 @@ fun ModelsSettingsTab(
                 downloadedColor = downloadedColor,
                 onCancelDownload = onCancelDownload,
                 onDeleteRequest = onDeleteRequest,
-                onFallbackChanged = onFallbackChanged
+                onFallbackChanged = onFallbackChanged,
+                refreshTrigger = refreshTrigger
             )
         } else {
             IntentEnginesSubTab(
@@ -120,7 +122,8 @@ fun ModelsSettingsTab(
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem as? AppModel,
                 onCancelDownload = onCancelDownload,
-                onFallbackChanged = onFallbackChanged
+                onFallbackChanged = onFallbackChanged,
+                refreshTrigger = refreshTrigger
             )
         }
     }

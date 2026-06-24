@@ -17,29 +17,26 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.state.AppStateManager
 import kotlinx.coroutines.launch
-
-object GeneralSettingsTabConfig {
-    const val SHOW_SAVE_BUTTON = true
-}
 
 @Composable
 fun GeneralSettingsTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
-    appStateManager: com.voxcommander.app.state.AppStateManager
+    appStateManager: AppStateManager
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     
-    // Manage own state
-    var apiKey by remember { mutableStateOf(settingsManager.getApiKey() ?: "") }
-    var modelRepoUrl by remember { mutableStateOf(settingsManager.getModelRepoBaseUrl()) }
-    var selectedLanguage by remember { mutableStateOf(settingsManager.getLanguage()) }
-    var offlineFallbackTimeout by remember { mutableIntStateOf(settingsManager.getOfflineFallbackTimeout()) }
+    // REACTIVE STATE (observed first)
+    val uiState by appStateManager.uiState.collectAsState()
 
-    // REACTIVE FALLBACK INFO (re-renders when appStateManager.refreshAll is called)
-    val refreshTrigger by appStateManager.refreshTrigger.collectAsState()
+    // Manage own state, synchronized with uiState
+    var apiKey by remember(uiState.apiKey) { mutableStateOf(uiState.apiKey ?: "") }
+    var modelRepoUrl by remember { mutableStateOf(settingsManager.getModelRepoBaseUrl()) }
+    var selectedLanguage by remember(uiState.voiceLanguage) { mutableStateOf(uiState.voiceLanguage) }
+    var offlineFallbackTimeout by remember(uiState.refreshTrigger) { mutableIntStateOf(settingsManager.getOfflineFallbackTimeout()) }
 
     var expanded by remember { mutableStateOf(false) }
     val languages = languageManager.getAvailableLanguages()
@@ -56,7 +53,10 @@ fun GeneralSettingsTab(
         var isApiFocused by remember { mutableStateOf(false) }
         TextField(
             value = apiKey,
-            onValueChange = { apiKey = it; settingsManager.saveApiKey(it) },
+            onValueChange = { 
+                apiKey = it
+                appStateManager.setApiKey(it)
+            },
             label = { Text(languageManager.getString("api_key")) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -114,7 +114,7 @@ fun GeneralSettingsTab(
                         onClick = {
                             selectedLanguage = lang
                             languageManager.loadLanguage(lang)
-                            settingsManager.saveLanguage(lang)
+                            appStateManager.setAppLanguage(lang)
                             expanded = false
                         }
                     )
@@ -159,7 +159,7 @@ fun GeneralSettingsTab(
                             text = { Text(label) },
                             onClick = {
                                 offlineFallbackTimeout = seconds
-                                settingsManager.saveOfflineFallbackTimeout(seconds)
+                                appStateManager.setOfflineFallbackTimeout(seconds)
                                 timeoutExpanded = false
                             }
                         )
@@ -169,22 +169,18 @@ fun GeneralSettingsTab(
         }
 
         // --- VOICE FALLBACK INFO (Compact) ---
-        val defaultVoiceProcessor = remember(refreshTrigger) { settingsManager.getDefaultVoiceFallbackProcessor() }
-        val defaultVoiceModel = remember(refreshTrigger) { settingsManager.getDefaultVoiceFallbackModel() }
-        if (defaultVoiceProcessor != null && defaultVoiceModel != null) {
+        if (uiState.defaultVoiceFallbackProcessor != null && uiState.defaultVoiceFallbackModel != null) {
             Text(
-                text = "Voice: $defaultVoiceProcessor ($defaultVoiceModel)",
+                text = "Voice: \${uiState.defaultVoiceFallbackProcessor} (\${uiState.defaultVoiceFallbackModel})",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )
         }
 
         // --- INTENT FALLBACK INFO (Compact) ---
-        val defaultIntentProcessor = remember(refreshTrigger) { settingsManager.getDefaultIntentFallbackProcessor() }
-        val defaultIntentModel = remember(refreshTrigger) { settingsManager.getDefaultIntentFallbackModel() }
-        if (defaultIntentProcessor != null && defaultIntentModel != null) {
+        if (uiState.defaultIntentFallbackProcessor != null && uiState.defaultIntentFallbackModel != null) {
             Text(
-                text = "Intent: $defaultIntentProcessor ($defaultIntentModel)",
+                text = "Intent: \${uiState.defaultIntentFallbackProcessor} (\${uiState.defaultIntentFallbackModel})",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )

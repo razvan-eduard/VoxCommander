@@ -30,15 +30,13 @@ fun MicrophoneButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isVoiceReady by appStateManager.voiceModelReady.collectAsState()
-    val isIntentReady by appStateManager.intentModelReady.collectAsState()
-    val globalVoiceState by appStateManager.voiceState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsState()
     
-    val isCurrentlyProcessing = globalVoiceState == VoiceState.PROCESSING || isProcessing
-    val isRecording = globalVoiceState == VoiceState.LISTENING_COMMAND
+    val isCurrentlyProcessing = uiState.voiceState == VoiceState.PROCESSING || isProcessing
+    val isRecording = uiState.voiceState == VoiceState.LISTENING_COMMAND
 
     // Button is enabled only if BOTH Voice and Intent engines are ready
-    val isAppReady = isVoiceReady && isIntentReady
+    val isAppReady = uiState.voiceModelReady && uiState.intentModelReady
 
     val buttonColor by animateColorAsState(
         targetValue = when {
@@ -82,11 +80,10 @@ fun ModelNotPresentMessage(
     languageManager: LanguageManager,
     appStateManager: AppStateManager
 ) {
-    val isVoiceReady by appStateManager.voiceModelReady.collectAsState()
-    val isIntentReady by appStateManager.intentModelReady.collectAsState()
+    val uiState by appStateManager.uiState.collectAsState()
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        if (!isVoiceReady) {
+        if (!uiState.voiceModelReady) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Voice engine not ready (Download model)",
@@ -96,7 +93,7 @@ fun ModelNotPresentMessage(
             )
         }
         
-        if (!isIntentReady) {
+        if (!uiState.intentModelReady) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "AI Intent engine not ready (Download model)",

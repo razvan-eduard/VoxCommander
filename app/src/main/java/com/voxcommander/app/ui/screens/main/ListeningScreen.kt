@@ -2,6 +2,7 @@ package com.voxcommander.app.ui.screens.main
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
@@ -9,87 +10,97 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
+import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.utils.Strings
 
 @Composable
 fun ListeningScreen(
     languageManager: LanguageManager,
+    appStateManager: AppStateManager,
     onStop: () -> Unit = { VoiceManager.stopListening() }
 ) {
     val isListening by VoiceManager.isListeningFlow.collectAsState()
     val partialTranscription by VoiceManager.partialTranscriptionFlow.collectAsState()
     val volume by VoiceManager.volumeFlow.collectAsState()
+    val uiState by appStateManager.uiState.collectAsState()
 
-    if (isListening) {
+    // GOOGLE VOICE EXCLUSION: Google provides its own native overlay.
+    // We hide our custom overlay to avoid UI clutter.
+    if (isListening && uiState.voiceProcessor != Strings.Processors.GOOGLE) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.8f)),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.42f), // Increased height to prevent clipping
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 12.dp,
+                shadowElevation = 16.dp
             ) {
-                // Microphone Icon with Volume Visualization
-                Box(
-                    modifier = Modifier.size(240.dp),
-                    contentAlignment = Alignment.Center
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(24.dp).navigationBarsPadding() // Added navigation bars padding
                 ) {
-                    // Pulsing Volume indicator ring
-                    // Scale alpha based on normalized volume (0.0 to 1.0)
-                    Surface(
-                        modifier = Modifier.size(
-                            (180 + (volume * 150)).dp
-                        ),
-                        color = MaterialTheme.colorScheme.primary.copy(
-                            alpha = (0.1f + (volume * 0.4f)).coerceIn(0.1f, 0.5f)
-                        ),
-                        shape = MaterialTheme.shapes.extraLarge
-                    ) {}
+                    // Microphone Icon with Volume Visualization
+                    Box(
+                        modifier = Modifier.size(160.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Pulsing Volume indicator ring
+                        Surface(
+                            modifier = Modifier.size(
+                                (100 + (volume * 100)).dp
+                            ),
+                            color = MaterialTheme.colorScheme.primary.copy(
+                                alpha = (0.1f + (volume * 0.4f)).coerceIn(0.1f, 0.5f)
+                            ),
+                            shape = RoundedCornerShape(100.dp)
+                        ) {}
 
-                    Icon(
-                        Icons.Default.Mic,
-                        contentDescription = languageManager.getString("content_desc_listening"),
-                        modifier = Modifier.size(120.dp),
-                        tint = Color.White
-                    )
-                }
+                        Icon(
+                            Icons.Default.Mic,
+                            contentDescription = languageManager.getString("content_desc_listening"),
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                // Partial Transcription
-                if (partialTranscription.isNotEmpty()) {
+                    // Partial Transcription
                     Text(
-                        text = partialTranscription,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 32.dp)
+                        text = partialTranscription.ifEmpty { languageManager.getString("recording_status") },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                } else {
-                    Text(
-                        text = languageManager.getString("recording_status"),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(48.dp))
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                // Stop Button
-                Button(
-                    onClick = onStop,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 64.dp)
-                        .height(56.dp)
-                ) {
-                    Text(languageManager.getString("stop_recording_button") ?: "Stop Recording", style = MaterialTheme.typography.titleLarge)
+                    // Stop Button
+                    Button(
+                        onClick = onStop,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text(languageManager.getString("stop_recording_button") ?: "Stop Recording")
+                    }
                 }
             }
         }

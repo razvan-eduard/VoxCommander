@@ -157,5 +157,9 @@
   "stop_recording_button": "Arrêter l'enregistrement",
   "delete_default_fallback_warning": "Ce paramètre sera réinitialisé.",
   "delete_active_wakeword_warning": "Attention : Vous supprimez le modèle actif. Le service sera arrêté.",
-  "model_not_present": "Modèle absent de l'appareil"
+  "model_not_present": "Modèle absent de l'appareil",
+  "ww_listening_for": "À l'écoute de '%s'...",
+  "ww_paused_app_listening": "Wake Word en pause (L'application écoute)",
+  "ww_paused_ai_thinking": "Wake Word en pause (L'IA réfléchit...)",
+  "ww_paused_diagnostics": "Wake Word en pause (Diagnostics en cours)"
 }

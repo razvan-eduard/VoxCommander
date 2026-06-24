@@ -51,123 +51,14 @@ class AppStateManager private constructor(
 ) {
     private val voiceMutex = Mutex()
 
-    private val _voiceState = MutableStateFlow(VoiceState.IDLE)
-    val voiceState: StateFlow<VoiceState> = _voiceState.asStateFlow()
+    // --- CENTRALIZED UI STATE ---
+    private val _uiState = MutableStateFlow(AppState.fromSettings(settingsManager, context))
+    val uiState: StateFlow<AppState> = _uiState.asStateFlow()
+    
+    // Alias for compatibility with older components
+    val state: StateFlow<AppState> = uiState
 
-    private val _wakeWordDetected = MutableStateFlow(false)
-    val wakeWordDetected: StateFlow<Boolean> = _wakeWordDetected.asStateFlow()
-
-    // --- REACIVE SETTINGS STATE ---
-    private val _voiceProcessor = MutableStateFlow(settingsManager.getVoiceProcessor())
-    val voiceProcessor: StateFlow<String> = _voiceProcessor.asStateFlow()
-
-    private val _voiceLanguage = MutableStateFlow(settingsManager.getVoiceLanguage())
-    val voiceLanguage: StateFlow<String> = _voiceLanguage.asStateFlow()
-
-    private val _selectedWhisperModelId = MutableStateFlow(settingsManager.getSelectedWhisperModelId())
-    val selectedWhisperModelId: StateFlow<String> = _selectedWhisperModelId.asStateFlow()
-
-    private val _selectedVoskModelName = MutableStateFlow(settingsManager.getSelectedVoskModelName())
-    val selectedVoskModelName: StateFlow<String?> = _selectedVoskModelName.asStateFlow()
-
-    private val _customWhisperModelPath = MutableStateFlow(settingsManager.getCustomWhisperModelPath())
-    val customWhisperModelPath: StateFlow<String?> = _customWhisperModelPath.asStateFlow()
-
-    private val _customVoskModelPaths = MutableStateFlow<Map<String, String>>(emptyMap())
-    val customVoskModelPaths: StateFlow<Map<String, String>> = _customVoskModelPaths.asStateFlow()
-
-    private val _apiKey = MutableStateFlow(settingsManager.getApiKey())
-    val apiKey: StateFlow<String?> = _apiKey.asStateFlow()
-
-    private val _wakeWord = MutableStateFlow(settingsManager.getWakeWord())
-    val wakeWord: StateFlow<String> = _wakeWord.asStateFlow()
-
-    private val _wakeWordEnabled = MutableStateFlow(settingsManager.isWakeWordEnabled())
-    val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled.asStateFlow()
-
-    private val _isWakeWordServiceListening = MutableStateFlow(false)
-    val isWakeWordServiceListening: StateFlow<Boolean> = _isWakeWordServiceListening.asStateFlow()
-
-    private val _cloudIntelligenceEnabled = MutableStateFlow(settingsManager.isCloudIntelligenceEnabled())
-    val cloudIntelligenceEnabled: StateFlow<Boolean> = _cloudIntelligenceEnabled.asStateFlow()
-
-    private val _aiProcessor = MutableStateFlow(settingsManager.getAiProcessor())
-    val aiProcessor: StateFlow<String> = _aiProcessor.asStateFlow()
-
-    private val _selectedLlamaModelId = MutableStateFlow(settingsManager.getSelectedLlamaModelId())
-    val selectedLlamaModelId: StateFlow<String> = _selectedLlamaModelId.asStateFlow()
-
-    // --- REFRESH TRIGGER (Forces re-evaluation of disk status) ---
-    private val _refreshTrigger = MutableStateFlow(0L)
-    val refreshTrigger: StateFlow<Long> = _refreshTrigger.asStateFlow()
-
-    // --- DERIVED READY STATE (The Source of Truth for "Selected model on device") ---
-    val voiceModelReady: StateFlow<Boolean> = combine(
-        voiceProcessor,
-        voiceLanguage,
-        selectedWhisperModelId,
-        selectedVoskModelName,
-        customWhisperModelPath,
-        _refreshTrigger
-    ) { args ->
-        val processor = args[0] as String
-        val language = args[1] as String
-        val whisperId = args[2] as String
-        val voskName = args[3] as? String
-        val customWhisper = args[4] as? String
-        // args[5] is the trigger, used only to force re-computation
-
-        when (processor) {
-            Strings.Processors.WHISPER_CPP,
-            Strings.Processors.WHISPER_VULKAN,
-            Strings.Processors.WHISPER_NEON -> {
-                settingsManager.isModelDownloaded(whisperId) || customWhisper != null
-            }
-            Strings.Processors.VOSK -> {
-                val customVosk = settingsManager.getCustomVoskModelPath(language)
-                if (!customVosk.isNullOrBlank()) {
-                    java.io.File(customVosk).exists()
-                } else {
-                    !voskName.isNullOrBlank() && settingsManager.isModelDownloaded(voskName)
-                }
-            }
-            Strings.Processors.GOOGLE,
-            Strings.Processors.WHISPER_API -> true
-            else -> false
-        }
-    }.stateIn(
-        scope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
-        started = SharingStarted.Eagerly,
-        initialValue = settingsManager.isCurrentVoiceModelReady(context)
-    )
-
-    // --- DERIVED READY STATE FOR INTENT ENGINE ---
-    val intentModelReady: StateFlow<Boolean> = combine(
-        aiProcessor,
-        selectedLlamaModelId,
-        _refreshTrigger
-    ) { args ->
-        val processor = args[0] as String
-        val llamaId = args[1] as String
-        // args[2] is the trigger
-
-        when (processor) {
-            Strings.AiProcessors.NLU_LOCAL -> {
-                settingsManager.isModelDownloaded(llamaId)
-            }
-            Strings.AiProcessors.GEMINI_NATIVE -> {
-                !settingsManager.isGeminiIncompatible()
-            }
-            Strings.AiProcessors.OPENAI -> true // Always ready if internet present
-            else -> false
-        }
-    }.stateIn(
-        scope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
-        started = SharingStarted.Eagerly,
-        initialValue = true
-    )
-
-    // --- BENCHMARK & DIAGNOSTIC STATE ---
+    // --- NON-SETTINGS STATE (Kept separate as they don't come from SettingsManager) ---
     private val _benchmarkResults = MutableStateFlow<List<BenchmarkResult>>(emptyList())
     val benchmarkResults: StateFlow<List<BenchmarkResult>> = _benchmarkResults.asStateFlow()
 
@@ -185,9 +76,33 @@ class AppStateManager private constructor(
     val systemInfo: StateFlow<String> = _systemInfo.asStateFlow()
 
     init {
-        loadCustomVoskPaths()
         refreshNativeLibsStatus()
+        refreshPermissions()
         setupVulkanTestTrigger()
+    }
+
+    /**
+     * Updates permission-related states in AppState.
+     */
+    fun refreshPermissions() {
+        updateState { 
+            copy(
+                canDrawOverlays = com.voxcommander.app.utils.PermissionUtils.canDrawOverlays(context),
+                hasMicrophonePermission = com.voxcommander.app.utils.PermissionUtils.hasMicrophonePermission(context),
+                hasNotificationPermission = com.voxcommander.app.utils.PermissionUtils.hasNotificationPermission(context)
+            ) 
+        }
+    }
+
+    /**
+     * Centralized wrapper for state updates.
+     * Automatically increments refreshTrigger to notify UI observers.
+     */
+    private inline fun updateState(mutation: AppState.() -> AppState) {
+        _uiState.update { currentState ->
+            val newState = currentState.mutation()
+            newState.copy(refreshTrigger = currentState.refreshTrigger + 1)
+        }
     }
 
     // Secure access to native resources
@@ -198,102 +113,175 @@ class AppStateManager private constructor(
     }
 
     fun setVoiceState(state: VoiceState) {
-        _voiceState.value = state
+        updateState { copy(voiceState = state) }
     }
 
     fun onWakeWordDetected() {
-        _wakeWordDetected.value = true
+        updateState { copy(wakeWordDetected = true) }
     }
 
     fun resetWakeWordDetection() {
-        _wakeWordDetected.value = false
+        updateState { copy(wakeWordDetected = false) }
     }
 
-    // State Update Methods
+    // State Update Methods - Atomic updates using .copy()
     fun setVoiceProcessor(processor: String) {
         settingsManager.saveVoiceProcessor(processor)
-        _voiceProcessor.value = processor
+        updateState {
+            copy(
+                voiceProcessor = processor,
+                voiceModelReady = recalculateVoiceReady(processor, settingsManager)
+            )
+        }
     }
 
     fun setVoiceLanguage(language: String) {
         settingsManager.saveVoiceLanguage(language)
-        _voiceLanguage.value = language
+        updateState {
+            copy(
+                voiceLanguage = language,
+                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
+            )
+        }
     }
 
     fun setSelectedWhisperModelId(modelId: String) {
         settingsManager.saveSelectedWhisperModelId(modelId)
-        _selectedWhisperModelId.value = modelId
+        updateState {
+            copy(
+                selectedWhisperModelId = modelId,
+                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
+            )
+        }
     }
 
     fun setSelectedVoskModelName(modelName: String) {
         settingsManager.saveSelectedVoskModelName(modelName)
-        _selectedVoskModelName.value = modelName
+        updateState {
+            copy(
+                selectedVoskModelName = modelName,
+                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
+            )
+        }
     }
 
     fun setCustomWhisperModelPath(path: String?) {
         if (path != null) settingsManager.saveCustomWhisperModelPath(path)
-        _customWhisperModelPath.value = path
+        updateState {
+            copy(
+                customWhisperModelPath = path,
+                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
+            )
+        }
     }
 
     fun setCustomVoskModelPath(language: String, path: String?) {
         if (path != null) settingsManager.saveCustomVoskModelPath(language, path)
-        loadCustomVoskPaths()
+        updateState {
+            val updatedPaths = customVoskModelPaths.toMutableMap()
+            if (path != null) {
+                updatedPaths[language] = path
+            } else {
+                updatedPaths.remove(language)
+            }
+            copy(
+                customVoskModelPaths = updatedPaths,
+                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
+            )
+        }
     }
 
     fun setApiKey(key: String?) {
         if (key != null) settingsManager.saveApiKey(key)
-        _apiKey.value = key
+        updateState { copy(apiKey = key) }
+    }
+
+    fun setAppLanguage(lang: String) {
+        settingsManager.saveLanguage(lang)
+        updateState { copy(voiceLanguage = lang) } // Sync app language with voice default
+        refreshAll()
+    }
+
+    fun setOfflineFallbackTimeout(seconds: Int) {
+        settingsManager.saveOfflineFallbackTimeout(seconds)
+        refreshAll()
     }
 
     fun setWakeWord(word: String) {
         settingsManager.saveWakeWord(word)
-        _wakeWord.value = word
+        updateState { copy(wakeWord = word) }
     }
 
     fun setWakeWordEnabled(enabled: Boolean) {
         settingsManager.saveWakeWordEnabled(enabled)
-        _wakeWordEnabled.value = enabled
+        updateState { copy(wakeWordEnabled = enabled) }
     }
 
     fun setWakeWordServiceListening(listening: Boolean) {
-        _isWakeWordServiceListening.value = listening
+        updateState { copy(isWakeWordServiceListening = listening) }
+    }
+
+    fun setWakeWordModelPath(path: String?) {
+        if (path != null) settingsManager.saveWakeWordModelPath(path)
+        updateState { copy(wakeWordModelPath = path) }
     }
 
     fun setCloudIntelligenceEnabled(enabled: Boolean) {
         settingsManager.saveCloudIntelligenceEnabled(enabled)
-        _cloudIntelligenceEnabled.value = enabled
+        updateState { copy(cloudIntelligenceEnabled = enabled) }
+    }
+
+    fun setVerboseLoggingEnabled(enabled: Boolean) {
+        settingsManager.saveVerboseLoggingEnabled(enabled)
+        updateState { copy(isVerboseLoggingEnabled = enabled) }
     }
 
     fun setAiProcessor(processor: String) {
         settingsManager.saveAiProcessor(processor)
-        _aiProcessor.value = processor
+        updateState {
+            copy(
+                aiProcessor = processor,
+                intentModelReady = recalculateIntentReady(processor, settingsManager)
+            )
+        }
     }
 
     fun setSelectedLlamaModelId(modelId: String) {
         settingsManager.saveSelectedLlamaModelId(modelId)
-        _selectedLlamaModelId.value = modelId
+        updateState {
+            copy(
+                selectedLlamaModelId = modelId,
+                intentModelReady = recalculateIntentReady(aiProcessor, settingsManager)
+            )
+        }
     }
 
     fun onWhisperDownloadComplete(modelId: String) {
-        handleModelDownload(modelId) { id ->
-            _selectedWhisperModelId.value = id
+        settingsManager.setModelDownloaded(modelId, true)
+        updateState {
+            copy(
+                selectedWhisperModelId = modelId,
+                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
+            )
         }
     }
 
     fun onVoskDownloadComplete(modelName: String) {
-        handleModelDownload(modelName) { name ->
-            _selectedVoskModelName.value = name
+        settingsManager.setModelDownloaded(modelName, true)
+        updateState {
+            copy(
+                selectedVoskModelName = modelName,
+                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
+            )
         }
-    }
-
-    private inline fun handleModelDownload(modelId: String, updateState: (String) -> Unit) {
-        settingsManager.setModelDownloaded(modelId, true)
-        updateState(modelId)
-        refreshAll()
     }
 
     // Diagnostic Helpers
     fun refreshNativeLibsStatus() {
+        val currentState = _uiState.value
+        val voiceProcessor = currentState.voiceProcessor
+        val aiProcessor = currentState.aiProcessor
+        
         // List of SO files and system components we depend on
         val soFiles = listOf(
             "libwhisper.so" to "Core Whisper STT Engine",
@@ -328,27 +316,27 @@ class AppStateManager private constructor(
                     isActive = false
                     adjustedDesc = "$desc (Incompatible)"
                 }
-                name.contains("whisper") && _voiceProcessor.value.startsWith("WHISPER") -> {
+                name.contains("whisper") && voiceProcessor.startsWith("WHISPER") -> {
                     isActive = true
                     adjustedDesc = desc
                 }
-                name.contains("ggml") && _voiceProcessor.value.startsWith("WHISPER") -> {
+                name.contains("ggml") && voiceProcessor.startsWith("WHISPER") -> {
                     isActive = true
                     adjustedDesc = desc
                 }
-                name.contains("omp") && _voiceProcessor.value.startsWith("WHISPER") -> {
+                name.contains("omp") && voiceProcessor.startsWith("WHISPER") -> {
                     isActive = true
                     adjustedDesc = desc
                 }
-                name.contains("vosk") && _voiceProcessor.value == "VOSK" -> {
+                name.contains("vosk") && voiceProcessor == "VOSK" -> {
                     isActive = true
                     adjustedDesc = desc
                 }
-                name.contains("llm") && settingsManager.getAiProcessor() == Strings.AiProcessors.NLU_LOCAL -> {
+                name.contains("llm") && aiProcessor == Strings.AiProcessors.NLU_LOCAL -> {
                     isActive = true
                     adjustedDesc = desc
                 }
-                name == "Google AICore" && settingsManager.getAiProcessor() == Strings.AiProcessors.GEMINI_NATIVE -> {
+                name == "Google AICore" && aiProcessor == Strings.AiProcessors.GEMINI_NATIVE -> {
                     isActive = true
                     adjustedDesc = desc
                 }
@@ -376,48 +364,30 @@ class AppStateManager private constructor(
         _systemInfo.value = info
     }
 
-    fun loadCustomVoskPaths() {
-        val languages = listOf("en", "ro", "de", "fr")
-        val paths = mutableMapOf<String, String>()
-        languages.forEach { lang ->
-            settingsManager.getCustomVoskModelPath(lang)?.let { path ->
-                paths[lang] = path
-            }
-        }
-        _customVoskModelPaths.value = paths
-    }
-
+    // Simplified refreshAll - just reload everything from SettingsManager
     fun refreshAll() {
-        _voiceProcessor.value = settingsManager.getVoiceProcessor()
-        _voiceLanguage.value = settingsManager.getVoiceLanguage()
-        _selectedWhisperModelId.value = settingsManager.getSelectedWhisperModelId()
-        _selectedVoskModelName.value = settingsManager.getSelectedVoskModelName()
-        _customWhisperModelPath.value = settingsManager.getCustomWhisperModelPath()
-        _apiKey.value = settingsManager.getApiKey()
-        _wakeWord.value = settingsManager.getWakeWord()
-        _wakeWordEnabled.value = settingsManager.isWakeWordEnabled()
-        _cloudIntelligenceEnabled.value = settingsManager.isCloudIntelligenceEnabled()
-        _aiProcessor.value = settingsManager.getAiProcessor()
-        _selectedLlamaModelId.value = settingsManager.getSelectedLlamaModelId()
-        loadCustomVoskPaths()
+        val current = _uiState.value
+        val nextTrigger = current.refreshTrigger + 1
+        _uiState.value = AppState.fromSettings(settingsManager, context).copy(
+            refreshTrigger = nextTrigger,
+            isWakeWordServiceListening = current.isWakeWordServiceListening,
+            voiceState = current.voiceState,
+            wakeWordDetected = current.wakeWordDetected
+        )
         refreshNativeLibsStatus()
-        
-        // Atomic increment to force re-evaluation of combined flows
-        _refreshTrigger.value++
     }
 
     // --- VULKAN TEST TRIGGER ---
     private fun setupVulkanTestTrigger() {
         combine(
-            voiceProcessor,
-            voiceModelReady,
+            _uiState,
             _vulkanTestState
-        ) { processor, modelReady, testState ->
-            Triple(processor, modelReady, testState)
-        }.onEach { (processor, modelReady, testState) ->
+        ) { uiState, testState ->
+            Pair(uiState, testState)
+        }.onEach { (uiState, testState) ->
             if (testState == VulkanTestState.IDLE &&
-                processor == Strings.Processors.WHISPER_VULKAN &&
-                modelReady &&
+                uiState.voiceProcessor == Strings.Processors.WHISPER_VULKAN &&
+                uiState.voiceModelReady &&
                 !settingsManager.isVulkanProbeDone() &&
                 !settingsManager.isVulkanIncompatible()) {
                 startVulkanTest()
@@ -429,7 +399,7 @@ class AppStateManager private constructor(
         _vulkanTestState.value = VulkanTestState.RUNNING
         _vulkanTestPassed.value = null
 
-        val modelId = _selectedWhisperModelId.value
+        val modelId = _uiState.value.selectedWhisperModelId
         // FIX: Models are in getExternalFilesDir(null), NOT context.filesDir
         val modelPath = java.io.File(context.getExternalFilesDir(null), "whisper-model-$modelId.bin").absolutePath
 

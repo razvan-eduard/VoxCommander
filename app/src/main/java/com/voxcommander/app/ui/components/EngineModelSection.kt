@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.utils.Strings
 
 /**
  * Universal component for managing ANY engine model (Whisper, Vosk, Llama).
@@ -22,6 +24,7 @@ fun <T> EngineModelSection(
     title: String,
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
+    appStateManager: AppStateManager,
     groups: List<DropdownGroup<T>>,
     selectedItem: T?,
     itemLabel: (T) -> String,
@@ -33,11 +36,12 @@ fun <T> EngineModelSection(
     downloadProgress: Float?,
     downloadingItem: Any?,
     currentProcessor: String,
-    fallbackCategory: String = "voice", // "voice" or "intent"
+    fallbackCategory: String = Strings.FallbackCategories.VOICE,
     onFallbackChanged: () -> Unit = {},
     refreshTrigger: Int = 0,
     onShowInfo: (() -> Unit)? = null
 ) {
+    val uiState by appStateManager.uiState.collectAsState()
     var showSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -61,7 +65,7 @@ fun <T> EngineModelSection(
         groups = groups,
         itemLabel = itemLabel,
         isDownloaded = { item ->
-            remember(modelIdProvider(item), refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
+            remember(modelIdProvider(item), uiState, refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
         },
         onDeviceLabel = languageManager.getString("on_device_label"),
         onItemSelected = { item, isDownloaded ->
@@ -94,7 +98,7 @@ fun <T> EngineModelSection(
                 groups = groups,
                 itemLabel = itemLabel,
                 isDownloaded = { item ->
-                    remember(modelIdProvider(item), refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
+                    remember(modelIdProvider(item), uiState, refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
                 },
                 onDeviceLabel = languageManager.getString("on_device_label"),
                 onItemSelected = { item, isDownloaded ->
@@ -121,16 +125,10 @@ fun <T> EngineModelSection(
     // 4. Categorized Fallback Logic
     if (selectedItem != null) {
         val modelId = modelIdProvider(selectedItem)
-        val isDownloaded = remember(modelId, refreshTrigger) { settingsManager.isModelDownloaded(modelId) }
+        val isDownloaded = remember(modelId, uiState, refreshTrigger) { settingsManager.isModelDownloaded(modelId) }
         
-        val defaultProcessor = remember(fallbackCategory, refreshTrigger) { 
-            if (fallbackCategory == "voice") settingsManager.getDefaultVoiceFallbackProcessor() 
-            else settingsManager.getDefaultIntentFallbackProcessor() 
-        }
-        val defaultModelId = remember(fallbackCategory, refreshTrigger) { 
-            if (fallbackCategory == "voice") settingsManager.getDefaultVoiceFallbackModel() 
-            else settingsManager.getDefaultIntentFallbackModel() 
-        }
+        val defaultProcessor = if (fallbackCategory == Strings.FallbackCategories.VOICE) uiState.defaultVoiceFallbackProcessor else uiState.defaultIntentFallbackProcessor
+        val defaultModelId = if (fallbackCategory == Strings.FallbackCategories.VOICE) uiState.defaultVoiceFallbackModel else uiState.defaultIntentFallbackModel
         
         val isDefault = defaultProcessor == currentProcessor && defaultModelId == modelId
         var showChangeDialog by remember { mutableStateOf(false) }
@@ -142,12 +140,12 @@ fun <T> EngineModelSection(
                         if (defaultProcessor != null && defaultModelId != null && defaultModelId != modelId) {
                             showChangeDialog = true
                         } else {
-                            if (fallbackCategory == "voice") settingsManager.saveDefaultVoiceFallback(currentProcessor, modelId)
+                            if (fallbackCategory == Strings.FallbackCategories.VOICE) settingsManager.saveDefaultVoiceFallback(currentProcessor, modelId)
                             else settingsManager.saveDefaultIntentFallback(currentProcessor, modelId)
                             onFallbackChanged()
                         }
                     } else {
-                        if (fallbackCategory == "voice") settingsManager.clearDefaultVoiceFallback()
+                        if (fallbackCategory == Strings.FallbackCategories.VOICE) settingsManager.clearDefaultVoiceFallback()
                         else settingsManager.clearDefaultIntentFallback()
                         onFallbackChanged()
                     }

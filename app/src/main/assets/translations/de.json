@@ -157,5 +157,9 @@
   "stop_recording_button": "Aufnahme stoppen",
   "delete_default_fallback_warning": "Diese Einstellung wird zurückgesetzt.",
   "delete_active_wakeword_warning": "Warnung: Sie löschen das aktive Wake Word Modell. Der Dienst wird gestoppt.",
-  "model_not_present": "Modell nicht auf Gerät vorhanden"
+  "model_not_present": "Modell nicht auf Gerät vorhanden",
+  "ww_listening_for": "Höre auf '%s'...",
+  "ww_paused_app_listening": "Wake Word pausiert (App hört zu)",
+  "ww_paused_ai_thinking": "Wake Word pausiert (KI denkt nach...)",
+  "ww_paused_diagnostics": "Wake Word pausiert (Diagnose läuft)"
 }

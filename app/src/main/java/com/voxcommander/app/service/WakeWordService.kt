@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import com.voxcommander.app.MainActivity
 import com.voxcommander.app.R
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.VoiceState
 import com.voxcommander.app.utils.Logger
@@ -33,6 +34,8 @@ class WakeWordService : Service() {
 
     private lateinit var settingsManager: SettingsManager
     private lateinit var appStateManager: AppStateManager
+    private lateinit var languageManager: com.voxcommander.app.domain.localization.LanguageManager
+    private lateinit var voiceOverlayManager: com.voxcommander.app.ui.components.VoiceOverlayManager
     private var wakeWordEngine: WakeWordEngine? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var notificationManager: NotificationManager? = null
@@ -42,10 +45,13 @@ class WakeWordService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "WakeWordService created")
-        Logger.log("WakeWordService created")
+        Logger.log("WakeWordService created", TAG)
         settingsManager = SettingsManager(this)
         appStateManager = AppStateManager.getInstance(settingsManager, this)
+        languageManager = com.voxcommander.app.domain.localization.LanguageManager(this).apply {
+            loadLanguage(settingsManager.getLanguage())
+        }
+        voiceOverlayManager = com.voxcommander.app.ui.components.VoiceOverlayManager(this, languageManager, appStateManager)
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
 
@@ -54,16 +60,30 @@ class WakeWordService : Service() {
         wakeLock?.acquire(10 * 60 * 1000L /*10 minutes*/)
 
         serviceScope.launch {
-            appStateManager.voiceState.collectLatest { state ->
-                handleVoiceStateChange(state)
+            appStateManager.uiState.collectLatest { uiState ->
+                handleVoiceStateChange(uiState.voiceState)
+            }
+        }
+
+        // Overlay observer
+        serviceScope.launch {
+            VoiceManager.isListeningFlow.collectLatest { isListening ->
+                val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    android.provider.Settings.canDrawOverlays(this@WakeWordService)
+                } else true
+                
+                if (isListening && canDraw) {
+                    voiceOverlayManager.show()
+                } else {
+                    voiceOverlayManager.hide()
+                }
             }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
-        Log.d(TAG, "WakeWordService onStartCommand: $action")
-        Logger.log("WakeWordService onStartCommand: $action")
+        Logger.log("WakeWordService onStartCommand: $action", TAG)
 
         when (action) {
             ACTION_START -> startWakeWordDetection()
@@ -80,20 +100,18 @@ class WakeWordService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "WakeWordService destroyed")
-        Logger.log("WakeWordService destroyed")
+        Logger.log("WakeWordService destroyed", TAG)
         stopWakeWordDetection()
         wakeLock?.release()
         appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
     private fun startWakeWordDetection() {
-        Log.d(TAG, "Starting wake word detection")
-        Logger.log("startWakeWordDetection called")
+        Logger.log("Starting wake word detection", TAG)
         
         // --- FORCE RESET IF STUCK ---
-        if (appStateManager.voiceState.value != VoiceState.IDLE) {
-            Log.w(TAG, "Service was in state ${appStateManager.voiceState.value}. Forcing IDLE...")
+        if (appStateManager.uiState.value.voiceState != VoiceState.IDLE) {
+            Log.w(TAG, "Service was in state ${appStateManager.uiState.value.voiceState}. Forcing IDLE...")
             appStateManager.setVoiceState(VoiceState.IDLE)
         }
 
@@ -121,8 +139,7 @@ class WakeWordService : Service() {
                 }?.absolutePath
             }
 
-            Log.d(TAG, "Wake word: $wakeWord, Path: ${modelPath ?: "null"}")
-            Logger.log("Wake word: $wakeWord, Path: ${modelPath ?: "null"}")
+            Logger.log("Wake word: $wakeWord, Path: ${modelPath ?: "null"}", TAG)
 
             if (modelPath == null) {
                 Logger.log("No Vosk model available")
@@ -148,43 +165,56 @@ class WakeWordService : Service() {
     }
 
     private fun stopWakeWordDetection() {
-        Log.d(TAG, "Stopping wake word detection")
-        wakeWordEngine?.stopListening()
+        Logger.log("Stopping wake word detection", TAG)
+        wakeWordEngine?.stopService()
         wakeWordEngine?.release()
         wakeWordEngine = null
-        appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
     private fun onWakeWordDetected() {
-        Log.i(TAG, "Wake word detected!")
-        Logger.log("Wake word detected!")
+        Logger.log("Wake word detected!", TAG)
         
         // --- REACTIVE TRIGGER (AppStateManager) ---
         appStateManager.onWakeWordDetected()
         
         playHapticFeedback()
-
-        // We still bring the activity to front to ensure it can start recording
-        val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra("action", "WAKE_WORD_DETECTED")
-        }
-        startActivity(intent)
+        // Removed startActivity(MainActivity) logic to keep Activity clean
+        // and let System Overlay handle the UI globally.
     }
 
     private fun handleVoiceStateChange(state: VoiceState) {
+        val currentUiState = appStateManager.uiState.value
+        Logger.log("handleVoiceStateChange: $state, serviceListeningProp: ${currentUiState.isWakeWordServiceListening}", TAG)
+        
         when (state) {
             VoiceState.IDLE -> {
-                if (wakeWordEngine != null) {
+                // Resume listening if service is logically active
+                if (wakeWordEngine != null && currentUiState.isWakeWordServiceListening) {
+                    val wakeWord = settingsManager.getWakeWord()
                     wakeWordEngine?.startListening()
-                    updateNotification("Listening for '${settingsManager.getWakeWord()}'...")
+                    updateNotification(languageManager.getString("ww_listening_for").format(wakeWord))
                 }
+            }
+            VoiceState.LISTENING_WAKEWORD -> {
+                // Active listening state, keep it running
+                updateNotification(languageManager.getString("ww_listening_for").format(settingsManager.getWakeWord()))
             }
             VoiceState.LISTENING_COMMAND -> {
                 wakeWordEngine?.stopListening()
-                updateNotification("Wake Word paused (App is listening)")
+                updateNotification(languageManager.getString("ww_paused_app_listening"))
             }
-            else -> {}
+            VoiceState.PROCESSING -> {
+                wakeWordEngine?.stopListening()
+                updateNotification(languageManager.getString("ww_paused_ai_thinking"))
+            }
+            VoiceState.BENCHMARKING -> {
+                wakeWordEngine?.stopListening()
+                updateNotification(languageManager.getString("ww_paused_diagnostics"))
+            }
+            else -> {
+                // For CLEANING or other states, keep it paused but alive
+                wakeWordEngine?.stopListening()
+            }
         }
     }
 

@@ -30,6 +30,8 @@ class WakeWordEngine(
     private var audioRecord: AudioRecord? = null
     private var isListening = false
 
+    val listening: Boolean get() = isListening
+
     private val sampleRate = 16000
     private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2
 
@@ -165,15 +167,16 @@ class WakeWordEngine(
         return cleanHeard == target
     }
 
+    /**
+     * Pauses the wake word engine (e.g. during a command), 
+     * but DOES NOT mark the service as globally stopped.
+     */
     fun stopListening() {
         if (!isListening) return
-        Log.d(TAG, "Stopping WakeWordEngine listening")
-        
-        // 1. Signal loop to stop first
+        Log.d(TAG, "Pausing WakeWordEngine listening")
+
         isListening = false
-        appStateManager.setWakeWordServiceListening(false)
-        
-        // 2. Stop audio capture
+
         try {
             audioRecord?.let {
                 if (it.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
@@ -186,14 +189,21 @@ class WakeWordEngine(
         } finally {
             audioRecord = null
         }
-        
+    }
+
+    /**
+     * Marks the service as globally stopped (User clicked STOP in UI).
+     */
+    fun stopService() {
+        stopListening()
+        appStateManager.setWakeWordServiceListening(false)
         appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
     fun release() {
-        stopListening()
+        stopService()
         
-        // 3. SECURE NATIVE CLEANUP: Wait for mutex to ensure loop has exited
+        // SECURE NATIVE CLEANUP
         CoroutineScope(Dispatchers.IO).launch {
             appStateManager.executeSecureVoiceAction {
                 Log.d(TAG, "Releasing native resources...")

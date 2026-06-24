@@ -29,16 +29,13 @@ fun IntentEnginesSubTab(
     downloadProgress: Float?,
     downloadingItem: AppModel?,
     onCancelDownload: () -> Unit,
-    onFallbackChanged: () -> Unit = {}
+    onFallbackChanged: () -> Unit = {},
+    refreshTrigger: Int = 0
 ) {
-    val cloudEnabled by appStateManager.cloudIntelligenceEnabled.collectAsState()
-    val aiProcessor by appStateManager.aiProcessor.collectAsState()
-    val selectedLlamaId by appStateManager.selectedLlamaModelId.collectAsState()
-    val refreshTriggerRaw by appStateManager.refreshTrigger.collectAsState()
-    val refreshTrigger = refreshTriggerRaw.toInt()
+    val uiState by appStateManager.uiState.collectAsState()
 
     // Dynamically build model list from Remote Registry
-    val llmModels = remember(refreshTrigger) {
+    val llmModels = remember {
         RemoteModelRegistry.getLlmModels().map {
             LlmModelInfo(
                 id = it.id,
@@ -50,8 +47,8 @@ fun IntentEnginesSubTab(
         }
     }
 
-    val selectedModel = remember(selectedLlamaId, llmModels) {
-        llmModels.find { it.id == selectedLlamaId } ?: llmModels.firstOrNull()
+    val selectedModel = remember(uiState.selectedLlamaModelId, llmModels) {
+        llmModels.find { it.id == uiState.selectedLlamaModelId } ?: llmModels.firstOrNull()
     }
 
     val nluGroups = remember(llmModels) {
@@ -85,12 +82,12 @@ fun IntentEnginesSubTab(
                         )
                     }
                     Switch(
-                        checked = cloudEnabled,
+                        checked = uiState.cloudIntelligenceEnabled,
                         onCheckedChange = { appStateManager.setCloudIntelligenceEnabled(it) }
                     )
                 }
 
-                if (cloudEnabled) {
+                if (uiState.cloudIntelligenceEnabled) {
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider(modifier = Modifier.alpha(0.5f))
                     Spacer(modifier = Modifier.height(16.dp))
@@ -116,7 +113,7 @@ fun IntentEnginesSubTab(
                             onClick = { expanded = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            val currentLabel = aiOptions.find { it.first == aiProcessor }?.second ?: "NLU AI (Local)"
+                            val currentLabel = aiOptions.find { it.first == uiState.aiProcessor }?.second ?: "NLU AI (Local)"
                             Text(text = currentLabel)
                         }
                         
@@ -154,16 +151,17 @@ fun IntentEnginesSubTab(
         }
 
         // --- NLU MODEL SELECTION ---
-        if (cloudEnabled && aiProcessor == Strings.AiProcessors.NLU_LOCAL) {
+        if (uiState.cloudIntelligenceEnabled && uiState.aiProcessor == Strings.AiProcessors.NLU_LOCAL) {
             EngineModelSection(
                 title = "NLU Model Selection",
                 languageManager = languageManager,
                 settingsManager = settingsManager,
-                groups = nluGroups,
+                appStateManager = appStateManager,
+                groups = remember(nluGroups, uiState, refreshTrigger) { nluGroups },
                 selectedItem = selectedModel,
                 itemLabel = { "${it.label} (${it.sizeDescription})" },
                 modelIdProvider = { it.id },
-                onItemSelected = { model, isDownloaded -> 
+                onItemSelected = { model, isDownloaded ->
                     appStateManager.setSelectedLlamaModelId(model.id)
                 },
                 onDownloadRequest = { model ->
@@ -174,8 +172,8 @@ fun IntentEnginesSubTab(
                 onCancelDownload = onCancelDownload,
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
-                currentProcessor = aiProcessor,
-                fallbackCategory = "intent",
+                currentProcessor = uiState.aiProcessor,
+                fallbackCategory = Strings.FallbackCategories.INTENT,
                 onFallbackChanged = onFallbackChanged,
                 refreshTrigger = refreshTrigger
             )

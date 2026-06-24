@@ -33,11 +33,12 @@ import java.util.Locale
 @Composable
 fun BenchmarkSettingsTab(
     languageManager: LanguageManager,
-    appStateManager: AppStateManager
+    appStateManager: AppStateManager,
+    refreshTrigger: Int = 0
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val voiceState by appStateManager.voiceState.collectAsState()
+    val uiState by appStateManager.uiState.collectAsState()
     val benchmarkResults by appStateManager.benchmarkResults.collectAsState()
     val nativeLibsStatus by appStateManager.nativeLibsStatus.collectAsState()
     val systemInfo by appStateManager.systemInfo.collectAsState()
@@ -45,7 +46,7 @@ fun BenchmarkSettingsTab(
     val settingsManager = remember { com.voxcommander.app.data.preferences.SettingsManager(context) }
     val benchmarkEngine = remember { BenchmarkEngine(context, settingsManager, appStateManager) }
     
-    val isRunning = voiceState == VoiceState.BENCHMARKING
+    val isRunning = uiState.voiceState == VoiceState.BENCHMARKING
 
     LaunchedEffect(Unit) {
         appStateManager.refreshNativeLibsStatus()

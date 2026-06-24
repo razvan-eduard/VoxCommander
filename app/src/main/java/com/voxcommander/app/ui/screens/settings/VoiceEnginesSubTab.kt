@@ -12,6 +12,7 @@ import com.voxcommander.app.domain.engine.vosk.VoskModelInfo
 import com.voxcommander.app.domain.engine.whisper.WhisperModelInfo
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
+import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.components.DropdownGroup
 import com.voxcommander.app.ui.components.EngineModelSection
 import com.voxcommander.app.ui.components.GroupedDropdownContent
@@ -23,7 +24,7 @@ import com.voxcommander.app.utils.Strings
 fun VoiceEnginesSubTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
-    appStateManager: com.voxcommander.app.state.AppStateManager,
+    appStateManager: AppStateManager,
     onProcessorSelected: (String) -> Unit,
     hasApiKey: Boolean,
     googleSttAvailable: Boolean,
@@ -46,17 +47,14 @@ fun VoiceEnginesSubTab(
     downloadedColor: Color,
     onCancelDownload: () -> Unit,
     onDeleteRequest: (AppModel) -> Unit, 
-    onFallbackChanged: () -> Unit = {}
+    onFallbackChanged: () -> Unit = {},
+    refreshTrigger: Int = 0
 ) {
     // REALTIME STATE from AppStateManager
-    val voiceProcessor by appStateManager.voiceProcessor.collectAsState()
-    val voiceLanguage by appStateManager.voiceLanguage.collectAsState()
-    val selectedWhisperId by appStateManager.selectedWhisperModelId.collectAsState()
-    val refreshTriggerRaw by appStateManager.refreshTrigger.collectAsState()
-    val refreshTrigger = refreshTriggerRaw.toInt()
+    val uiState by appStateManager.uiState.collectAsState()
 
-    val selectedWhisperModel = remember(selectedWhisperId, whisperModels) { 
-        whisperModels.find { it.id == selectedWhisperId } ?: whisperModels.firstOrNull() 
+    val selectedWhisperModel = remember(uiState.selectedWhisperModelId, whisperModels) { 
+        whisperModels.find { it.id == uiState.selectedWhisperModelId } ?: whisperModels.firstOrNull() 
     }
     // 1. Processor Selection
     Text(text = languageManager.getString("voice_processor_section"), style = MaterialTheme.typography.titleMedium)
@@ -71,7 +69,7 @@ fun VoiceEnginesSubTab(
         )
 
         OutlinedButton(onClick = { processorExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(voiceProcessor.replace("_", " "))
+            Text(uiState.voiceProcessor.replace("_", " "))
         }
         DropdownMenu(expanded = processorExpanded, onDismissRequest = { processorExpanded = false }, modifier = Modifier.fillMaxWidth()) {
             processors.forEach { proc ->
@@ -106,7 +104,7 @@ fun VoiceEnginesSubTab(
     val languageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val languageGroups = listOf(DropdownGroup("AVAILABLE LANGUAGES", languages))
-    val selectedLangPair = languages.find { it.first == voiceLanguage }
+    val selectedLangPair = languages.find { it.first == uiState.voiceLanguage }
 
     Text(text = languageManager.getString("voice_language"), style = MaterialTheme.typography.labelLarge)
     
@@ -138,7 +136,7 @@ fun VoiceEnginesSubTab(
     HorizontalDivider()
 
     // 3. API Model Selection (OpenAI Whisper)
-    if (voiceProcessor == Strings.Processors.WHISPER_API) {
+    if (uiState.voiceProcessor == Strings.Processors.WHISPER_API) {
         val apiModels = listOf("whisper-1") // Add more as they become available
         var selectedApiModel by remember { mutableStateOf(apiModels.first()) }
         val isSelectionEnabled = apiModels.size > 1
@@ -179,7 +177,7 @@ fun VoiceEnginesSubTab(
     }
 
     // 4. Engine Specific Sections
-    when (voiceProcessor) {
+    when (uiState.voiceProcessor) {
         Strings.Processors.WHISPER_CPP, 
         Strings.Processors.WHISPER_VULKAN, 
         Strings.Processors.WHISPER_NEON -> {
@@ -187,7 +185,8 @@ fun VoiceEnginesSubTab(
                 title = languageManager.getString("whisper_model_select"),
                 languageManager = languageManager,
                 settingsManager = settingsManager,
-                groups = remember {
+                appStateManager = appStateManager,
+                groups = remember(whisperModels, refreshTrigger) {
                     listOf(
                         DropdownGroup(languageManager.getString("multilingual_models_header"), whisperModels.filter { it.isMultilingual }),
                         DropdownGroup(languageManager.getString("english_only_models_header"), whisperModels.filter { !it.isMultilingual })
@@ -206,8 +205,8 @@ fun VoiceEnginesSubTab(
                 onCancelDownload = onCancelDownload,
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
-                currentProcessor = voiceProcessor,
-                fallbackCategory = "voice",
+                currentProcessor = uiState.voiceProcessor,
+                fallbackCategory = Strings.FallbackCategories.VOICE,
                 onFallbackChanged = onFallbackChanged,
                 refreshTrigger = refreshTrigger
             )
@@ -217,7 +216,8 @@ fun VoiceEnginesSubTab(
                 title = languageManager.getString("vosk_model_select"),
                 languageManager = languageManager,
                 settingsManager = settingsManager,
-                groups = remember(voskGroups) {
+                appStateManager = appStateManager,
+                groups = remember(voskGroups, uiState, refreshTrigger) {
                     voskGroups.map { group ->
                         DropdownGroup(group.language.uppercase(), group.models)
                     }
@@ -239,8 +239,8 @@ fun VoiceEnginesSubTab(
                 onCancelDownload = onCancelDownload,
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
-                currentProcessor = voiceProcessor,
-                fallbackCategory = "voice",
+                currentProcessor = uiState.voiceProcessor,
+                fallbackCategory = Strings.FallbackCategories.VOICE,
                 onFallbackChanged = onFallbackChanged,
                 refreshTrigger = refreshTrigger
             )
