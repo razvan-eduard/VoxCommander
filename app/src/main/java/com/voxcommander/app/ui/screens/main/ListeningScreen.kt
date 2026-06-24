@@ -35,13 +35,13 @@ fun ListeningScreen(
     if (isListening && uiState.voiceProcessor != Strings.Processors.GOOGLE) {
         Box(
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter
+            contentAlignment = Alignment.Center
         ) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.42f), // Increased height to prevent clipping
-                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    .fillMaxWidth(0.85f) // Gap stânga-dreapta
+                    .wrapContentHeight(),
+                shape = RoundedCornerShape(32.dp), // Toate colțurile rotunjite
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 12.dp,
                 shadowElevation = 16.dp
