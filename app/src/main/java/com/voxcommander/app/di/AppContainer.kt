@@ -54,11 +54,12 @@ class AppContainer(context: Context) {
     val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, l3Engine, geminiEngine, settingsManager)
 
     // --- VIEW MODELS ---
-    val mainViewModel = MainViewModel(masterIntentEngine, appStateManager)
+    val mainViewModel = MainViewModel(masterIntentEngine, appStateManager, languageManager)
     val modelManagementViewModel = ModelManagementViewModel(
         settingsManager,
         appStateManager,
         modelDownloader,
+        languageManager,
         appContext
     )
 
@@ -92,7 +93,7 @@ class AppContainer(context: Context) {
      * attempt killed the process, so we mark Vulkan incompatible and clear the cookie.
      */
     private fun checkVulkanCrashCookie() {
-        android.util.Log.d("VulkanProbe", "checkVulkanCrashCookie: pending=${settingsManager.isVulkanRuntimeAttemptPending()}")
+        android.util.Log.d("VulkanProbe", "checkVulkanCrashCookie: pending=\${settingsManager.isVulkanRuntimeAttemptPending()}")
         if (settingsManager.isVulkanRuntimeAttemptPending()) {
             settingsManager.setVulkanIncompatible(true)
             settingsManager.setVulkanRuntimeAttempt(false)

@@ -3,6 +3,7 @@ package com.voxcommander.app.data.remote
 import android.util.Log
 import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,7 +43,7 @@ data class RemoteModelItem(
  * Fetches models.json from GitHub/Remote Repo and provides data to UI.
  */
 object RemoteModelRegistry {
-    private const val TAG = "RemoteModelRegistry"
+    private const val TAG = Strings.Tags.REMOTE_MODEL_REGISTRY
     private val gson = Gson()
     private var cachedSchema: RemoteModelSchema? = null
 

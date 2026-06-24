@@ -68,7 +68,7 @@ class WhisperSttEngine(
     }
 
     companion object {
-        private const val BASE_URL = "https://api.openai.com/"
+        private const val BASE_URL = Strings.Urls.OPENAI_API
         private const val AUTH_PREFIX = "Bearer "
         private const val MEDIA_TYPE_WAV = "audio/wav"
         private const val FILENAME_WAV = "audio.wav"

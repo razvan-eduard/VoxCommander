@@ -190,7 +190,8 @@ fun MainScreen(
         VulkanTestModal(
             vulkanTestState = appStateManager.vulkanTestState.collectAsStateWithLifecycle().value,
             vulkanTestPassed = appStateManager.vulkanTestPassed.collectAsStateWithLifecycle().value,
-            onDismiss = { appStateManager.dismissVulkanTestResult() }
+            onDismiss = { appStateManager.dismissVulkanTestResult() },
+            languageManager = languageManager
         )
     }
 }

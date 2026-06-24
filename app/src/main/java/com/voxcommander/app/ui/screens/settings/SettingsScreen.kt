@@ -270,12 +270,6 @@ fun SettingsContent(
                 }
             }
         }
-
-        // Overlay is Z-stacked on top of the Scaffold
-        ListeningScreen(
-            languageManager = languageManager,
-            appStateManager = appStateManager
-        )
     }
 
     SettingsDialogs(

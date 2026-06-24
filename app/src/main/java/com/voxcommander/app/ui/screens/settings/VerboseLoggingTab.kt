@@ -61,9 +61,9 @@ fun VerboseLoggingTab(
             modifier = Modifier.weight(1f),
             enabled = verboseLoggingEnabled && logs.isNotEmpty()
         ) {
-            Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+            Icon(Icons.Default.ContentCopy, contentDescription = languageManager.getString("copy_button"))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Copy")
+            Text(languageManager.getString("copy_button"))
         }
 
         // Share Button
@@ -83,9 +83,9 @@ fun VerboseLoggingTab(
             modifier = Modifier.weight(1f),
             enabled = verboseLoggingEnabled && logs.isNotEmpty()
         ) {
-            Icon(Icons.Default.Share, contentDescription = "Share")
+            Icon(Icons.Default.Share, contentDescription = languageManager.getString("share_button"))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Share")
+            Text(languageManager.getString("share_button"))
         }
     }
 

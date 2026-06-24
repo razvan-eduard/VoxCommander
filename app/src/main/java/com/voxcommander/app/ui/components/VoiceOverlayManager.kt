@@ -27,7 +27,7 @@ import com.voxcommander.app.ui.theme.VoxCommanderTheme
  * This allows the microphone to appear over ANY app, including BottomSheets and Home screen.
  */
 class VoiceOverlayManager(
-    private val context: Context, 
+    private val context: Context,
     private val languageManager: LanguageManager,
     private val appStateManager: AppStateManager
 ) {
@@ -38,19 +38,32 @@ class VoiceOverlayManager(
     fun show() {
         if (composeView != null) return
 
+        val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            windowType,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.CENTER
             // Allows the window to extend outside of the screen if needed
             flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            
+            // Handle display cutouts for Android 9+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
         }
 
         val view = ComposeView(context).apply {

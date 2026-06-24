@@ -79,8 +79,8 @@ fun GeneralSettingsTab(
                 modelRepoUrl = it
                 settingsManager.saveModelRepoBaseUrl(it)
             },
-            label = { Text("Model Repository Base URL") },
-            placeholder = { Text("https://github.com/user/repo") },
+            label = { Text(languageManager.getString("model_repository_url")) },
+            placeholder = { Text(languageManager.getString("repository_url_placeholder")) },
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { isRepoFocused = it.isFocused },
@@ -139,7 +139,7 @@ fun GeneralSettingsTab(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Timeout", style = MaterialTheme.typography.labelLarge)
+            Text(text = languageManager.getString("timeout_label"), style = MaterialTheme.typography.labelLarge)
             
             Box {
                 OutlinedButton(
@@ -172,7 +172,7 @@ fun GeneralSettingsTab(
         // --- VOICE FALLBACK INFO (Compact) ---
         if (uiState.defaultVoiceFallbackProcessor != null && uiState.defaultVoiceFallbackModel != null) {
             Text(
-                text = "Voice: \${uiState.defaultVoiceFallbackProcessor} (\${uiState.defaultVoiceFallbackModel})",
+                text = "Voice: ${uiState.defaultVoiceFallbackProcessor} (${uiState.defaultVoiceFallbackModel})",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )
@@ -181,7 +181,7 @@ fun GeneralSettingsTab(
         // --- INTENT FALLBACK INFO (Compact) ---
         if (uiState.defaultIntentFallbackProcessor != null && uiState.defaultIntentFallbackModel != null) {
             Text(
-                text = "Intent: \${uiState.defaultIntentFallbackProcessor} (\${uiState.defaultIntentFallbackModel})",
+                text = "Intent: ${uiState.defaultIntentFallbackProcessor} (${uiState.defaultIntentFallbackModel})",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )

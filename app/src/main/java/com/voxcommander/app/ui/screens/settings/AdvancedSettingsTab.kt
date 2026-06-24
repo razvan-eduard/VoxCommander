@@ -6,10 +6,8 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
@@ -17,7 +15,6 @@ import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.LogLevel
 import com.voxcommander.app.utils.LoggingFlags
-import com.voxcommander.app.utils.Strings
 
 @Composable
 fun AdvancedSettingsTab(
@@ -100,8 +97,8 @@ fun AdvancedSettingsTab(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Toast")
-        androidx.compose.material3.Checkbox(
+        Text(languageManager.getString("toast_label"))
+        Checkbox(
             checked = loggingFlags.toastEnabled,
             onCheckedChange = { enabled ->
                 loggingFlags = loggingFlags.copy(toastEnabled = enabled)
@@ -120,8 +117,8 @@ fun AdvancedSettingsTab(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Logcat")
-        androidx.compose.material3.Checkbox(
+        Text(languageManager.getString("logcat_label"))
+        Checkbox(
             checked = loggingFlags.logcatEnabled,
             onCheckedChange = { enabled ->
                 loggingFlags = loggingFlags.copy(logcatEnabled = enabled)
@@ -158,7 +155,7 @@ fun AdvancedSettingsTab(
     Spacer(modifier = Modifier.height(24.dp))
 
     // --- SYSTEM MAINTENANCE ---
-    Text(text = "System Maintenance", style = MaterialTheme.typography.titleMedium)
+    Text(text = languageManager.getString("system_maintenance"), style = MaterialTheme.typography.titleMedium)
     Spacer(modifier = Modifier.height(12.dp))
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -168,7 +165,7 @@ fun AdvancedSettingsTab(
             Button(onClick = onClearDefaultFallback, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
                 Text(languageManager.getString("clear_default_fallback"))
             }
-            Text(text = "Maintenance actions are global and affect all AI engines.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text = languageManager.getString("maintenance_warning"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

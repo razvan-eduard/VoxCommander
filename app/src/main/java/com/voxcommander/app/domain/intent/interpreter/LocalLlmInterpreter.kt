@@ -6,6 +6,7 @@ import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.voxcommander.app.domain.intent.model.IntentPayload
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.google.gson.Gson
+import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -18,7 +19,7 @@ class LocalLlmInterpreter(
     private val settingsManager: SettingsManager
 ) : AssistantEngine {
 
-    private val TAG = "LocalLlmInterpreter"
+    private val TAG = Strings.Tags.LOCAL_LLM_INTERPRETER
     private var llmInference: LlmInference? = null
     private val gson = Gson()
 

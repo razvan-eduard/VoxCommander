@@ -64,8 +64,8 @@ fun BenchmarkSettingsTab(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "Global Engine Benchmark", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(text = "Synthetic speed test across cloud services and downloaded on-device models.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = languageManager.getString("global_engine_benchmark"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(text = languageManager.getString("benchmark_description"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = { scope.launch { benchmarkEngine.runFullBenchmark() } },
@@ -75,11 +75,11 @@ fun BenchmarkSettingsTab(
                         if (isRunning) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Running All Tests...")
+                            Text(languageManager.getString("running_all_tests"))
                         } else {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Start Benchmark")
+                            Text(languageManager.getString("start_benchmark"))
                         }
                     }
                 }
@@ -87,13 +87,13 @@ fun BenchmarkSettingsTab(
         }
 
         if (benchmarkResults.isNotEmpty()) {
-            item { Text(text = "Performance Metrics", style = MaterialTheme.typography.titleSmall) }
-            items(benchmarkResults) { result -> BenchmarkResultItem(result) }
+            item { Text(text = languageManager.getString("performance_metrics"), style = MaterialTheme.typography.titleSmall) }
+            items(benchmarkResults) { result -> BenchmarkResultItem(result, languageManager) }
         }
 
         item {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "Native Library Inventory", style = MaterialTheme.typography.titleSmall)
+                Text(text = languageManager.getString("native_library_inventory"), style = MaterialTheme.typography.titleSmall)
                 IconButton(onClick = { appStateManager.refreshNativeLibsStatus() }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(18.dp))
                 }
@@ -116,7 +116,7 @@ fun BenchmarkSettingsTab(
 
         if (systemInfo.isNotBlank()) {
             item {
-                Text(text = "Engine Runtime Diagnostics", style = MaterialTheme.typography.titleSmall)
+                Text(text = languageManager.getString("engine_runtime_diagnostics"), style = MaterialTheme.typography.titleSmall)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color.Black)
@@ -143,15 +143,15 @@ fun BenchmarkSettingsTab(
 }
 
 @Composable
-fun BenchmarkResultItem(result: com.voxcommander.app.state.BenchmarkResult) {
+fun BenchmarkResultItem(result: com.voxcommander.app.state.BenchmarkResult, languageManager: LanguageManager) {
     Card(modifier = Modifier.fillMaxWidth(), border = BorderStroke(1.dp, if (result.isSuccess) Color.Gray.copy(alpha = 0.3f) else Color.Red)) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = "${result.engine} (${result.model})", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 if (result.isSuccess) {
-                    Text(text = "Time: ${result.inferenceTimeMs}ms | RTF: ${String.format(Locale.US, "%.2fx", result.rtf)}", style = MaterialTheme.typography.bodySmall, color = if (result.rtf < 0.5f) Color(0xFF4CAF50) else Color.Gray)
+                    Text(text = languageManager.getString("time_rtf_format").format(result.inferenceTimeMs, String.format(Locale.US, "%.2f", result.rtf)), style = MaterialTheme.typography.bodySmall, color = if (result.rtf < 0.5f) Color(0xFF4CAF50) else Color.Gray)
                 } else {
-                    Text(text = "Error: ${result.error}", style = MaterialTheme.typography.bodySmall, color = Color.Red)
+                    Text(text = languageManager.getString("error_format").format(result.error), style = MaterialTheme.typography.bodySmall, color = Color.Red)
                 }
             }
             if (result.isSuccess) Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))

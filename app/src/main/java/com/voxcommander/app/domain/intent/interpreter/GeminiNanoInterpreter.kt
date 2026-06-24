@@ -6,6 +6,7 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.gson.Gson
 import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -15,7 +16,7 @@ import kotlinx.coroutines.withContext
  */
 class GeminiNanoInterpreter(private val context: Context) : AssistantEngine {
 
-    private val TAG = "GeminiNanoInterpreter"
+    private val TAG = Strings.Tags.GEMINI_NANO_INTERPRETER
     private val gson = Gson()
     
     // The modelName "gemini-1.5-flash" is used as a proxy; on-device Gemini Nano

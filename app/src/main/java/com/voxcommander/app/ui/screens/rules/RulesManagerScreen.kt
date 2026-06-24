@@ -137,7 +137,7 @@ fun RulesManagerContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = if (editingRuleId == null) "Add New Fast Trigger (L1)" else "Edit Fast Trigger",
+                                text = if (editingRuleId == null) languageManager.getString("add_new_fast_trigger") else languageManager.getString("edit_fast_trigger"),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = if (editingRuleId == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
                             )
@@ -152,7 +152,7 @@ fun RulesManagerContent(
                                     wizardTokens = emptyList()
                                     selectedWizardIndices.clear()
                                 }) {
-                                    Text("Cancel Edit", style = MaterialTheme.typography.labelSmall)
+                                    Text(languageManager.getString("cancel_edit"), style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
@@ -188,7 +188,7 @@ fun RulesManagerContent(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text(text = "Regex Wizard: Select keywords", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                        Text(text = languageManager.getString("regex_wizard_title"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
                                     
@@ -217,7 +217,7 @@ fun RulesManagerContent(
                                     
                                     if (selectedWizardIndices.isEmpty()) {
                                         Text(
-                                            text = "Tap words in order to build your trigger pattern.",
+                                            text = languageManager.getString("regex_wizard_desc"),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                                             modifier = Modifier.padding(top = 4.dp)
@@ -232,20 +232,20 @@ fun RulesManagerContent(
                             OutlinedTextField(
                                 value = artist,
                                 onValueChange = { artist = it },
-                                label = { Text("Artist (Static)") },
+                                label = { Text(languageManager.getString("artist_static")) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             OutlinedTextField(
                                 value = track,
                                 onValueChange = { track = it },
-                                label = { Text("Track (Static)") },
+                                label = { Text(languageManager.getString("track_static")) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         } else if (selectedCategory == "maps") {
                             OutlinedTextField(
                                 value = destination,
                                 onValueChange = { destination = it },
-                                label = { Text("Destination (Static)") },
+                                label = { Text(languageManager.getString("destination_static")) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -323,7 +323,7 @@ fun RulesManagerContent(
                             modifier = Modifier.fillMaxWidth(),
                             enabled = triggerPattern.isNotBlank()
                         ) {
-                            Text(if (editingRuleId == null) languageManager.getString("add_rule_button") else "Update Rule")
+                            Text(if (editingRuleId == null) languageManager.getString("add_rule_button") else languageManager.getString("update_rule"))
                         }
                     }
                 }
@@ -332,7 +332,7 @@ fun RulesManagerContent(
             // --- LIST OF EXISTING RULES ---
             if (rules.isNotEmpty()) {
                 item {
-                    Text(text = "Active Fast Triggers", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                    Text(text = languageManager.getString("active_fast_triggers"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                 }
                 
                 items(rules) { rule ->

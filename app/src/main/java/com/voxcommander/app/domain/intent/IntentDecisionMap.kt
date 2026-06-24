@@ -21,7 +21,7 @@ class IntentDecisionMap(
     private val settingsManager: SettingsManager
 ) : AssistantEngine {
 
-    private val TAG = "IntentDecisionMap"
+    private val TAG = Strings.Tags.INTENT_DECISION_MAP
 
     override suspend fun processCommand(spokenText: String): IntentPayload? {
         if (spokenText.isBlank()) return null

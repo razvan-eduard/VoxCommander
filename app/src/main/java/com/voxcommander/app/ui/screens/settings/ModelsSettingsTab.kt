@@ -71,12 +71,12 @@ fun ModelsSettingsTab(
             Tab(
                 selected = selectedSubTab == 0,
                 onClick = { selectedSubTab = 0 },
-                text = { Text("Voice Engines", style = MaterialTheme.typography.labelLarge) }
+                text = { Text(languageManager.getString("voice_engines"), style = MaterialTheme.typography.labelLarge) }
             )
             Tab(
                 selected = selectedSubTab == 1,
                 onClick = { selectedSubTab = 1 },
-                text = { Text("Intent Engines", style = MaterialTheme.typography.labelLarge) }
+                text = { Text(languageManager.getString("intent_engines"), style = MaterialTheme.typography.labelLarge) }
             )
         }
 

@@ -9,6 +9,7 @@ import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.VoiceState
 import com.voxcommander.app.utils.Logger
+import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,7 +25,7 @@ class WakeWordEngine(
     private val appStateManager: AppStateManager,
     private val onWakeWordDetected: () -> Unit
 ) {
-    private val TAG = "WakeWordEngine"
+    private val TAG = Strings.Tags.WAKE_WORD_ENGINE
     private var model: Model? = null
     private var recognizer: Recognizer? = null
     private var audioRecord: AudioRecord? = null

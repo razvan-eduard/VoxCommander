@@ -9,6 +9,16 @@ object Strings {
         const val WHISPER_CMAKE_STT_ENGINE = "WhisperCmakeSttEngine"
         const val VOSK_MODEL_PARSER = "VoskModelParser"
         const val VOSK_MODEL_REGISTRY = "VoskModelRegistry"
+        const val VULKAN_PROBE = "VulkanProbe"
+        const val REMOTE_MODEL_REGISTRY = "RemoteModelRegistry"
+        const val WAKE_WORD_ENGINE = "WakeWordEngine"
+        const val WAKE_WORD_SERVICE = "WakeWordService"
+        const val INTENT_DECISION_MAP = "IntentDecisionMap"
+        const val WHISPER_CPP_STT_ENGINE = "WhisperCppSttEngine"
+        const val AI_INTERPRETER = "AiInterpreter"
+        const val GEMINI_NANO_INTERPRETER = "GeminiNanoInterpreter"
+        const val OPENAI_INTERPRETER = "OpenAiInterpreter"
+        const val LOCAL_LLM_INTERPRETER = "LocalLlmInterpreter"
     }
 
     object Processors {
@@ -61,7 +71,7 @@ object Strings {
         const val KEY_SELECTED_LLAMA_MODEL_ID = "selected_llama_model_id"
         const val KEY_MODEL_REPO_BASE_URL = "model_repo_base_url"
         const val KEY_MODELS_JSON_CACHE = "models_json_cache"
-        const val DEFAULT_MODEL_REPO_URL = "https://github.com/razvan-eduard/VoxCommander"
+        const val DEFAULT_MODEL_REPO_URL = Strings.Urls.DEFAULT_MODEL_REPO
     }
 
     object Database {
@@ -97,6 +107,20 @@ object Strings {
 
     object Languages {
         const val DEFAULT = "en"
+    }
+
+    object Actions {
+        const val START_WAKE_WORD = "com.voxcommander.app.action.START_WAKE_WORD"
+        const val STOP_WAKE_WORD = "com.voxcommander.app.action.STOP_WAKE_WORD"
+        const val PAUSE_WAKE_WORD = "com.voxcommander.app.action.PAUSE_WAKE_WORD"
+        const val RESUME_WAKE_WORD = "com.voxcommander.app.action.RESUME_WAKE_WORD"
+        const val EXIT_SERVICE = "com.voxcommander.app.action.EXIT_SERVICE"
+    }
+
+    object Urls {
+        const val DEFAULT_MODEL_REPO = "https://github.com/razvan-eduard/VoxCommander"
+        const val VOSK_MODELS = "https://alphacephei.com/vosk/models"
+        const val OPENAI_API = "https://api.openai.com/"
     }
 
     object FallbackCategories {

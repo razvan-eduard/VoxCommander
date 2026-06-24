@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.engine.SttEngine
+import com.voxcommander.app.utils.Strings
 import com.whispercpp.whisper.WhisperContext
 import com.whispercpp.whisper.WhisperLib
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +25,7 @@ class WhisperCppSttEngine(
     private val onVulkanIncompatible: () -> Unit = {}
 ) : SttEngine {
 
-    private val TAG = "WhisperCppSttEngine"
+    private val TAG = Strings.Tags.WHISPER_CPP_STT_ENGINE
     private var whisperContext: WhisperContext? = null
     private var isUsingGpu = false
     private val loadMutex = Mutex()

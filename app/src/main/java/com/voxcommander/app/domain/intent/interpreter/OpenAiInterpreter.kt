@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -21,7 +22,7 @@ class OpenAiInterpreter(
     private val settingsManager: SettingsManager
 ) : AssistantEngine {
 
-    private val TAG = "OpenAiInterpreter"
+    private val TAG = Strings.Tags.OPENAI_INTERPRETER
     private val client = OkHttpClient()
     private val gson = Gson()
 

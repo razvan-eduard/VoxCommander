@@ -15,7 +15,7 @@ class AiInterpreter(
     private val settingsManager: SettingsManager
 ) : AssistantEngine {
     
-    private val TAG = "AiInterpreter"
+    private val TAG = Strings.Tags.AI_INTERPRETER
     
     // We'll lazy-load these as needed
     private val nluInterpreter by lazy { LocalLlmInterpreter(context, settingsManager) }

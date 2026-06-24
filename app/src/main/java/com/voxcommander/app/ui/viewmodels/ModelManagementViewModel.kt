@@ -12,12 +12,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.ModelDownloader
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.engine.vosk.VoskLanguageGroup
 import com.voxcommander.app.domain.engine.vosk.VoskModelRegistry
-import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
+import com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry
+import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
+import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.FileHelper
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -36,6 +41,7 @@ class ModelManagementViewModel(
     private val settingsManager: SettingsManager,
     private val appStateManager: AppStateManager,
     private val modelDownloader: ModelDownloader,
+    private val languageManager: LanguageManager,
     private val context: Context
 ) : ViewModel() {
 
@@ -114,7 +120,7 @@ class ModelManagementViewModel(
                 val cursor = downloadManager.query(query)
 
                 var success = false
-                if (cursor.moveToFirst()) {
+                if (cursor != null && cursor.moveToFirst()) {
                     val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
                     if (statusIndex != -1) {
                         val status = cursor.getInt(statusIndex)
@@ -123,7 +129,7 @@ class ModelManagementViewModel(
                         }
                     }
                 }
-                cursor.close()
+                cursor?.close()
 
                 if (!success) {
                     handleDownloadFailure()
@@ -179,6 +185,7 @@ class ModelManagementViewModel(
         } else url
         
         val id = modelDownloader.downloadVoskModel(lang, resolvedUrl, name)
+        currentDownloadId = id
         startProgressTracking(id)
     }
 
@@ -200,6 +207,7 @@ class ModelManagementViewModel(
         } else url
         
         val id = modelDownloader.downloadWhisperModel(modelId, resolvedUrl)
+        currentDownloadId = id
         startProgressTracking(id)
     }
 
@@ -229,6 +237,7 @@ class ModelManagementViewModel(
         } else url
         
         val id = modelDownloader.downloadNluModel(modelId, resolvedUrl)
+        currentDownloadId = id
         startProgressTracking(id)
     }
 
@@ -262,6 +271,7 @@ class ModelManagementViewModel(
             
             // Force UI refresh to reset buttons immediately
             appStateManager.refreshAll()
+            showSuccessMessage(languageManager.getString("error_download_failed"))
         }
     }
 
@@ -274,7 +284,7 @@ class ModelManagementViewModel(
         val path = uri.path ?: uri.toString()
         settingsManager.saveCustomVoskModelPath(lang, path)
         settingsManager.setVoiceModelReady(true)
-        showSuccessMessage("Custom Vosk model path saved")
+        showSuccessMessage(languageManager.getString("success_custom_vosk"))
     }
 
     /**
@@ -284,7 +294,7 @@ class ModelManagementViewModel(
         FileHelper.copyUriToInternal(context, uri, "custom-whisper-model.bin")?.let { path ->
             settingsManager.saveCustomWhisperModelPath(path)
             settingsManager.setVoiceModelReady(true)
-            showSuccessMessage("Custom Whisper model saved")
+            showSuccessMessage(languageManager.getString("success_custom_whisper"))
         }
     }
 
@@ -323,11 +333,18 @@ class ModelManagementViewModel(
         val protectedLlama = mutableSetOf<String>()
         protectedLlama.add(selectedLlama)
 
-        android.util.Log.d(
-            "ModelCleanup",
-            "VM deleteUnusedModels -> voiceProcessor=$voiceProcessor aiProcessor=${settingsManager.getAiProcessor()} " +
-                "selectedVosk=$selectedVosk selectedWhisper=$selectedWhisper selectedLlama=$selectedLlama " +
-                "protectedVosk=$protectedVosk protectedWhisper=$protectedWhisper protectedLlama=$protectedLlama"
+        Logger.log(
+            languageManager.getString("vm_cleanup_log").format(
+                voiceProcessor, 
+                settingsManager.getAiProcessor(),
+                selectedVosk ?: "none",
+                selectedWhisper,
+                selectedLlama,
+                protectedVosk.toString(),
+                protectedWhisper.toString(),
+                protectedLlama.toString()
+            ),
+            languageManager.getString("model_cleanup_tag")
         )
 
         modelDownloader.deleteUnusedModels(protectedVosk, protectedWhisper, protectedLlama)
@@ -421,7 +438,7 @@ class ModelManagementViewModel(
             while (downloading) {
                 val query = DownloadManager.Query().setFilterById(downloadId)
                 val cursor = downloadManager.query(query)
-                if (cursor.moveToFirst()) {
+                if (cursor != null && cursor.moveToFirst()) {
                     val bytesDownloadedIndex = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
                     val bytesTotalIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
                     val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
@@ -440,21 +457,27 @@ class ModelManagementViewModel(
                         if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
                             downloading = false
                             if (status == DownloadManager.STATUS_FAILED) {
-                                _downloadProgress.value = null
-                                _downloadingItem.value = null
+                                withContext(Dispatchers.Main) {
+                                    _downloadProgress.value = null
+                                    _downloadingItem.value = null
+                                    currentDownloadId = null
+                                    handleDownloadFailure()
+                                }
                             }
                         }
                     }
                 }
-                cursor.close()
+                cursor?.close()
                 delay(500)
             }
         }
     }
 
     private fun handleDownloadSuccess() {
+        currentDownloadId = null
         _downloadProgress.value = null
         _downloadingItem.value = null
+        progressJob?.cancel()
 
         when (lastDownloadType) {
             "whisper" -> {
@@ -462,9 +485,9 @@ class ModelManagementViewModel(
                 modelDownloader.verifyWhisperModel(modelId) { verified ->
                     if (verified) {
                         appStateManager.onWhisperDownloadComplete(modelId)
-                        showSuccessMessage("Whisper Model $modelId ready!")
+                        showSuccessMessage(languageManager.getString("whisper_ready_msg").format(modelId))
                     } else {
-                        showSuccessMessage("Verification failed for Whisper $modelId")
+                        showSuccessMessage(languageManager.getString("error_verification_failed").format(modelId))
                     }
                 }
             }
@@ -473,9 +496,9 @@ class ModelManagementViewModel(
                 modelDownloader.unzipVoskModel(modelName) { unzipped ->
                     if (unzipped) {
                         appStateManager.onVoskDownloadComplete(modelName)
-                        showSuccessMessage("Vosk Model $modelName ready!")
+                        showSuccessMessage(languageManager.getString("vosk_ready_msg").format(modelName))
                     } else {
-                        showSuccessMessage("Extraction failed for Vosk $modelName")
+                        showSuccessMessage(languageManager.getString("error_extraction_failed").format(modelName))
                     }
                 }
             }
@@ -485,9 +508,9 @@ class ModelManagementViewModel(
                 if (file.exists()) {
                     settingsManager.setModelDownloaded(modelId, true)
                     appStateManager.refreshAll()
-                    showSuccessMessage("NLU Model $modelId ready!")
+                    showSuccessMessage(languageManager.getString("nlu_ready_msg").format(modelId))
                 } else {
-                    showSuccessMessage("File missing after NLU download")
+                    showSuccessMessage(languageManager.getString("error_nlu_missing"))
                 }
             }
         }
@@ -495,7 +518,7 @@ class ModelManagementViewModel(
     }
 
     private fun handleDownloadFailure() {
-        showSuccessMessage("Download failed or cancelled")
+        showSuccessMessage(languageManager.getString("error_download_failed"))
         lastDownloadType = null
     }
 

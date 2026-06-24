@@ -23,7 +23,8 @@ import com.voxcommander.app.state.VulkanTestState
 fun VulkanTestModal(
     vulkanTestState: VulkanTestState,
     vulkanTestPassed: Boolean?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    languageManager: com.voxcommander.app.domain.localization.LanguageManager
 ) {
     if (vulkanTestState == VulkanTestState.IDLE) return
 
@@ -64,19 +65,19 @@ fun VulkanTestModal(
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         Text(
-                            text = "Testing Vulkan Compatibility",
+                            text = languageManager.getString("testing_vulkan_compatibility"),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Testing GPU inference performance...",
+                            text = languageManager.getString("testing_gpu_performance"),
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "This may take up to 30 seconds",
+                            text = languageManager.getString("vulkan_test_timeout"),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -101,7 +102,7 @@ fun VulkanTestModal(
                         Spacer(modifier = Modifier.height(24.dp))
                         
                         Text(
-                            text = if (isSuccess) "Vulkan Ready!" else "Incompatible Device",
+                            text = if (isSuccess) languageManager.getString("vulkan_ready") else languageManager.getString("incompatible_device"),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = themeColor
@@ -111,9 +112,9 @@ fun VulkanTestModal(
                         
                         Text(
                             text = if (isSuccess) {
-                                "Your GPU passed the Whisper inference test. High-speed transcription is enabled."
+                                languageManager.getString("vulkan_ready_message")
                             } else {
-                                "Your GPU failed the stress test. Switched to NEON (CPU) for stability."
+                                languageManager.getString("vulkan_failed_message")
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center

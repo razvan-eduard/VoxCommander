@@ -3,12 +3,13 @@ package com.voxcommander.app.data.remote
 import android.util.Log
 import com.voxcommander.app.domain.engine.vosk.VoskLanguageGroup
 import com.voxcommander.app.domain.engine.vosk.VoskModelInfo
+import com.voxcommander.app.utils.Strings
 import org.jsoup.Jsoup
 import java.io.IOException
 
 object VoskModelParser {
-    private const val TAG = "VoskModelParser"
-    private const val VOSK_MODELS_URL = "https://alphacephei.com/vosk/models"
+    private const val TAG = Strings.Tags.VOSK_MODEL_PARSER
+    private const val VOSK_MODELS_URL = Strings.Urls.VOSK_MODELS
     private const val TIMEOUT_MS = 30000
     private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 

@@ -10,6 +10,7 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import android.util.Log
+import com.voxcommander.app.utils.Strings
 
 /**
  * Orchestrates a one-shot, isolated Vulkan GPU compatibility test. Binds to
@@ -96,7 +97,7 @@ class VulkanProbe(
     }
 
     companion object {
-        private const val TAG = "VulkanProbe"
+        private const val TAG = Strings.Tags.VULKAN_PROBE
         private const val TIMEOUT_MS = 30_000L
     }
 }
