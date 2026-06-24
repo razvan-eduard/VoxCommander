@@ -12,8 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
@@ -25,10 +24,11 @@ fun ListeningScreen(
     appStateManager: AppStateManager,
     onStop: () -> Unit = { VoiceManager.stopListening() }
 ) {
-    val isListening by VoiceManager.isListeningFlow.collectAsState()
-    val partialTranscription by VoiceManager.partialTranscriptionFlow.collectAsState()
-    val volume by VoiceManager.volumeFlow.collectAsState()
-    val uiState by appStateManager.uiState.collectAsState()
+    // TEST: Migrating to collectAsStateWithLifecycle to verify manual Lifecycle sync in WindowManager
+    val isListening by VoiceManager.isListeningFlow.collectAsStateWithLifecycle()
+    val partialTranscription by VoiceManager.partialTranscriptionFlow.collectAsStateWithLifecycle()
+    val volume by VoiceManager.volumeFlow.collectAsStateWithLifecycle()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     // GOOGLE VOICE EXCLUSION: Google provides its own native overlay.
     // We hide our custom overlay to avoid UI clutter.
