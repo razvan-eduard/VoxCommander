@@ -21,6 +21,7 @@ object PromptProvider {
 
     /**
      * Fallback template if models.json is not loaded or key is missing.
+     * Aligned with models.json structure.
      */
     private fun getDefaultNluTemplate(): String {
         return """
@@ -30,8 +31,9 @@ object PromptProvider {
                - audio: ["audio_youtube", "audio_spotify", "media_pause", "media_play", "media_next", "media_prev"]
                - settings: ["vol_up", "vol_down", "wifi_toggle", "bluetooth_toggle"]
                - maps: ["waze_nav", "maps_nav"]
-            3. RETURN: Return EXCLUSIVELY a JSON object with these 6 keys: category, actionType, artist, track, album, destination.
-            
+            3. DEFAULT: If music platform is not specified, use actionType="audio_youtube".
+            4. RETURN: Return EXCLUSIVELY a JSON object with these 6 keys: category, actionType, artist, track, album, destination.
+
             Input: "$PLACEHOLDER_TEXT"
             JSON:
         """.trimIndent()

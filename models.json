@@ -1,5 +1,8 @@
 {
   "schema_version": 1,
+  "prompts": {
+    "standard_nlu": "System intent mapping for Vox Commander. Rules:\n1. category: Choose STRICTLY from [\"audio\", \"settings\", \"maps\", \"home\", \"app\"].\n2. actionType: Choose STRICTLY from:\n   - audio: [\"audio_youtube\", \"audio_spotify\", \"media_pause\", \"media_play\", \"media_next\", \"media_prev\"]\n   - settings: [\"vol_up\", \"vol_down\", \"wifi_toggle\", \"bluetooth_toggle\"]\n   - maps: [\"waze_nav\", \"maps_nav\"]\n3. DEFAULT: If music platform is not specified, use actionType=\"audio_youtube\".\n4. RETURN: Return EXCLUSIVELY a JSON object with these 6 keys: category, actionType, artist, track, album, destination.\n\nInput: \"${spokenText}\"\nJSON:"
+  },
   "engines": {
     "stt_whisper": [
       {
@@ -20,7 +23,7 @@
       },
       {
         "id": "small",
-        "label": "Whisper Small (High Precision)",
+        "label": "Whisper Small (High Precisionxxx)",
         "path": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
         "size_mb": 480,
         "is_multilingual": true,

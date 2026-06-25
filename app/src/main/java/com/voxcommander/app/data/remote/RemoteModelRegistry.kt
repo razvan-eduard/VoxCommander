@@ -54,26 +54,25 @@ object RemoteModelRegistry {
     /**
      * Fetches models.json from the configured base URL.
      * Uses RAW content URL for GitHub automatically.
+     * Always attempts to load from persistent cache if memory is empty.
      */
     suspend fun fetchJson(settingsManager: SettingsManager, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
-        // Only return early if NOT forcing and we have memory cache
-        if (!force && cachedSchema != null) return@withContext true
-        
-        // If not forcing, try to use persistent disk cache
-        if (!force) {
+        // 1. Ensure we have something in memory if available on disk
+        if (cachedSchema == null) {
             settingsManager.getModelsJsonCache()?.let {
                 try {
                     cachedSchema = gson.fromJson(it, RemoteModelSchema::class.java)
-                    if (cachedSchema != null) return@withContext true
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to parse cached JSON", e)
+                    Log.e(TAG, "Failed to parse disk cache during init", e)
                 }
             }
         }
 
+        // 2. Return early if we have data and NO force is requested
+        if (!force && cachedSchema != null) return@withContext true
+
+        // 3. Perform network fetch
         val baseUrl = settingsManager.getModelRepoBaseUrl()
-        
-        // Logic: Transform normal GitHub URL to RAW if needed
         val rawUrlBase = if (baseUrl.contains("github.com") && !baseUrl.contains("raw.githubusercontent.com")) {
             baseUrl.replace("github.com", "raw.githubusercontent.com")
                 .removeSuffix("/") + "/main/models.json"
@@ -81,9 +80,7 @@ object RemoteModelRegistry {
             if (baseUrl.endsWith("/")) "${baseUrl}models.json" else "$baseUrl/models.json"
         }
         
-        // CACHE BUSTER: Append timestamp to bypass CDN caching
         val rawUrl = "$rawUrlBase?t=${System.currentTimeMillis()}"
-
         Log.d(TAG, "Fetching remote registry from: $rawUrl")
 
         return@withContext try {
@@ -94,10 +91,14 @@ object RemoteModelRegistry {
                 settingsManager.saveModelsJsonCache(jsonText)
                 _registryUpdateSignal.value++
                 true
-            } else false
+            } else {
+                Log.e(TAG, "Fetched JSON was null or invalid")
+                false
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch remote JSON: ${e.message}")
-            false
+            Log.e(TAG, "Network fetch failed: ${e.message}")
+            // Even if network failed, if we have cachedSchema from step 1, we are somewhat okay
+            cachedSchema != null
         }
     }
 
