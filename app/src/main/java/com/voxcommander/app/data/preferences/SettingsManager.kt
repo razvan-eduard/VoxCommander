@@ -7,6 +7,7 @@ import androidx.security.crypto.MasterKey
 import com.voxcommander.app.utils.Strings
 
 class SettingsManager(context: Context) {
+    private val appContext = context.applicationContext
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
@@ -18,6 +19,8 @@ class SettingsManager(context: Context) {
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
+
+    fun getContext(): Context = appContext
 
     fun saveApiKey(apiKey: String) {
         sharedPreferences.edit().putString(KEY_API_KEY, apiKey).apply()
@@ -304,6 +307,10 @@ class SettingsManager(context: Context) {
 
     fun getModelsJsonCache(): String? {
         return sharedPreferences.getString(Strings.Preferences.KEY_MODELS_JSON_CACHE, null)
+    }
+
+    fun clearModelsJsonCache() {
+        sharedPreferences.edit().remove(Strings.Preferences.KEY_MODELS_JSON_CACHE).apply()
     }
 
     /**

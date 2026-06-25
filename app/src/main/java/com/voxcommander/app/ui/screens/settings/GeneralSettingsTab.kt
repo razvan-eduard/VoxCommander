@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.state.AppStateManager
 import kotlinx.coroutines.launch
@@ -85,9 +86,9 @@ fun GeneralSettingsTab(
                 .fillMaxWidth()
                 .onFocusChanged { isRepoFocused = it.isFocused },
             trailingIcon = {
-                IconButton(onClick = { 
-                    scope.launch { 
-                        val success = com.voxcommander.app.data.remote.RemoteModelRegistry.fetchJson(settingsManager, force = true)
+                IconButton(onClick = {
+                    scope.launch {
+                        val success = RemoteModelRegistry.fetchJson(settingsManager, force = true)
                         if (success) {
                             appStateManager.refreshAll()
                         }

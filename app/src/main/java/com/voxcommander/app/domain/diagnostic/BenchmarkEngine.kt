@@ -5,8 +5,8 @@ import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.engine.google.GoogleSttEngine
 import com.voxcommander.app.domain.engine.vosk.VoskSttEngine
 import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
-import com.voxcommander.app.domain.engine.whisper.WhisperModelInfo
-import com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry
+import com.voxcommander.app.data.remote.RemoteModelRegistry
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.domain.engine.whisper.WhisperSttEngine
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.BenchmarkResult
@@ -53,13 +53,13 @@ class BenchmarkEngine(
         diagInfo.append("\n")
 
         // 2. Whisper Diagnostics
-        val downloadedWhisperModels = WhisperModelRegistry.models.filter {
-            settingsManager.isModelDownloaded(it.id) 
+        val downloadedWhisperModels = RemoteModelRegistry.getWhisperModels().filter {
+            settingsManager.isModelDownloaded(it.id)
         }
 
         if (downloadedWhisperModels.isNotEmpty()) {
             diagInfo.append("--- WHISPER MODELS DETECTED ---\n")
-            downloadedWhisperModels.forEach { 
+            downloadedWhisperModels.forEach {
                 diagInfo.append("ID: ${it.id} | Size: ${it.sizeDescription} | Label: ${it.label}\n")
             }
             diagInfo.append("\n")
@@ -127,7 +127,7 @@ class BenchmarkEngine(
         appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
-    private suspend fun runSingleWhisperBenchmark(model: WhisperModelInfo, forceGpu: Boolean, audioData: ByteArray) {
+    private suspend fun runSingleWhisperBenchmark(model: AppModel, forceGpu: Boolean, audioData: ByteArray) {
         val label = if (forceGpu) "Whisper Vulkan" else "Whisper NEON"
         try {
             val engine = WhisperCppSttEngine(context, settingsManager, forceGpu = forceGpu)

@@ -25,6 +25,7 @@ fun IntentEnginesSubTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
     appStateManager: AppStateManager,
+    llamaModels: List<AppModel>,
     onDownloadLlamaModel: (AppModel) -> Unit,
     onDeleteLlamaModel: (AppModel) -> Unit,
     downloadProgress: Float?,
@@ -35,26 +36,13 @@ fun IntentEnginesSubTab(
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
-    // Dynamically build model list from Remote Registry
-    val llmModels = remember {
-        RemoteModelRegistry.getLlmModels().map {
-            LlmModelInfo(
-                id = it.id,
-                label = it.label,
-                url = it.path,
-                sizeDescription = "${it.size_mb} MB",
-                engineTypeTag = it.engine_type ?: "MEDIAPIPE_GENAI"
-            )
-        }
+    val selectedModel = remember(uiState.selectedLlamaModelId, llamaModels) {
+        llamaModels.find { it.id == uiState.selectedLlamaModelId } ?: llamaModels.firstOrNull()
     }
 
-    val selectedModel = remember(uiState.selectedLlamaModelId, llmModels) {
-        llmModels.find { it.id == uiState.selectedLlamaModelId } ?: llmModels.firstOrNull()
-    }
-
-    val nluGroups = remember(llmModels) {
+    val nluGroups = remember(llamaModels) {
         listOf(
-            DropdownGroup("AVAILABLE NLU MODELS", llmModels)
+            DropdownGroup("AVAILABLE NLU MODELS", llamaModels)
         )
     }
 
@@ -181,7 +169,7 @@ fun IntentEnginesSubTab(
             
             if (selectedModel != null) {
                 Text(
-                    text = "Engine: ${selectedModel.engineTypeTag}",
+                    text = "Engine: ${selectedModel.engineType}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.padding(horizontal = 4.dp)
