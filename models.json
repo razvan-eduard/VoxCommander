@@ -23,7 +23,7 @@
       },
       {
         "id": "small",
-        "label": "Whisper Small (High Precisionxxx)",
+        "label": "Whisper Small (High Precision)",
         "path": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
         "size_mb": 480,
         "is_multilingual": true,
