@@ -7,8 +7,6 @@ object Strings {
         const val VOICE_MANAGER = "VoiceManager"
         const val WHISPER_LIB = "WhisperLib"
         const val WHISPER_CMAKE_STT_ENGINE = "WhisperCmakeSttEngine"
-        const val VOSK_MODEL_PARSER = "VoskModelParser"
-        const val VOSK_MODEL_REGISTRY = "VoskModelRegistry"
         const val VULKAN_PROBE = "VulkanProbe"
         const val REMOTE_MODEL_REGISTRY = "RemoteModelRegistry"
         const val WAKE_WORD_ENGINE = "WakeWordEngine"

@@ -10,8 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
-import com.voxcommander.app.domain.engine.vosk.VoskLanguageGroup
-import com.voxcommander.app.domain.engine.vosk.VoskModelInfo
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.components.DropdownGroup
 import com.voxcommander.app.ui.components.GroupedDropdownContent
@@ -24,31 +23,42 @@ fun ServiceSettingsTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
     appStateManager: AppStateManager,
-    voskGroups: List<VoskLanguageGroup>,
+    voskModels: List<AppModel>,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     downloadedColor: Color,
-    onDownloadRequest: (VoskModelInfo) -> Unit,
-    onDeleteRequest: (VoskModelInfo) -> Unit,
+    onDownloadRequest: (AppModel) -> Unit,
+    onDeleteRequest: (AppModel) -> Unit,
     onCancelDownload: () -> Unit,
     downloadProgress: Float?,
     downloadingItem: Any? = null,
-    refreshTrigger: Int = 0
+    refreshTrigger: Int = 0,
+    isVoskMultilingual: Boolean = false,
+    availableVoskLanguages: List<String> = emptyList()
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     var showModelSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Filter Vosk models by selected language if not multilingual
+    val filteredVoskModels = remember(voskModels, uiState.voiceLanguage, isVoskMultilingual) {
+        if (isVoskMultilingual) {
+            voskModels
+        } else {
+            voskModels.filter { (it as? com.voxcommander.app.data.remote.RemoteModelItem)?.lang_code == uiState.voiceLanguage }
+        }
+    }
+
     // Get selected wake word model from uiState, default to first downloaded if none selected
-    val selectedWakeWordModel = remember(voskGroups, uiState.wakeWordModelPath, refreshTrigger) {
+    val selectedWakeWordModel = remember(filteredVoskModels, uiState.wakeWordModelPath, refreshTrigger) {
         val path = uiState.wakeWordModelPath
         if (path != null) {
-            voskGroups.flatMap { it.models }.find { it.name == path }
+            filteredVoskModels.find { it.id == path }
         } else {
             // Auto-select first downloaded model
-            voskGroups.flatMap { it.models }.firstOrNull { model ->
-                settingsManager.isModelDownloaded(model.name)
+            filteredVoskModels.firstOrNull { model ->
+                settingsManager.isModelDownloaded(model.id)
             }
         }
     }
@@ -74,9 +84,51 @@ fun ServiceSettingsTab(
     }
 
     if (uiState.wakeWordEnabled) {
+        // Voice Language Selection (only for non-multilingual Vosk)
+        if (!isVoskMultilingual) {
+            val languages = availableVoskLanguages.map { lang ->
+                lang to lang.uppercase()
+            }
+
+            var showLanguageSheet by remember { mutableStateOf(false) }
+            val languageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+            val languageGroups = listOf(DropdownGroup("AVAILABLE LANGUAGES", languages))
+            val selectedLangPair = languages.find { it.first == uiState.voiceLanguage }
+
+            Text(text = languageManager.getString("voice_language"), style = MaterialTheme.typography.labelLarge)
+
+            GroupedDropdownMenu(
+                selectedItem = selectedLangPair,
+                groups = languageGroups,
+                itemLabel = { it.second },
+                isDownloaded = { true },
+                onDeviceLabel = "",
+                onItemSelected = { pair, _ -> appStateManager.setVoiceLanguage(pair.first) },
+                onExpandedChange = { showLanguageSheet = it },
+                languageManager = languageManager
+            )
+
+            if (showLanguageSheet) {
+                ModalBottomSheet(onDismissRequest = { showLanguageSheet = false }, sheetState = languageSheetState) {
+                    GroupedDropdownContent(
+                        title = languageManager.getString("voice_language"),
+                        groups = languageGroups,
+                        itemLabel = { it.second },
+                        isDownloaded = { true },
+                        onDeviceLabel = "",
+                        onItemSelected = { pair, _ -> appStateManager.setVoiceLanguage(pair.first); showLanguageSheet = false },
+                        languageManager = languageManager
+                    )
+                }
+            }
+
+            HorizontalDivider()
+        }
+
         // Wake Word Text Field
         val isWakeWordModelOnDevice = remember(selectedWakeWordModel, refreshTrigger) {
-            selectedWakeWordModel != null && settingsManager.isModelDownloaded(selectedWakeWordModel.name)
+            selectedWakeWordModel != null && settingsManager.isModelDownloaded(selectedWakeWordModel.id)
         }
 
         VoiceInputTextField(
@@ -93,30 +145,27 @@ fun ServiceSettingsTab(
         // Wake Word Model Selection
         Text(text = languageManager.getString("wake_word_model"), style = MaterialTheme.typography.labelLarge)
 
-        val groupedModels = remember(voskGroups, uiState) {
-            voskGroups.map { group ->
-                DropdownGroup(
-                    header = group.language.uppercase(),
-                    items = group.models
-                )
-            }
+        val groupedModels = remember(filteredVoskModels, uiState) {
+            if (filteredVoskModels.isNotEmpty()) {
+                listOf(DropdownGroup("AVAILABLE MODELS", filteredVoskModels))
+            } else emptyList()
         }
 
         GroupedDropdownMenu(
             selectedItem = selectedWakeWordModel,
             groups = groupedModels,
-            itemLabel = { if (it.size != null) "${it.name} (${it.size})" else it.name },
-            isDownloaded = { model -> remember(model.name, uiState, refreshTrigger) { settingsManager.isModelDownloaded(model.name) } },
+            itemLabel = { it.label + " (" + it.sizeDescription + ")" },
+            isDownloaded = { model -> remember(model.id, uiState, refreshTrigger) { settingsManager.isModelDownloaded(model.id) } },
             onDeviceLabel = languageManager.getString("on_device_label"),
             onItemSelected = { model, isDownloaded ->
-                appStateManager.setWakeWordModelPath(model.name)
+                appStateManager.setWakeWordModelPath(model.id)
             },
             onExpandedChange = { showModelSheet = it },
             onDownloadRequest = onDownloadRequest,
             onDeleteRequest = onDeleteRequest,
             onCancelDownload = onCancelDownload,
             downloadProgress = downloadProgress,
-            downloadingItem = downloadingItem,
+            downloadingItem = downloadingItem as? AppModel,
             languageManager = languageManager
         )
 
@@ -130,18 +179,18 @@ fun ServiceSettingsTab(
                 GroupedDropdownContent(
                     title = languageManager.getString("wake_word_model"),
                     groups = groupedModels,
-                    itemLabel = { if (it.size != null) "${it.name} (${it.size})" else it.name },
-                    isDownloaded = { model -> remember(model.name, uiState, refreshTrigger) { settingsManager.isModelDownloaded(model.name) } },
+                    itemLabel = { it.label + " (" + it.sizeDescription + ")" },
+                    isDownloaded = { model -> remember(model.id, uiState, refreshTrigger) { settingsManager.isModelDownloaded(model.id) } },
                     onDeviceLabel = languageManager.getString("on_device_label"),
                     onItemSelected = { model, isDownloaded ->
-                        appStateManager.setWakeWordModelPath(model.name)
+                        appStateManager.setWakeWordModelPath(model.id)
                         showModelSheet = false
                     },
                     onDownloadRequest = onDownloadRequest,
                     onDeleteRequest = onDeleteRequest,
                     onCancelDownload = onCancelDownload,
                     downloadProgress = downloadProgress,
-                    downloadingItem = downloadingItem,
+                    downloadingItem = downloadingItem as? AppModel,
                     languageManager = languageManager
                 )
             }
@@ -157,7 +206,7 @@ fun ServiceSettingsTab(
 
         // Check if selected model is on device
         val isModelOnDevice = remember(selectedWakeWordModel, uiState, refreshTrigger) {
-            selectedWakeWordModel != null && settingsManager.isModelDownloaded(selectedWakeWordModel.name)
+            selectedWakeWordModel != null && settingsManager.isModelDownloaded(selectedWakeWordModel.id)
         }
 
         // Start/Stop Service Button

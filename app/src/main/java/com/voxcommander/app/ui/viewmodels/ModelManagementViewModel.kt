@@ -13,9 +13,6 @@ import androidx.lifecycle.viewModelScope
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.data.remote.RemoteModelRegistry
-import com.voxcommander.app.domain.engine.vosk.VoskLanguageGroup
-import com.voxcommander.app.domain.engine.vosk.VoskModelRegistry
-import com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
@@ -29,13 +26,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
  * ViewModel for managing model downloads and cleanup.
- * Handles download progress, completion, and model management logic.
+ * Orchestrates UI state for all model types (Vosk, Whisper, Llama) directly from RemoteModelRegistry.
  */
 class ModelManagementViewModel(
     private val settingsManager: SettingsManager,
@@ -45,16 +43,22 @@ class ModelManagementViewModel(
     private val context: Context
 ) : ViewModel() {
 
-    // --- STATE FLOWS ---
+    // --- REACTIVE MODEL LISTS (Zero manual mapping) ---
+    private val _voskModels = MutableStateFlow<List<AppModel>>(emptyList())
+    val voskModels: StateFlow<List<AppModel>> = _voskModels.asStateFlow()
+
+    private val _whisperModels = MutableStateFlow<List<AppModel>>(emptyList())
+    val whisperModels: StateFlow<List<AppModel>> = _whisperModels.asStateFlow()
+
+    private val _llamaModels = MutableStateFlow<List<AppModel>>(emptyList())
+    val llamaModels: StateFlow<List<AppModel>> = _llamaModels.asStateFlow()
+
+    // --- OTHER UI STATES ---
     private val _downloadProgress = MutableStateFlow<Float?>(null)
     val downloadProgress: StateFlow<Float?> = _downloadProgress.asStateFlow()
 
     private val _selectionSuccessMessage = MutableStateFlow<String?>(null)
     val selectionSuccessMessage: StateFlow<String?> = _selectionSuccessMessage.asStateFlow()
-
-    // --- VOSK MODEL STATE ---
-    private val _voskGroups = MutableStateFlow<List<VoskLanguageGroup>>(emptyList())
-    val voskGroups: StateFlow<List<VoskLanguageGroup>> = _voskGroups.asStateFlow()
 
     private val _isVoskLoading = MutableStateFlow(false)
     val isVoskLoading: StateFlow<Boolean> = _isVoskLoading.asStateFlow()
@@ -65,231 +69,135 @@ class ModelManagementViewModel(
     private val _voskError = MutableStateFlow<String?>(null)
     val voskError: StateFlow<String?> = _voskError.asStateFlow()
 
-    // --- VULKAN TEST MODAL STATE ---
     private val _showVulkanError = MutableStateFlow(false)
     val showVulkanError: StateFlow<Boolean> = _showVulkanError.asStateFlow()
 
-    fun dismissVulkanError() {
-        _showVulkanError.value = false
-    }
+    fun dismissVulkanError() { _showVulkanError.value = false }
 
-    // Expose Vulkan test state from AppStateManager
     val vulkanTestState = appStateManager.vulkanTestState
     val vulkanTestPassed = appStateManager.vulkanTestPassed
 
-    fun dismissVulkanTestResult() {
-        appStateManager.dismissVulkanTestResult()
-    }
+    fun dismissVulkanTestResult() { appStateManager.dismissVulkanTestResult() }
 
     // --- DOWNLOAD TRACKING ---
     private var progressJob: Job? = null
     private var currentDownloadId: Long? = null
-    private var lastDownloadedVoskModelName: String? = null
-    private var lastDownloadedWhisperModelId: String? = null
-    private var lastDownloadedLlamaModelId: String? = null
-    private var lastDownloadType: String? = null // "vosk", "whisper", or "llama"
+    private var lastDownloadType: String? = null
+    private var lastDownloadedId: String? = null
 
-    // Unified download item state
     private val _downloadingItem = MutableStateFlow<AppModel?>(null)
     val downloadingItem: StateFlow<AppModel?> = _downloadingItem.asStateFlow()
 
-    // Flag to prevent duplicate handling of the same download
     private var handledDownloadIds = mutableSetOf<Long>()
 
-    // --- BROADCAST RECEIVER FOR DOWNLOAD COMPLETION ---
     private val onDownloadComplete = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) ?: -1
-            if (id != -1L) {
-                // Prevent duplicate handling
-                if (handledDownloadIds.contains(id)) {
-                    return
-                }
+            if (id != -1L && !handledDownloadIds.contains(id)) {
                 handledDownloadIds.add(id)
-
                 _downloadProgress.value = null
                 progressJob?.cancel()
 
-                val downloadManager = context?.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
-                if (downloadManager == null) {
-                    handleDownloadFailure()
-                    return
-                }
-
+                val downloadManager = context?.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return
                 val query = DownloadManager.Query().setFilterById(id)
                 val cursor = downloadManager.query(query)
 
                 var success = false
                 if (cursor != null && cursor.moveToFirst()) {
                     val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                    if (statusIndex != -1) {
-                        val status = cursor.getInt(statusIndex)
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            success = true
-                        }
+                    if (statusIndex != -1 && cursor.getInt(statusIndex) == DownloadManager.STATUS_SUCCESSFUL) {
+                        success = true
                     }
                 }
                 cursor?.close()
 
-                if (!success) {
-                    handleDownloadFailure()
-                    return
-                }
-
-                handleDownloadSuccess()
+                if (success) handleDownloadSuccess() else handleDownloadFailure()
             }
         }
     }
 
     init {
-        // Register broadcast receiver
-        ContextCompat.registerReceiver(
-            context,
-            onDownloadComplete,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            ContextCompat.RECEIVER_EXPORTED
-        )
-        // Initial load
-        viewModelScope.launch { loadVoskModels(force = true) }
+        ContextCompat.registerReceiver(context, onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_EXPORTED)
+        
+        // AUTO-SYNC: Rebuild all UI lists whenever the Registry Wrapper is updated
+        viewModelScope.launch {
+            RemoteModelRegistry.registryUpdateSignal.collectLatest { 
+                rebuildUiLists()
+            }
+        }
+
+        // Initial fetch
+        viewModelScope.launch { loadModels(force = false) }
     }
 
-    /**
-     * Reactively loads Vosk models from the registry.
-     */
-    suspend fun loadVoskModels(force: Boolean = false) {
+    private fun rebuildUiLists() {
+        _whisperModels.value = RemoteModelRegistry.getWhisperModels()
+        _voskModels.value = RemoteModelRegistry.getVoskModels()
+        _llamaModels.value = RemoteModelRegistry.getLlmModels()
+
+        _isVoskOffline.value = _voskModels.value.isEmpty()
+    }
+
+    suspend fun loadModels(force: Boolean = false) {
         _isVoskLoading.value = true
-        val result = VoskModelRegistry.getModels(force)
-        _voskGroups.value = result.groups
-        _isVoskOffline.value = !result.isOnline
-        _voskError.value = result.errorMessage
+        RemoteModelRegistry.fetchJson(settingsManager, force)
         _isVoskLoading.value = false
     }
 
+    suspend fun loadVoskModels(force: Boolean = false) = loadModels(force)
+
     // --- DOWNLOAD METHODS ---
 
-    /**
-     * Downloads a Vosk model.
-     */
     fun downloadVoskModel(lang: String, url: String, name: String) {
-        lastDownloadedVoskModelName = name
-        lastDownloadType = "vosk"
-        
-        // Find the model object for UI tracking
-        _downloadingItem.value = _voskGroups.value.flatMap { it.models }.find { it.name == name }
-        
+        lastDownloadedId = name; lastDownloadType = "vosk"
+        val item = RemoteModelRegistry.getVoskModels().find { it.id == name } ?: return
+        _downloadingItem.value = item
         appStateManager.setSelectedVoskModelName(name)
-        
-        val resolvedUrl = if (!url.startsWith("http")) {
-            val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getVoskModels().find { it.id == name }
-            if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
-        } else url
-        
-        val id = modelDownloader.downloadVoskModel(lang, resolvedUrl, name)
-        currentDownloadId = id
-        startProgressTracking(id)
+        val id = modelDownloader.downloadVoskModel(lang, RemoteModelRegistry.resolveUrl(item, settingsManager), name)
+        currentDownloadId = id; startProgressTracking(id)
     }
 
-    /**
-     * Downloads a Whisper model.
-     */
     fun downloadWhisperModel(modelId: String, url: String) {
-        lastDownloadedWhisperModelId = modelId
-        lastDownloadType = "whisper"
-        
-        // Find the model object for UI tracking
-        _downloadingItem.value = com.voxcommander.app.domain.engine.whisper.WhisperModelRegistry.getModelById(modelId)
-        
+        lastDownloadedId = modelId; lastDownloadType = "whisper"
+        val item = RemoteModelRegistry.getWhisperModels().find { it.id == modelId } ?: return
+        _downloadingItem.value = item
         appStateManager.setSelectedWhisperModelId(modelId)
-        
-        val resolvedUrl = if (!url.startsWith("http")) {
-            val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getWhisperModels().find { it.id == modelId }
-            if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
-        } else url
-        
-        val id = modelDownloader.downloadWhisperModel(modelId, resolvedUrl)
-        currentDownloadId = id
-        startProgressTracking(id)
+        val id = modelDownloader.downloadWhisperModel(modelId, RemoteModelRegistry.resolveUrl(item, settingsManager))
+        currentDownloadId = id; startProgressTracking(id)
     }
 
-    /**
-     * Downloads a Llama model.
-     */
     fun downloadLlamaModel(modelId: String, url: String) {
-        lastDownloadedLlamaModelId = modelId
-        lastDownloadType = "llama"
-        
-        // Find model for tracking
-        _downloadingItem.value = com.voxcommander.app.data.remote.RemoteModelRegistry.getLlmModels().find { it.id == modelId }?.let {
-            LlmModelInfo(
-                id = it.id,
-                label = it.label,
-                url = it.path,
-                sizeDescription = "${it.size_mb} MB",
-                engineTypeTag = it.engine_type ?: "MEDIAPIPE_GENAI"
-            )
-        }
-        
+        lastDownloadedId = modelId; lastDownloadType = "llama"
+        val item = RemoteModelRegistry.getLlmModels().find { it.id == modelId } ?: return
+        _downloadingItem.value = item
         appStateManager.setSelectedLlamaModelId(modelId)
-        
-        val resolvedUrl = if (!url.startsWith("http")) {
-            val item = com.voxcommander.app.data.remote.RemoteModelRegistry.getLlmModels().find { it.id == modelId }
-            if (item != null) com.voxcommander.app.data.remote.RemoteModelRegistry.resolveUrl(item, settingsManager) else url
-        } else url
-        
-        val id = modelDownloader.downloadNluModel(modelId, resolvedUrl)
-        currentDownloadId = id
-        startProgressTracking(id)
+        val id = modelDownloader.downloadNluModel(modelId, RemoteModelRegistry.resolveUrl(item, settingsManager))
+        currentDownloadId = id; startProgressTracking(id)
     }
 
-    /**
-     * Cancels the current download.
-     * Agnostic implementation using AppModel interface properties.
-     */
     fun cancelDownload() {
-        currentDownloadId?.let { downloadId ->
-            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
-            downloadManager?.remove(downloadId)
-            progressJob?.cancel()
-            _downloadProgress.value = null
-            
-            // AGNOSTIC CLEANUP using the current downloading item
-            val item = _downloadingItem.value
-            if (item != null) {
+        currentDownloadId?.let { id ->
+            (context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager)?.remove(id)
+            progressJob?.cancel(); _downloadProgress.value = null
+            _downloadingItem.value?.let { item ->
                 val root = context.getExternalFilesDir(null)
-                val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                
                 when (item.engineType) {
                     "Whisper" -> root?.let { File(it, "whisper-model-${item.id}.bin").delete() }
-                    "Llama", "NLU_LLM" -> root?.let { File(it, "nlu-model-${item.id}.bin").delete() }
-                    "Vosk" -> downloadsDir?.let { File(it, "vosk-model-${item.id}.zip").delete() }
+                    "Llama" -> root?.let { File(it, "nlu-model-${item.id}.bin").delete() }
+                    "Vosk" -> context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { File(it, "vosk-model-${item.id}.zip").delete() }
                 }
             }
-
-            _downloadingItem.value = null
-            currentDownloadId = null
-            lastDownloadType = null
-            
-            // Force UI refresh to reset buttons immediately
-            appStateManager.refreshAll()
+            _downloadingItem.value = null; appStateManager.refreshAll()
             showSuccessMessage(languageManager.getString("error_download_failed"))
         }
     }
 
-    // --- CUSTOM MODEL SELECTION ---
-
-    /**
-     * Selects a custom Vosk model from a URI.
-     */
     fun selectCustomVoskModel(uri: Uri, lang: String) {
-        val path = uri.path ?: uri.toString()
-        settingsManager.saveCustomVoskModelPath(lang, path)
+        settingsManager.saveCustomVoskModelPath(lang, uri.path ?: uri.toString())
         settingsManager.setVoiceModelReady(true)
         showSuccessMessage(languageManager.getString("success_custom_vosk"))
     }
 
-    /**
-     * Selects a custom Whisper model from a URI.
-     */
     fun selectCustomWhisperModel(uri: Uri) {
         FileHelper.copyUriToInternal(context, uri, "custom-whisper-model.bin")?.let { path ->
             settingsManager.saveCustomWhisperModelPath(path)
@@ -298,219 +206,80 @@ class ModelManagementViewModel(
         }
     }
 
-    // --- MODEL MANAGEMENT ---
+    fun clearDefaultOfflineFallback() { settingsManager.clearDefaultOfflineFallback(); appStateManager.refreshAll() }
 
-    /**
-     * Clears all default offline fallbacks for both Voice and Intent.
-     */
-    fun clearDefaultOfflineFallback() {
-        settingsManager.clearDefaultOfflineFallback()
-        appStateManager.refreshAll()
-    }
-
-    /**
-     * Deletes unused models, keeping ONLY the currently selected models (plus the
-     * wake-word model, which powers a separate feature).
-     *
-     * Old default fallbacks are NOT protected: they are deleted along with everything
-     * else, and the selected model becomes the new default fallback (being the last
-     * one remaining), as long as it is actually present on disk.
-     */
     fun deleteUnusedModels() {
-        val voiceProcessor = settingsManager.getVoiceProcessor()
-        val selectedVosk = settingsManager.getSelectedVoskModelName()
-        val selectedWhisper = settingsManager.getSelectedWhisperModelId()
-        val selectedLlama = settingsManager.getSelectedLlamaModelId()
+        val voiceProc = settingsManager.getVoiceProcessor()
+        val selVosk = settingsManager.getSelectedVoskModelName()
+        val selWhisp = settingsManager.getSelectedWhisperModelId()
+        val selLlama = settingsManager.getSelectedLlamaModelId()
 
-        // 1. Protect ONLY the selected models (+ wake-word model).
-        val protectedVosk = mutableSetOf<String>()
-        selectedVosk?.let { protectedVosk.add(it) }
-        settingsManager.getWakeWordModelPath()?.let { protectedVosk.add(it) }
+        val protVosk = mutableSetOf<String>().apply { selVosk?.let { add(it) }; settingsManager.getWakeWordModelPath()?.let { add(it) } }
+        val protWhisp = setOf(selWhisp)
+        val protLlama = setOf(selLlama)
 
-        val protectedWhisper = mutableSetOf<String>()
-        protectedWhisper.add(selectedWhisper)
-
-        val protectedLlama = mutableSetOf<String>()
-        protectedLlama.add(selectedLlama)
-
-        Logger.log(
-            languageManager.getString("vm_cleanup_log").format(
-                voiceProcessor, 
-                settingsManager.getAiProcessor(),
-                selectedVosk ?: "none",
-                selectedWhisper,
-                selectedLlama,
-                protectedVosk.toString(),
-                protectedWhisper.toString(),
-                protectedLlama.toString()
-            ),
-            languageManager.getString("model_cleanup_tag")
-        )
-
-        modelDownloader.deleteUnusedModels(protectedVosk, protectedWhisper, protectedLlama)
-
-        // 2. The selected model is now the last one remaining -> make it the default fallback.
-        reassignDefaultFallbacks(voiceProcessor, selectedVosk, selectedWhisper, selectedLlama)
-
-        // 3. Refresh flags in settings (after fallback reassignment, so the new default is protected).
-        settingsManager.clearUnusedModelFlags(
-            selectedVosk ?: "",
-            selectedWhisper
-        )
-
+        modelDownloader.deleteUnusedModels(protVosk, protWhisp, protLlama)
+        reassignDefaultFallbacks(voiceProc, selVosk, selWhisp, selLlama)
+        settingsManager.clearUnusedModelFlags(selVosk ?: "", selWhisp)
         appStateManager.refreshAll()
     }
 
-    /**
-     * After a cleanup, points the default voice/intent fallback at the currently selected
-     * model (the last one remaining). If the selected model is not present on disk, the
-     * stale fallback is cleared instead of leaving a dangling reference.
-     */
-    private fun reassignDefaultFallbacks(
-        voiceProcessor: String,
-        selectedVosk: String?,
-        selectedWhisper: String,
-        selectedLlama: String
-    ) {
-        // Voice fallback follows the active voice processor.
-        when {
-            voiceProcessor == Strings.Processors.VOSK -> {
-                if (selectedVosk != null && isModelPresent("vosk", selectedVosk)) {
-                    settingsManager.saveDefaultVoiceFallback(voiceProcessor, selectedVosk)
-                } else {
-                    settingsManager.clearDefaultVoiceFallback()
-                }
-            }
-            voiceProcessor.startsWith("WHISPER") -> {
-                if (isModelPresent("whisper", selectedWhisper)) {
-                    settingsManager.saveDefaultVoiceFallback(voiceProcessor, selectedWhisper)
-                } else {
-                    settingsManager.clearDefaultVoiceFallback()
-                }
-            }
-        }
-
-        // Intent (NLU) fallback.
-        if (isModelPresent("llama", selectedLlama)) {
-            settingsManager.saveDefaultIntentFallback(Strings.AiProcessors.NLU_LOCAL, selectedLlama)
-        } else {
-            settingsManager.clearDefaultIntentFallback()
-        }
+    private fun reassignDefaultFallbacks(proc: String, vosk: String?, whisp: String, llama: String) {
+        if (proc == Strings.Processors.VOSK && vosk != null && isModelPresent("vosk", vosk)) settingsManager.saveDefaultVoiceFallback(proc, vosk)
+        else if (proc.startsWith("WHISPER") && isModelPresent("whisper", whisp)) settingsManager.saveDefaultVoiceFallback(proc, whisp)
+        if (isModelPresent("llama", llama)) settingsManager.saveDefaultIntentFallback(Strings.AiProcessors.NLU_LOCAL, llama)
     }
 
-    /**
-     * Checks whether a model's file/directory currently exists on disk.
-     */
     private fun isModelPresent(type: String, id: String): Boolean {
         val root = context.getExternalFilesDir(null) ?: return false
-        val target = when (type) {
-            "whisper" -> File(root, "whisper-model-$id.bin")
-            "llama" -> File(root, "nlu-model-$id.bin")
-            "vosk" -> File(root, "vosk-model-$id")
-            else -> return false
+        return when (type) {
+            "whisper" -> File(root, "whisper-model-$id.bin").exists()
+            "llama" -> File(root, "nlu-model-$id.bin").exists()
+            "vosk" -> File(root, "vosk-model-$id").exists()
+            else -> false
         }
-        return target.exists()
     }
 
-    /**
-     * Deletes a specific Llama model.
-     */
-    fun deleteLlamaModel(modelId: String) {
-        settingsManager.setModelDownloaded(modelId, false)
-        FileHelper.deleteModelFile(context, modelId, "llama")
+    fun deleteLlamaModel(id: String) {
+        settingsManager.setModelDownloaded(id, false)
+        FileHelper.deleteModelFile(context, id, "llama")
         appStateManager.refreshAll()
     }
 
-    // --- PRIVATE HELPER METHODS ---
-
-    private fun startProgressTracking(downloadId: Long) {
+    private fun startProgressTracking(id: Long) {
         progressJob?.cancel()
-        currentDownloadId = downloadId
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
-        if (downloadManager == null) {
-            _downloadProgress.value = null
-            _downloadingItem.value = null
-            return
-        }
-
         progressJob = viewModelScope.launch(Dispatchers.IO) {
-            var downloading = true
-            while (downloading) {
-                val query = DownloadManager.Query().setFilterById(downloadId)
-                val cursor = downloadManager.query(query)
-                if (cursor != null && cursor.moveToFirst()) {
-                    val bytesDownloadedIndex = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                    val bytesTotalIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-
-                    if (bytesDownloadedIndex != -1 && bytesTotalIndex != -1) {
-                        val bytesDownloaded = cursor.getLong(bytesDownloadedIndex)
-                        val bytesTotal = cursor.getLong(bytesTotalIndex)
-
-                        if (bytesTotal > 0) {
-                            _downloadProgress.value = bytesDownloaded.toFloat() / bytesTotal.toFloat()
-                        }
-                    }
-
-                    if (statusIndex != -1) {
-                        val status = cursor.getInt(statusIndex)
-                        if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
-                            downloading = false
-                            if (status == DownloadManager.STATUS_FAILED) {
-                                withContext(Dispatchers.Main) {
-                                    _downloadProgress.value = null
-                                    _downloadingItem.value = null
-                                    currentDownloadId = null
-                                    handleDownloadFailure()
-                                }
-                            }
-                        }
+            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return@launch
+            while (true) {
+                dm.query(DownloadManager.Query().setFilterById(id))?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                        val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                        if (total > 0) _downloadProgress.value = downloaded.toFloat() / total.toFloat()
+                        val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                        if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) return@launch
                     }
                 }
-                cursor?.close()
                 delay(500)
             }
         }
     }
 
     private fun handleDownloadSuccess() {
-        currentDownloadId = null
-        _downloadProgress.value = null
-        _downloadingItem.value = null
-        progressJob?.cancel()
-
+        _downloadProgress.value = null; _downloadingItem.value = null; progressJob?.cancel()
         when (lastDownloadType) {
             "whisper" -> {
-                val modelId = lastDownloadedWhisperModelId ?: settingsManager.getSelectedWhisperModelId()
-                modelDownloader.verifyWhisperModel(modelId) { verified ->
-                    if (verified) {
-                        appStateManager.onWhisperDownloadComplete(modelId)
-                        showSuccessMessage(languageManager.getString("whisper_ready_msg").format(modelId))
-                    } else {
-                        showSuccessMessage(languageManager.getString("error_verification_failed").format(modelId))
-                    }
-                }
+                val id = lastDownloadedId ?: settingsManager.getSelectedWhisperModelId()
+                modelDownloader.verifyWhisperModel(id) { if (it) appStateManager.onWhisperDownloadComplete(id) }
             }
             "vosk" -> {
-                val modelName = lastDownloadedVoskModelName ?: ""
-                modelDownloader.unzipVoskModel(modelName) { unzipped ->
-                    if (unzipped) {
-                        appStateManager.onVoskDownloadComplete(modelName)
-                        showSuccessMessage(languageManager.getString("vosk_ready_msg").format(modelName))
-                    } else {
-                        showSuccessMessage(languageManager.getString("error_extraction_failed").format(modelName))
-                    }
-                }
+                val name = lastDownloadedId ?: ""
+                modelDownloader.unzipVoskModel(name) { if (it) appStateManager.onVoskDownloadComplete(name) }
             }
             "llama" -> {
-                val modelId = lastDownloadedLlamaModelId ?: settingsManager.getSelectedLlamaModelId()
-                val file = File(context.getExternalFilesDir(null), "nlu-model-$modelId.bin")
-                if (file.exists()) {
-                    settingsManager.setModelDownloaded(modelId, true)
-                    appStateManager.refreshAll()
-                    showSuccessMessage(languageManager.getString("nlu_ready_msg").format(modelId))
-                } else {
-                    showSuccessMessage(languageManager.getString("error_nlu_missing"))
+                val id = lastDownloadedId ?: settingsManager.getSelectedLlamaModelId()
+                if (File(context.getExternalFilesDir(null), "nlu-model-$id.bin").exists()) {
+                    settingsManager.setModelDownloaded(id, true); appStateManager.refreshAll()
                 }
             }
         }
@@ -522,12 +291,9 @@ class ModelManagementViewModel(
         lastDownloadType = null
     }
 
-    private fun showSuccessMessage(message: String) {
-        _selectionSuccessMessage.value = message
-        viewModelScope.launch {
-            delay(5000)
-            _selectionSuccessMessage.value = null
-        }
+    private fun showSuccessMessage(msg: String) {
+        _selectionSuccessMessage.value = msg
+        viewModelScope.launch { delay(5000); _selectionSuccessMessage.value = null }
     }
 
     override fun onCleared() {

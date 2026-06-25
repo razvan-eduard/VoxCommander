@@ -1,6 +1,7 @@
 package com.voxcommander.app
 
 import android.app.Application
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.di.AppContainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +21,7 @@ class VoxApplication : Application() {
         
         // Initial fetch of the remote model registry - Force update on start to bypass CDN caching
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            com.voxcommander.app.data.remote.RemoteModelRegistry.fetchJson(container.settingsManager, force = true)
+            RemoteModelRegistry.fetchJson(container.settingsManager, force = true)
         }
     }
 }

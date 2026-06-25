@@ -8,9 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
-import com.voxcommander.app.domain.engine.vosk.VoskLanguageGroup
-import com.voxcommander.app.domain.engine.vosk.VoskModelInfo
-import com.voxcommander.app.domain.engine.whisper.WhisperModelInfo
+import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
@@ -30,16 +28,17 @@ fun ModelsSettingsTab(
     hasApiKey: Boolean,
     googleSttAvailable: Boolean,
     onVoiceLanguageSelected: (String) -> Unit,
-    whisperModels: List<WhisperModelInfo>,
-    onWhisperModelSelected: (WhisperModelInfo, Boolean) -> Unit,
+    whisperModels: List<AppModel>,
+    llamaModels: List<AppModel>,
+    onWhisperModelSelected: (AppModel, Boolean) -> Unit,
     onSelectCustomWhisperModel: () -> Unit,
-    voskGroups: List<VoskLanguageGroup>,
-    selectedVoskModel: VoskModelInfo?,
+    voskModels: List<AppModel>,
+    selectedVoskModel: AppModel?,
     isVoskLoading: Boolean,
     isOffline: Boolean,
     voskError: String?,
     onRetryConnection: suspend () -> Unit,
-    onVoskModelSelected: (VoskModelInfo, Boolean, String) -> Unit,
+    onVoskModelSelected: (AppModel, Boolean, String) -> Unit,
     onSelectCustomVoskModel: () -> Unit,
     downloadProgress: Float?,
     downloadingItem: Any? = null,
@@ -51,7 +50,10 @@ fun ModelsSettingsTab(
     onDeleteLlamaModel: (AppModel) -> Unit,
     onDeleteRequest: (AppModel) -> Unit,
     onFallbackChanged: () -> Unit = {},
-    refreshTrigger: Int = 0
+    refreshTrigger: Int = 0,
+    isWhisperMultilingual: Boolean = true,
+    isVoskMultilingual: Boolean = false,
+    availableVoskLanguages: List<String> = emptyList()
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) }
     
@@ -94,7 +96,7 @@ fun ModelsSettingsTab(
                 whisperModels = whisperModels,
                 onWhisperModelSelected = onWhisperModelSelected,
                 onSelectCustomWhisperModel = onSelectCustomWhisperModel,
-                voskGroups = voskGroups,
+                voskModels = voskModels,
                 selectedVoskModel = selectedVoskModel,
                 isVoskLoading = isVoskLoading,
                 isOffline = isOffline,
@@ -110,13 +112,17 @@ fun ModelsSettingsTab(
                 onCancelDownload = onCancelDownload,
                 onDeleteRequest = onDeleteRequest,
                 onFallbackChanged = onFallbackChanged,
-                refreshTrigger = refreshTrigger
+                refreshTrigger = refreshTrigger,
+                isWhisperMultilingual = isWhisperMultilingual,
+                isVoskMultilingual = isVoskMultilingual,
+                availableVoskLanguages = availableVoskLanguages
             )
         } else {
             IntentEnginesSubTab(
                 languageManager = languageManager, 
                 settingsManager = settingsManager, 
                 appStateManager = appStateManager,
+                llamaModels = llamaModels,
                 onDownloadLlamaModel = onDownloadLlamaModel,
                 onDeleteLlamaModel = onDeleteLlamaModel,
                 downloadProgress = downloadProgress,
