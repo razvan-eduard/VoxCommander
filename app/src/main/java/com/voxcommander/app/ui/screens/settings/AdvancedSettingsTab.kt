@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.domain.localization.LanguageManager
@@ -73,7 +74,7 @@ fun AdvancedSettingsTab(
     }
 
     // Keep subscription active
-    val _uiState by appStateManager.uiState.collectAsStateWithLifecycle()
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
     // Initialize Logger
     LaunchedEffect(Unit) {
@@ -150,6 +151,33 @@ fun AdvancedSettingsTab(
             },
             enabled = loggingFlags.logcatEnabled
         )
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // --- EXPERIMENTAL FEATURES ---
+    Text(text = "Experimental Features", style = MaterialTheme.typography.titleMedium)
+    Spacer(modifier = Modifier.height(12.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Whisper Vulkan (Experimental)", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    Text("Enable GPU acceleration via Vulkan. May cause crashes on some devices.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(
+                    checked = uiState.isExperimentalVulkanEnabled,
+                    onCheckedChange = { appStateManager.setExperimentalVulkanEnabled(it) }
+                )
+            }
+        }
     }
 
     Spacer(modifier = Modifier.height(24.dp))

@@ -2,25 +2,25 @@ package com.voxcommander.app.state
 
 import android.content.Context
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.utils.Strings
 
 /**
  * Centralized application state data class.
  * Contains all UI-relevant state in a single immutable object.
- * Derived properties are calculated based on base state values.
+ * This is the reactive Single Source of Truth (SSOT).
  */
 data class AppState(
     // --- VOICE SETTINGS ---
     val voiceProcessor: String,
     val voiceLanguage: String,
-    val selectedWhisperModelId: String,
-    val selectedVoskModelName: String?,
+    val activeVoiceModelId: String?,
     val customWhisperModelPath: String?,
     val customVoskModelPaths: Map<String, String>,
-    
+
     // --- INTENT SETTINGS ---
     val aiProcessor: String,
-    val selectedLlamaModelId: String,
+    val activeIntentModelId: String?,
     val cloudIntelligenceEnabled: Boolean,
     
     // --- WAKE WORD SETTINGS ---
@@ -29,6 +29,7 @@ data class AppState(
     val wakeWordModelPath: String?,
     val isWakeWordServiceListening: Boolean,
     val isVerboseLoggingEnabled: Boolean,
+    val isExperimentalVulkanEnabled: Boolean,
     
     // --- API SETTINGS ---
     val apiKey: String?,
@@ -42,6 +43,9 @@ data class AppState(
     val defaultVoiceFallbackModel: String?,
     val defaultIntentFallbackProcessor: String?,
     val defaultIntentFallbackModel: String?,
+
+    // --- DYNAMIC MODEL REGISTRY (Reconstructed from JSON Cache) ---
+    val availableModels: Map<String, List<AppModel>> = emptyMap(),
     
     // --- UI SYNC ---
     val refreshTrigger: Int = 0,
@@ -58,39 +62,41 @@ data class AppState(
          * Creates initial AppState by reading all values from SettingsManager.
          * Derived properties are calculated immediately.
          */
-        fun fromSettings(settingsManager: SettingsManager, context: Context): AppState {
+        fun fromSettings(settingsManager: SettingsManager, context: Context, availableModels: Map<String, List<AppModel>>): AppState {
             val voiceProcessor = settingsManager.getVoiceProcessor()
             val voiceLanguage = settingsManager.getVoiceLanguage()
-            val selectedWhisperModelId = settingsManager.getSelectedWhisperModelId()
-            val selectedVoskModelName = settingsManager.getSelectedVoskModelName()
-            val customWhisperModelPath = settingsManager.getCustomWhisperModelPath()
-            
+            val activeVoiceModelId = settingsManager.getActiveVoiceModelId()
+            val customWhisperModelPath = settingsManager.getCustomModelPath("stt_whisper")
+
             // Calculate voiceModelReady
             val voiceModelReady = when (voiceProcessor) {
                 Strings.Processors.WHISPER_CPP,
                 Strings.Processors.WHISPER_VULKAN,
                 Strings.Processors.WHISPER_NEON -> {
-                    settingsManager.isModelDownloaded(selectedWhisperModelId) || customWhisperModelPath != null
+                    val modelId = activeVoiceModelId
+                    val isDownloaded = modelId != null && settingsManager.isModelDownloaded(modelId)
+                    val customPath = settingsManager.getCustomModelPath("stt_whisper")
+                    isDownloaded || !customPath.isNullOrBlank()
                 }
                 Strings.Processors.VOSK -> {
-                    val customVosk = settingsManager.getCustomVoskModelPath(voiceLanguage)
-                    if (!customVosk.isNullOrBlank()) {
-                        java.io.File(customVosk).exists()
+                    val customPath = settingsManager.getCustomModelPath("wake_vosk", voiceLanguage)
+                    if (!customPath.isNullOrBlank()) {
+                        java.io.File(customPath).exists()
                     } else {
-                        !selectedVoskModelName.isNullOrBlank() && settingsManager.isModelDownloaded(selectedVoskModelName)
+                        !activeVoiceModelId.isNullOrBlank() && settingsManager.isModelDownloaded(activeVoiceModelId)
                     }
                 }
                 Strings.Processors.GOOGLE,
                 Strings.Processors.WHISPER_API -> true
                 else -> false
             }
-            
+
             // Calculate intentModelReady
             val aiProcessor = settingsManager.getAiProcessor()
-            val selectedLlamaModelId = settingsManager.getSelectedLlamaModelId()
+            val activeIntentModelId = settingsManager.getActiveIntentModelId()
             val intentModelReady = when (aiProcessor) {
                 Strings.AiProcessors.NLU_LOCAL -> {
-                    settingsManager.isModelDownloaded(selectedLlamaModelId)
+                    activeIntentModelId != null && settingsManager.isModelDownloaded(activeIntentModelId)
                 }
                 Strings.AiProcessors.GEMINI_NATIVE -> {
                     !settingsManager.isGeminiIncompatible()
@@ -103,7 +109,7 @@ data class AppState(
             val customVoskModelPaths = mutableMapOf<String, String>()
             val languages = listOf("en", "ro", "de", "fr")
             languages.forEach { lang ->
-                settingsManager.getCustomVoskModelPath(lang)?.let { path ->
+                settingsManager.getCustomModelPath("wake_vosk", lang)?.let { path ->
                     customVoskModelPaths[lang] = path
                 }
             }
@@ -111,18 +117,18 @@ data class AppState(
             return AppState(
                 voiceProcessor = voiceProcessor,
                 voiceLanguage = voiceLanguage,
-                selectedWhisperModelId = selectedWhisperModelId,
-                selectedVoskModelName = selectedVoskModelName,
+                activeVoiceModelId = activeVoiceModelId,
                 customWhisperModelPath = customWhisperModelPath,
                 customVoskModelPaths = customVoskModelPaths,
                 aiProcessor = aiProcessor,
-                selectedLlamaModelId = selectedLlamaModelId,
+                activeIntentModelId = activeIntentModelId,
                 cloudIntelligenceEnabled = settingsManager.isCloudIntelligenceEnabled(),
                 wakeWord = settingsManager.getWakeWord(),
                 wakeWordEnabled = settingsManager.isWakeWordEnabled(),
                 wakeWordModelPath = settingsManager.getWakeWordModelPath(),
                 isWakeWordServiceListening = false,
                 isVerboseLoggingEnabled = settingsManager.isVerboseLoggingEnabled(),
+                isExperimentalVulkanEnabled = settingsManager.isExperimentalVulkanEnabled(),
                 apiKey = settingsManager.getApiKey(),
                 voiceState = VoiceState.IDLE,
                 wakeWordDetected = false,
@@ -130,6 +136,7 @@ data class AppState(
                 defaultVoiceFallbackModel = settingsManager.getDefaultVoiceFallbackModel(),
                 defaultIntentFallbackProcessor = settingsManager.getDefaultIntentFallbackProcessor(),
                 defaultIntentFallbackModel = settingsManager.getDefaultIntentFallbackModel(),
+                availableModels = availableModels,
                 refreshTrigger = 0,
                 canDrawOverlays = com.voxcommander.app.utils.PermissionUtils.canDrawOverlays(context),
                 hasMicrophonePermission = com.voxcommander.app.utils.PermissionUtils.hasMicrophonePermission(context),
@@ -149,14 +156,17 @@ data class AppState(
             Strings.Processors.WHISPER_CPP,
             Strings.Processors.WHISPER_VULKAN,
             Strings.Processors.WHISPER_NEON -> {
-                settingsManager.isModelDownloaded(selectedWhisperModelId) || customWhisperModelPath != null
+                val modelId = activeVoiceModelId
+                val isDownloaded = modelId != null && settingsManager.isModelDownloaded(modelId)
+                val customPath = settingsManager.getCustomModelPath("stt_whisper")
+                isDownloaded || !customPath.isNullOrBlank()
             }
             Strings.Processors.VOSK -> {
-                val customVosk = settingsManager.getCustomVoskModelPath(voiceLanguage)
-                if (!customVosk.isNullOrBlank()) {
-                    java.io.File(customVosk).exists()
+                val customPath = settingsManager.getCustomModelPath("wake_vosk", voiceLanguage)
+                if (!customPath.isNullOrBlank()) {
+                    java.io.File(customPath).exists()
                 } else {
-                    !selectedVoskModelName.isNullOrBlank() && settingsManager.isModelDownloaded(selectedVoskModelName)
+                    !activeVoiceModelId.isNullOrBlank() && settingsManager.isModelDownloaded(activeVoiceModelId)
                 }
             }
             Strings.Processors.GOOGLE,
@@ -172,7 +182,7 @@ data class AppState(
     fun recalculateIntentReady(newProcessor: String, settingsManager: SettingsManager): Boolean {
         return when (newProcessor) {
             Strings.AiProcessors.NLU_LOCAL -> {
-                settingsManager.isModelDownloaded(selectedLlamaModelId)
+                activeIntentModelId != null && settingsManager.isModelDownloaded(activeIntentModelId)
             }
             Strings.AiProcessors.GEMINI_NATIVE -> {
                 !settingsManager.isGeminiIncompatible()

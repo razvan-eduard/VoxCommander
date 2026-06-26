@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.utils.Strings
 
 class SettingsManager(context: Context) {
@@ -72,7 +73,7 @@ class SettingsManager(context: Context) {
         val wakeWordKey = wakeWordModel?.let { "${KEY_MODEL_DOWNLOADED_PREFIX}$it" }
         val voiceFallbackKey = getDefaultVoiceFallbackModel()?.let { "${KEY_MODEL_DOWNLOADED_PREFIX}$it" }
         val intentFallbackKey = getDefaultIntentFallbackModel()?.let { "${KEY_MODEL_DOWNLOADED_PREFIX}$it" }
-        val activeLlamaKey = "${KEY_MODEL_DOWNLOADED_PREFIX}${getSelectedLlamaModelId()}"
+        val activeLlamaKey = "${KEY_MODEL_DOWNLOADED_PREFIX}${getActiveIntentModelId()}"
         
         sharedPreferences.edit().let { edit ->
             all.keys.forEach { key ->
@@ -90,36 +91,31 @@ class SettingsManager(context: Context) {
         }
     }
 
-    fun saveCustomVoskModelPath(langCode: String, path: String) {
-        sharedPreferences.edit().putString("${KEY_CUSTOM_VOSK_MODEL_PATH}_$langCode", path).apply()
+    fun saveCustomModelPath(engineKey: String, path: String, langCode: String? = null) {
+        val key = if (langCode != null) "${KEY_CUSTOM_MODEL_PATH}_${engineKey}_$langCode" else "${KEY_CUSTOM_MODEL_PATH}_$engineKey"
+        sharedPreferences.edit().putString(key, path).apply()
     }
 
-    fun getCustomVoskModelPath(langCode: String): String? {
-        return sharedPreferences.getString("${KEY_CUSTOM_VOSK_MODEL_PATH}_$langCode", null)
+    fun getCustomModelPath(engineKey: String, langCode: String? = null): String? {
+        val key = if (langCode != null) "${KEY_CUSTOM_MODEL_PATH}_${engineKey}_$langCode" else "${KEY_CUSTOM_MODEL_PATH}_$engineKey"
+        return sharedPreferences.getString(key, null)
     }
 
-    fun saveCustomWhisperModelPath(path: String) {
-        sharedPreferences.edit().putString(KEY_CUSTOM_WHISPER_MODEL_PATH, path).apply()
+    // Active model settings (unified for voice and intent)
+    fun saveActiveVoiceModelId(modelId: String) {
+        sharedPreferences.edit().putString(KEY_ACTIVE_VOICE_MODEL_ID, modelId).apply()
     }
 
-    fun getCustomWhisperModelPath(): String? {
-        return sharedPreferences.getString(KEY_CUSTOM_WHISPER_MODEL_PATH, null)
+    fun getActiveVoiceModelId(): String? {
+        return sharedPreferences.getString(KEY_ACTIVE_VOICE_MODEL_ID, null)
     }
 
-    fun saveSelectedWhisperModelId(modelId: String) {
-        sharedPreferences.edit().putString(KEY_SELECTED_WHISPER_MODEL_ID, modelId).apply()
+    fun saveActiveIntentModelId(modelId: String) {
+        sharedPreferences.edit().putString(KEY_ACTIVE_INTENT_MODEL_ID, modelId).apply()
     }
 
-    fun getSelectedWhisperModelId(): String {
-        return sharedPreferences.getString(KEY_SELECTED_WHISPER_MODEL_ID, DEFAULT_WHISPER_MODEL) ?: DEFAULT_WHISPER_MODEL
-    }
-
-    fun saveSelectedVoskModelName(modelName: String) {
-        sharedPreferences.edit().putString(KEY_SELECTED_VOSK_MODEL_NAME, modelName).apply()
-    }
-
-    fun getSelectedVoskModelName(): String? {
-        return sharedPreferences.getString(KEY_SELECTED_VOSK_MODEL_NAME, null)
+    fun getActiveIntentModelId(): String? {
+        return sharedPreferences.getString(KEY_ACTIVE_INTENT_MODEL_ID, null)
     }
 
     // Wake word settings
@@ -209,7 +205,7 @@ class SettingsManager(context: Context) {
     }
 
     fun getLogLevel(): String {
-        return sharedPreferences.getString(KEY_LOG_LEVEL, "NONE") ?: "NONE"
+        return sharedPreferences.getString(KEY_LOG_LEVEL, "LOGCAT_ONLY") ?: "LOGCAT_ONLY"
     }
 
     fun saveVerboseLoggingEnabled(enabled: Boolean) {
@@ -267,6 +263,14 @@ class SettingsManager(context: Context) {
         return sharedPreferences.getBoolean(KEY_GEMINI_INCOMPATIBLE, false)
     }
 
+    fun saveExperimentalVulkanEnabled(enabled: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_EXPERIMENTAL_VULKAN_ENABLED, enabled).apply()
+    }
+
+    fun isExperimentalVulkanEnabled(): Boolean {
+        return sharedPreferences.getBoolean(KEY_EXPERIMENTAL_VULKAN_ENABLED, false)
+    }
+
     fun saveCloudIntelligenceEnabled(enabled: Boolean) {
         sharedPreferences.edit().putBoolean(Strings.Preferences.KEY_CLOUD_INTELLIGENCE_ENABLED, enabled).apply()
     }
@@ -281,14 +285,6 @@ class SettingsManager(context: Context) {
 
     fun getAiProcessor(): String {
         return sharedPreferences.getString(Strings.Preferences.KEY_AI_PROCESSOR, Strings.AiProcessors.NLU_LOCAL) ?: Strings.AiProcessors.NLU_LOCAL
-    }
-
-    fun saveSelectedLlamaModelId(modelId: String) {
-        sharedPreferences.edit().putString(Strings.Preferences.KEY_SELECTED_LLAMA_MODEL_ID, modelId).apply()
-    }
-
-    fun getSelectedLlamaModelId(): String {
-        return sharedPreferences.getString(Strings.Preferences.KEY_SELECTED_LLAMA_MODEL_ID, "3.2-1b") ?: "3.2-1b"
     }
 
     // --- REMOTE REPOSITORY SETTINGS ---
@@ -326,42 +322,48 @@ class SettingsManager(context: Context) {
     }
 
     /**
-     * UNIFIED CHECK: Performs a real-time check of the currently active voice processor
-     * and its selected model to determine if the assistant is ready.
+     * UNIFIED AGNOSTIC CHECK: Determines if the selected processor is ready.
+     * Uses RemoteModelRegistry as the ONLY source of truth for what engines exist.
      */
     fun isCurrentVoiceModelReady(context: android.content.Context): Boolean {
         val processor = getVoiceProcessor()
+        
+        // Cloud engines are handled by checking known cloud processor IDs
+        if (processor == Strings.Processors.GOOGLE || processor == Strings.Processors.WHISPER_API) {
+            return true
+        }
+
+        val modelId = getActiveVoiceModelId()
         val language = getVoiceLanguage()
         
-        return when (processor) {
-            Strings.Processors.WHISPER_CPP,
-            Strings.Processors.WHISPER_VULKAN,
-            Strings.Processors.WHISPER_NEON -> {
-                val modelId = getSelectedWhisperModelId()
-                val isDownloaded = isModelDownloaded(modelId)
-                val customPath = getCustomWhisperModelPath()
-                isDownloaded || !customPath.isNullOrBlank()
-            }
-            Strings.Processors.VOSK -> {
-                val customPath = getCustomVoskModelPath(language)
-                if (!customPath.isNullOrBlank()) {
-                    java.io.File(customPath).exists()
-                } else {
-                    val modelName = getSelectedVoskModelName()
-                    !modelName.isNullOrBlank() && isModelDownloaded(modelName)
-                }
-            }
-            Strings.Processors.GOOGLE,
-            Strings.Processors.WHISPER_API -> true
-            else -> false
+        // Dynamic Check: Match processor against engines defined in JSON
+        val engineKeys = RemoteModelRegistry.getEngineTypes()
+        
+        // If it's a known JSON engine
+        if (processor in engineKeys) {
+            // 1. Check if model is downloaded from registry
+            if (modelId != null && isModelDownloaded(modelId)) return true
+            
+            // 2. Check if a custom model path exists
+            val isMultilingual = RemoteModelRegistry.isMultilingual(processor)
+            val customPath = getCustomModelPath(processor, if (!isMultilingual) language else null)
+            if (!customPath.isNullOrBlank() && java.io.File(customPath).exists()) return true
         }
+        
+        // Special case: Experimental Vulkan (uses stt_whisper models)
+        if (processor == Strings.Processors.WHISPER_VULKAN) {
+            if (modelId != null && isModelDownloaded(modelId)) return true
+            val customPath = getCustomModelPath("stt_whisper")
+            if (!customPath.isNullOrBlank() && java.io.File(customPath).exists()) return true
+        }
+
+        return false
     }
 
     companion object {
         private const val PREFS_NAME = Strings.Preferences.PREFS_NAME
         private const val DEFAULT_LANGUAGE = Strings.Preferences.DEFAULT_LANGUAGE
         private const val DEFAULT_PROCESSOR = Strings.Processors.WHISPER_NEON // Default to NEON for safety
-        private const val DEFAULT_WHISPER_MODEL = Strings.Preferences.DEFAULT_WHISPER_MODEL
         private const val DEFAULT_WAKE_WORD = "hi vosk"
         private const val DEFAULT_OFFLINE_FALLBACK_TIMEOUT = 10 // Default to 10 seconds
         private const val DEFAULT_OFFLINE_MODEL = "tiny" // Default to tiny Whisper model
@@ -370,10 +372,9 @@ class SettingsManager(context: Context) {
         private const val KEY_LANGUAGE = Strings.Preferences.KEY_LANGUAGE
         private const val KEY_VOICE_LANGUAGE = Strings.Preferences.KEY_VOICE_LANGUAGE
         private const val KEY_VOICE_PROCESSOR = Strings.Preferences.KEY_VOICE_PROCESSOR
-        private const val KEY_CUSTOM_VOSK_MODEL_PATH = Strings.Preferences.KEY_CUSTOM_VOSK_MODEL_PATH
-        private const val KEY_CUSTOM_WHISPER_MODEL_PATH = Strings.Preferences.KEY_CUSTOM_WHISPER_MODEL_PATH
-        private const val KEY_SELECTED_WHISPER_MODEL_ID = Strings.Preferences.KEY_SELECTED_WHISPER_MODEL_ID
-        private const val KEY_SELECTED_VOSK_MODEL_NAME = Strings.Preferences.KEY_SELECTED_VOSK_MODEL_NAME
+        private const val KEY_CUSTOM_MODEL_PATH = "custom_model_path"
+        private const val KEY_ACTIVE_VOICE_MODEL_ID = Strings.Preferences.KEY_ACTIVE_VOICE_MODEL_ID
+        private const val KEY_ACTIVE_INTENT_MODEL_ID = Strings.Preferences.KEY_ACTIVE_INTENT_MODEL_ID
         private const val KEY_MODEL_DOWNLOADED_PREFIX = Strings.Preferences.KEY_MODEL_DOWNLOADED_PREFIX
         private const val KEY_VULKAN_INCOMPATIBLE = Strings.Preferences.KEY_VULKAN_INCOMPATIBLE
         private const val KEY_VULKAN_PROBE_DONE = Strings.Preferences.KEY_VULKAN_PROBE_DONE
@@ -393,5 +394,6 @@ class SettingsManager(context: Context) {
         private const val KEY_VOICE_MODEL_READY = "voice_model_ready"
         private const val KEY_CLOUD_INTELLIGENCE_ENABLED = "cloud_intelligence_enabled"
         private const val KEY_GEMINI_INCOMPATIBLE = "gemini_incompatible"
+        private const val KEY_EXPERIMENTAL_VULKAN_ENABLED = "experimental_vulkan_enabled"
     }
 }

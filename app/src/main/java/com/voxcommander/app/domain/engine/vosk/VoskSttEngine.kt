@@ -25,7 +25,7 @@ class VoskSttEngine(
     private suspend fun ensureModelLoaded() = withContext(Dispatchers.IO) {
         if (model == null) {
             try {
-                val customPath: String? = settingsManager.getCustomVoskModelPath(langCode)
+                val customPath: String? = settingsManager.getCustomModelPath("wake_vosk", langCode)
                 if (!customPath.isNullOrBlank() && File(customPath).exists()) {
                     val actualPath = findModelDir(File(customPath))?.absolutePath ?: customPath
                     model = Model(actualPath)
@@ -33,9 +33,9 @@ class VoskSttEngine(
                 }
 
                 val rootDir = context.getExternalFilesDir(null)
-                
+
                 // TIER 1: Specific selected model
-                val selectedModelName = settingsManager.getSelectedVoskModelName()
+                val selectedModelName = settingsManager.getActiveVoiceModelId()
                 val specificModelDir = if (!selectedModelName.isNullOrBlank()) {
                     File(rootDir, selectedModelName)
                 } else null

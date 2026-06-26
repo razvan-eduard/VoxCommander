@@ -13,10 +13,12 @@ object Strings {
         const val WAKE_WORD_SERVICE = "WakeWordService"
         const val INTENT_DECISION_MAP = "IntentDecisionMap"
         const val WHISPER_CPP_STT_ENGINE = "WhisperCppSttEngine"
+        const val MODEL_MANAGEMENT_VIEW_MODEL = "ModelManagementViewModel"
         const val AI_INTERPRETER = "AiInterpreter"
         const val GEMINI_NANO_INTERPRETER = "GeminiNanoInterpreter"
         const val OPENAI_INTERPRETER = "OpenAiInterpreter"
         const val LOCAL_LLM_INTERPRETER = "LocalLlmInterpreter"
+        const val FILE_HELPER = "FileHelper"
     }
 
     object Processors {
@@ -54,6 +56,8 @@ object Strings {
         const val KEY_CUSTOM_WHISPER_MODEL_PATH = "custom_whisper_model_path"
         const val KEY_SELECTED_WHISPER_MODEL_ID = "selected_whisper_model_id"
         const val KEY_SELECTED_VOSK_MODEL_NAME = "selected_vosk_model_name"
+        const val KEY_ACTIVE_VOICE_MODEL_ID = "active_voice_model_id"
+        const val KEY_ACTIVE_INTENT_MODEL_ID = "active_intent_model_id"
         const val KEY_MODEL_DOWNLOADED_PREFIX = "model_downloaded_"
         const val KEY_VULKAN_INCOMPATIBLE = "vulkan_incompatible"
         const val KEY_VULKAN_PROBE_DONE = "vulkan_probe_done"
@@ -66,7 +70,7 @@ object Strings {
         const val KEY_OFFLINE_FALLBACK_TIMEOUT = "offline_fallback_timeout"
         const val KEY_CLOUD_INTELLIGENCE_ENABLED = "cloud_intelligence_enabled"
         const val KEY_AI_PROCESSOR = "ai_processor"
-        const val KEY_SELECTED_LLAMA_MODEL_ID = "selected_llama_model_id"
+        const val KEY_SELECTED_NLU_MODEL_ID = "selected_nlu_model_id"
         const val KEY_MODEL_REPO_BASE_URL = "model_repo_base_url"
         const val KEY_MODELS_JSON_CACHE = "models_json_cache"
         const val DEFAULT_MODEL_REPO_URL = Strings.Urls.DEFAULT_MODEL_REPO

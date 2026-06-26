@@ -53,7 +53,7 @@ class BenchmarkEngine(
         diagInfo.append("\n")
 
         // 2. Whisper Diagnostics
-        val downloadedWhisperModels = RemoteModelRegistry.getWhisperModels().filter {
+        val downloadedWhisperModels = RemoteModelRegistry.getModels("stt_whisper").filter {
             settingsManager.isModelDownloaded(it.id)
         }
 
@@ -83,14 +83,14 @@ class BenchmarkEngine(
         }
 
         // 3. Vosk Diagnostics
-        val selectedVosk = settingsManager.getSelectedVoskModelName()
+        val selectedVosk = settingsManager.getActiveVoiceModelId()
         if (selectedVosk != null && settingsManager.isModelDownloaded(selectedVosk)) {
             val lang = settingsManager.getVoiceLanguage()
             diagInfo.append("--- VOSK ENGINE INFO ---\n")
             diagInfo.append("Active Model: $selectedVosk\n")
             diagInfo.append("Active Language: $lang\n")
             diagInfo.append("Backend: Kaldi-based (libvosk.so)\n\n")
-            
+
             runVoskBenchmark(selectedVosk, dummyAudio)
         }
 
@@ -105,17 +105,17 @@ class BenchmarkEngine(
         }
 
         // 5. LLM Diagnostics (Local LLM via MediaPipe)
-        val llamaModelId = settingsManager.getSelectedLlamaModelId()
-        
+        val nluModelId = settingsManager.getActiveIntentModelId()
+
         diagInfo.append("--- LOCAL LLM DIAGNOSTICS ---\n")
         val geminiSupported = !settingsManager.isGeminiIncompatible()
         diagInfo.append("Gemini Nano Native: ${if (geminiSupported) "SUPPORTED" else "INCOMPATIBLE"}\n")
-        
-        if (settingsManager.isModelDownloaded(llamaModelId)) {
-            diagInfo.append("Active Model: $llamaModelId\n\n")
-            runLlamaBenchmark(llamaModelId)
+
+        if (nluModelId != null && settingsManager.isModelDownloaded(nluModelId)) {
+            diagInfo.append("Active Model: $nluModelId\n\n")
+            runLlamaBenchmark(nluModelId)
         } else {
-            diagInfo.append("Llama Model: Not Downloaded\n\n")
+            diagInfo.append("NLU Model: Not Downloaded\n\n")
         }
 
         // Finalize system info view

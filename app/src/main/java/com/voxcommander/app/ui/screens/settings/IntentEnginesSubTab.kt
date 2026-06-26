@@ -25,9 +25,8 @@ fun IntentEnginesSubTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
     appStateManager: AppStateManager,
-    llamaModels: List<AppModel>,
-    onDownloadLlamaModel: (AppModel) -> Unit,
-    onDeleteLlamaModel: (AppModel) -> Unit,
+    onDownloadModel: (String, String, String?) -> Unit,
+    onDeleteModel: (String, String) -> Unit,
     downloadProgress: Float?,
     downloadingItem: AppModel?,
     onCancelDownload: () -> Unit,
@@ -35,16 +34,9 @@ fun IntentEnginesSubTab(
     refreshTrigger: Int = 0
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
-
-    val selectedModel = remember(uiState.selectedLlamaModelId, llamaModels) {
-        llamaModels.find { it.id == uiState.selectedLlamaModelId } ?: llamaModels.firstOrNull()
-    }
-
-    val nluGroups = remember(llamaModels) {
-        listOf(
-            DropdownGroup("AVAILABLE NLU MODELS", llamaModels)
-        )
-    }
+    
+    // 1. Resolve Engine Key
+    val engineKey = uiState.aiProcessor
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // --- MASTER TOGGLE ---
@@ -89,11 +81,14 @@ fun IntentEnginesSubTab(
                     
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val aiOptions = listOf(
-                        Strings.AiProcessors.OPENAI to "OpenAI (Cloud)",
-                        Strings.AiProcessors.NLU_LOCAL to "NLU AI (Local)",
-                        Strings.AiProcessors.GEMINI_NATIVE to "Gemini Nano (System)"
-                    )
+                    val aiOptions = remember(uiState.availableModels) {
+                        val list = RemoteModelRegistry.getEngineKeysByType("llm").toMutableList()
+                        
+                        // Inject Virtual Services
+                        if (!list.contains(Strings.AiProcessors.OPENAI)) list.add(Strings.AiProcessors.OPENAI)
+                        if (!list.contains(Strings.AiProcessors.GEMINI_NATIVE)) list.add(Strings.AiProcessors.GEMINI_NATIVE)
+                        list
+                    }
 
                     var expanded by remember { mutableStateOf(false) }
                     
@@ -102,8 +97,7 @@ fun IntentEnginesSubTab(
                             onClick = { expanded = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            val currentLabel = aiOptions.find { it.first == uiState.aiProcessor }?.second ?: "NLU AI (Local)"
-                            Text(text = currentLabel)
+                            Text(RemoteModelRegistry.getEngineLabel(uiState.aiProcessor, languageManager))
                         }
                         
                         DropdownMenu(
@@ -111,7 +105,7 @@ fun IntentEnginesSubTab(
                             onDismissRequest = { expanded = false },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            aiOptions.forEach { (id, label) ->
+                            aiOptions.forEach { id ->
                                 val isEnabled = when (id) {
                                     Strings.AiProcessors.GEMINI_NATIVE -> !settingsManager.isGeminiIncompatible()
                                     else -> true
@@ -120,7 +114,7 @@ fun IntentEnginesSubTab(
                                 DropdownMenuItem(
                                     text = { 
                                         Text(
-                                            text = if (isEnabled) label else "$label (Incompatible)",
+                                            text = RemoteModelRegistry.getEngineLabel(id, languageManager) + if (isEnabled) "" else " (Incompatible)",
                                             color = if (isEnabled) LocalContentColor.current else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                         ) 
                                     },
@@ -140,9 +134,20 @@ fun IntentEnginesSubTab(
         }
 
         // --- NLU MODEL SELECTION ---
-        if (uiState.cloudIntelligenceEnabled && uiState.aiProcessor == Strings.AiProcessors.NLU_LOCAL) {
+        // Only show if the current engine is a JSON-defined LLM with actual models
+        val nluModels = uiState.availableModels[engineKey] ?: emptyList()
+        
+        if (uiState.cloudIntelligenceEnabled && nluModels.isNotEmpty()) {
+            val selectedModel = remember(uiState.activeIntentModelId, nluModels) {
+                nluModels.find { it.id == uiState.activeIntentModelId } ?: nluModels.firstOrNull()
+            }
+
+            val nluGroups = remember(nluModels) {
+                listOf(DropdownGroup(languageManager.getString("available_models_header"), nluModels))
+            }
+
             EngineModelSection(
-                title = "NLU Model Selection",
+                title = languageManager.getString("nlu_model_selection_title"),
                 languageManager = languageManager,
                 settingsManager = settingsManager,
                 appStateManager = appStateManager,
@@ -151,13 +156,13 @@ fun IntentEnginesSubTab(
                 itemLabel = { "${it.label} (${it.sizeDescription})" },
                 modelIdProvider = { it.id },
                 onItemSelected = { model, isDownloaded ->
-                    appStateManager.setSelectedLlamaModelId(model.id)
+                    appStateManager.setActiveIntentModelId(model.id)
                 },
                 onDownloadRequest = { model ->
-                    appStateManager.setSelectedLlamaModelId(model.id)
-                    onDownloadLlamaModel(model)
+                    appStateManager.setActiveIntentModelId(model.id)
+                    onDownloadModel(model.id, engineKey, null)
                 },
-                onDeleteRequest = onDeleteLlamaModel,
+                onDeleteRequest = { model -> onDeleteModel(model.id, engineKey) },
                 onCancelDownload = onCancelDownload,
                 downloadProgress = downloadProgress,
                 downloadingItem = downloadingItem,
@@ -169,7 +174,7 @@ fun IntentEnginesSubTab(
             
             if (selectedModel != null) {
                 Text(
-                    text = "Engine: ${selectedModel.engineType}",
+                    text = languageManager.getString("engine_type_label").format(RemoteModelRegistry.getEngineLabel(engineKey, languageManager)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.padding(horizontal = 4.dp)

@@ -26,7 +26,7 @@ class LocalLlmInterpreter(
     private fun setupLlm() {
         if (llmInference != null) return
 
-        val modelId = settingsManager.getSelectedLlamaModelId()
+        val modelId = settingsManager.getActiveIntentModelId()
         val modelPath = File(context.getExternalFilesDir(null), "nlu-model-$modelId.bin").absolutePath
 
         if (!File(modelPath).exists()) {

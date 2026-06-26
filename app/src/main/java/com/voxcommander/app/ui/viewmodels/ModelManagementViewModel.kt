@@ -11,11 +11,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.remote.DownloadCompleteReceiver
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
-import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.FileHelper
 import com.voxcommander.app.utils.Logger
@@ -43,6 +43,10 @@ class ModelManagementViewModel(
     private val context: Context
 ) : ViewModel() {
 
+    private companion object {
+        private const val TAG = Strings.Tags.MODEL_MANAGEMENT_VIEW_MODEL
+    }
+
     // --- REACTIVE MODEL LISTS (Zero manual mapping) ---
     private val _voskModels = MutableStateFlow<List<AppModel>>(emptyList())
     val voskModels: StateFlow<List<AppModel>> = _voskModels.asStateFlow()
@@ -50,8 +54,8 @@ class ModelManagementViewModel(
     private val _whisperModels = MutableStateFlow<List<AppModel>>(emptyList())
     val whisperModels: StateFlow<List<AppModel>> = _whisperModels.asStateFlow()
 
-    private val _llamaModels = MutableStateFlow<List<AppModel>>(emptyList())
-    val llamaModels: StateFlow<List<AppModel>> = _llamaModels.asStateFlow()
+    private val _nluModels = MutableStateFlow<List<AppModel>>(emptyList())
+    val nluModels: StateFlow<List<AppModel>> = _nluModels.asStateFlow()
 
     // --- OTHER UI STATES ---
     private val _downloadProgress = MutableStateFlow<Float?>(null)
@@ -90,34 +94,38 @@ class ModelManagementViewModel(
 
     private var handledDownloadIds = mutableSetOf<Long>()
 
-    private val onDownloadComplete = object : BroadcastReceiver() {
+    private val onDownloadCompleteLocal = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) ?: -1
+            val id = intent?.getLongExtra(DownloadCompleteReceiver.EXTRA_DOWNLOAD_ID, -1) ?: -1
+            val directoryName = intent?.getStringExtra("directory_name")
+            val modelType = intent?.getStringExtra("model_type")
+
+            Logger.log("Download complete broadcast received: id=$id, type=$modelType, dir=$directoryName, handled=${handledDownloadIds.contains(id)}", Strings.Tags.MODEL_MANAGEMENT_VIEW_MODEL)
             if (id != -1L && !handledDownloadIds.contains(id)) {
                 handledDownloadIds.add(id)
                 _downloadProgress.value = null
+                _downloadingItem.value = null
                 progressJob?.cancel()
 
-                val downloadManager = context?.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return
-                val query = DownloadManager.Query().setFilterById(id)
-                val cursor = downloadManager.query(query)
-
-                var success = false
-                if (cursor != null && cursor.moveToFirst()) {
-                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                    if (statusIndex != -1 && cursor.getInt(statusIndex) == DownloadManager.STATUS_SUCCESSFUL) {
-                        success = true
-                    }
+                if (modelType != null) {
+                    lastDownloadType = modelType
                 }
-                cursor?.close()
 
-                if (success) handleDownloadSuccess() else handleDownloadFailure()
+                // For Vosk, use the actual directory name from broadcast
+                if (directoryName != null) {
+                    lastDownloadedId = directoryName
+                }
+
+                Logger.log("Calling handleDownloadSuccess: type=$lastDownloadType, id=$lastDownloadedId", Strings.Tags.MODEL_MANAGEMENT_VIEW_MODEL)
+                handleDownloadSuccess()
+            } else {
+                Logger.log("Skipping download complete: id=$id, already handled or invalid", Strings.Tags.MODEL_MANAGEMENT_VIEW_MODEL)
             }
         }
     }
 
     init {
-        ContextCompat.registerReceiver(context, onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_EXPORTED)
+        ContextCompat.registerReceiver(context, onDownloadCompleteLocal, IntentFilter(DownloadCompleteReceiver.ACTION_DOWNLOAD_COMPLETE_LOCAL), ContextCompat.RECEIVER_EXPORTED)
         
         // AUTO-SYNC: Rebuild all UI lists whenever the Registry Wrapper is updated
         viewModelScope.launch {
@@ -131,16 +139,19 @@ class ModelManagementViewModel(
     }
 
     private fun rebuildUiLists() {
-        _whisperModels.value = RemoteModelRegistry.getWhisperModels()
-        _voskModels.value = RemoteModelRegistry.getVoskModels()
-        _llamaModels.value = RemoteModelRegistry.getLlmModels()
+        _whisperModels.value = RemoteModelRegistry.getModels("stt_whisper")
+        _voskModels.value = RemoteModelRegistry.getModels("wake_vosk")
+        _nluModels.value = RemoteModelRegistry.getModels("nlu_llm")
 
         _isVoskOffline.value = _voskModels.value.isEmpty()
+
+        Logger.log("Rebuilt UI lists: ${_whisperModels.value.size} Whisper, ${_voskModels.value.size} Vosk, ${_nluModels.value.size} NLU", TAG)
     }
 
     suspend fun loadModels(force: Boolean = false) {
         _isVoskLoading.value = true
         RemoteModelRegistry.fetchJson(settingsManager, force)
+        rebuildUiLists()
         _isVoskLoading.value = false
     }
 
@@ -148,101 +159,106 @@ class ModelManagementViewModel(
 
     // --- DOWNLOAD METHODS ---
 
-    fun downloadVoskModel(lang: String, url: String, name: String) {
-        lastDownloadedId = name; lastDownloadType = "vosk"
-        val item = RemoteModelRegistry.getVoskModels().find { it.id == name } ?: return
+    fun downloadModel(modelId: String, engineType: String, lang: String? = null) {
+        Logger.log("downloadModel called: modelId=$modelId, engineType=$engineType, lang=$lang", TAG)
+        lastDownloadedId = modelId; lastDownloadType = engineType
+
+        val item = RemoteModelRegistry.getModels(engineType).find { it.id == modelId } ?: return
         _downloadingItem.value = item
-        appStateManager.setSelectedVoskModelName(name)
-        val id = modelDownloader.downloadVoskModel(lang, RemoteModelRegistry.resolveUrl(item, settingsManager), name)
-        currentDownloadId = id; startProgressTracking(id)
+
+        // Pre-flight check: if already on disk, just select it
+        val localFile = modelDownloader.resolveLocalFile(modelId, engineType)
+        if (localFile?.exists() == true) {
+            Logger.log("Model already exists, marking as downloaded: $modelId", TAG)
+            settingsManager.setModelDownloaded(modelId, true)
+            when (engineType) {
+                "nlu_llm" -> appStateManager.setActiveIntentModelId(modelId)
+                else -> appStateManager.setActiveVoiceModelId(modelId)
+            }
+            appStateManager.refreshAll()
+            _downloadingItem.value = null
+            return
+        }
+
+        // Start real download
+        val id = modelDownloader.downloadModel(modelId, RemoteModelRegistry.resolveUrl(item, settingsManager), engineType)
+        if (id != -1L) {
+            currentDownloadId = id
+            startProgressTracking(id)
+        }
     }
 
-    fun downloadWhisperModel(modelId: String, url: String) {
-        lastDownloadedId = modelId; lastDownloadType = "whisper"
-        val item = RemoteModelRegistry.getWhisperModels().find { it.id == modelId } ?: return
-        _downloadingItem.value = item
-        appStateManager.setSelectedWhisperModelId(modelId)
-        val id = modelDownloader.downloadWhisperModel(modelId, RemoteModelRegistry.resolveUrl(item, settingsManager))
-        currentDownloadId = id; startProgressTracking(id)
+    fun selectVoiceModel(modelId: String, engineKey: String, langCode: String? = null) {
+        if (langCode != null) appStateManager.setVoiceLanguage(langCode)
+        
+        val file = modelDownloader.resolveLocalFile(modelId, engineKey)
+        if (file?.exists() == true) {
+            appStateManager.setActiveVoiceModelId(modelId)
+            settingsManager.setModelDownloaded(modelId, true)
+            appStateManager.refreshAll()
+        }
     }
 
-    fun downloadLlamaModel(modelId: String, url: String) {
-        lastDownloadedId = modelId; lastDownloadType = "llama"
-        val item = RemoteModelRegistry.getLlmModels().find { it.id == modelId } ?: return
-        _downloadingItem.value = item
-        appStateManager.setSelectedLlamaModelId(modelId)
-        val id = modelDownloader.downloadNluModel(modelId, RemoteModelRegistry.resolveUrl(item, settingsManager))
-        currentDownloadId = id; startProgressTracking(id)
+    fun selectCustomModel(uri: Uri, engineKey: String, langCode: String? = null) {
+        val extension = RemoteModelRegistry.getExtension(engineKey)
+        
+        if (extension.isBlank()) {
+            // Directory-based strategy (e.g. wake_vosk)
+            val path = uri.path ?: uri.toString()
+            settingsManager.saveCustomModelPath(engineKey, path, langCode)
+            showSuccessMessage(languageManager.getString("success_custom_vosk"))
+        } else {
+            // File-based strategy (e.g. stt_whisper, nlu_llm)
+            val fileName = "$engineKey$extension"
+            FileHelper.copyUriToInternal(context, uri, fileName)?.let { internalPath ->
+                settingsManager.saveCustomModelPath(engineKey, internalPath)
+                showSuccessMessage(languageManager.getString("success_custom_whisper"))
+            }
+        }
+        appStateManager.refreshAll()
     }
 
     fun cancelDownload() {
         currentDownloadId?.let { id ->
+            val engineKey = lastDownloadType ?: return@let
+            val modelId = lastDownloadedId ?: return@let
+            
             (context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager)?.remove(id)
-            progressJob?.cancel(); _downloadProgress.value = null
-            _downloadingItem.value?.let { item ->
-                val root = context.getExternalFilesDir(null)
-                when (item.engineType) {
-                    "Whisper" -> root?.let { File(it, "whisper-model-${item.id}.bin").delete() }
-                    "Llama" -> root?.let { File(it, "nlu-model-${item.id}.bin").delete() }
-                    "Vosk" -> context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.let { File(it, "vosk-model-${item.id}.zip").delete() }
-                }
+            progressJob?.cancel()
+            _downloadProgress.value = null
+            
+            modelDownloader.resolveLocalFile(modelId, engineKey)?.let { file ->
+                if (file.exists()) file.deleteRecursively()
             }
-            _downloadingItem.value = null; appStateManager.refreshAll()
+            
+            _downloadingItem.value = null
+            appStateManager.refreshAll()
             showSuccessMessage(languageManager.getString("error_download_failed"))
-        }
-    }
-
-    fun selectCustomVoskModel(uri: Uri, lang: String) {
-        settingsManager.saveCustomVoskModelPath(lang, uri.path ?: uri.toString())
-        settingsManager.setVoiceModelReady(true)
-        showSuccessMessage(languageManager.getString("success_custom_vosk"))
-    }
-
-    fun selectCustomWhisperModel(uri: Uri) {
-        FileHelper.copyUriToInternal(context, uri, "custom-whisper-model.bin")?.let { path ->
-            settingsManager.saveCustomWhisperModelPath(path)
-            settingsManager.setVoiceModelReady(true)
-            showSuccessMessage(languageManager.getString("success_custom_whisper"))
         }
     }
 
     fun clearDefaultOfflineFallback() { settingsManager.clearDefaultOfflineFallback(); appStateManager.refreshAll() }
 
     fun deleteUnusedModels() {
-        val voiceProc = settingsManager.getVoiceProcessor()
-        val selVosk = settingsManager.getSelectedVoskModelName()
-        val selWhisp = settingsManager.getSelectedWhisperModelId()
-        val selLlama = settingsManager.getSelectedLlamaModelId()
+        val activeVoiceModelId = settingsManager.getActiveVoiceModelId()
+        val activeIntentModelId = settingsManager.getActiveIntentModelId()
 
-        val protVosk = mutableSetOf<String>().apply { selVosk?.let { add(it) }; settingsManager.getWakeWordModelPath()?.let { add(it) } }
-        val protWhisp = setOf(selWhisp)
-        val protLlama = setOf(selLlama)
-
-        modelDownloader.deleteUnusedModels(protVosk, protWhisp, protLlama)
-        reassignDefaultFallbacks(voiceProc, selVosk, selWhisp, selLlama)
-        settingsManager.clearUnusedModelFlags(selVosk ?: "", selWhisp)
+        modelDownloader.deleteUnusedModels(settingsManager, activeVoiceModelId, activeIntentModelId, appStateManager)
         appStateManager.refreshAll()
     }
 
-    private fun reassignDefaultFallbacks(proc: String, vosk: String?, whisp: String, llama: String) {
-        if (proc == Strings.Processors.VOSK && vosk != null && isModelPresent("vosk", vosk)) settingsManager.saveDefaultVoiceFallback(proc, vosk)
-        else if (proc.startsWith("WHISPER") && isModelPresent("whisper", whisp)) settingsManager.saveDefaultVoiceFallback(proc, whisp)
-        if (isModelPresent("llama", llama)) settingsManager.saveDefaultIntentFallback(Strings.AiProcessors.NLU_LOCAL, llama)
-    }
+    fun deleteModel(modelId: String, engineKey: String) {
+        modelDownloader.deleteModelFile(modelId, engineKey)
+        settingsManager.setModelDownloaded(modelId, false)
 
-    private fun isModelPresent(type: String, id: String): Boolean {
-        val root = context.getExternalFilesDir(null) ?: return false
-        return when (type) {
-            "whisper" -> File(root, "whisper-model-$id.bin").exists()
-            "llama" -> File(root, "nlu-model-$id.bin").exists()
-            "vosk" -> File(root, "vosk-model-$id").exists()
-            else -> false
+        // Clear fallback if this was the default model
+        if (settingsManager.getDefaultVoiceFallbackModel() == modelId) {
+            settingsManager.clearDefaultVoiceFallback()
         }
-    }
+        if (settingsManager.getDefaultIntentFallbackModel() == modelId) {
+            settingsManager.clearDefaultIntentFallback()
+        }
 
-    fun deleteLlamaModel(id: String) {
-        settingsManager.setModelDownloaded(id, false)
-        FileHelper.deleteModelFile(context, id, "llama")
         appStateManager.refreshAll()
     }
 
@@ -257,7 +273,11 @@ class ModelManagementViewModel(
                         val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
                         if (total > 0) _downloadProgress.value = downloaded.toFloat() / total.toFloat()
                         val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                        if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) return@launch
+                        if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED || status == DownloadManager.STATUS_PAUSED) {
+                            _downloadProgress.value = null
+                            _downloadingItem.value = null
+                            return@launch
+                        }
                     }
                 }
                 delay(500)
@@ -267,22 +287,28 @@ class ModelManagementViewModel(
 
     private fun handleDownloadSuccess() {
         _downloadProgress.value = null; _downloadingItem.value = null; progressJob?.cancel()
-        when (lastDownloadType) {
-            "whisper" -> {
-                val id = lastDownloadedId ?: settingsManager.getSelectedWhisperModelId()
-                modelDownloader.verifyWhisperModel(id) { if (it) appStateManager.onWhisperDownloadComplete(id) }
+        val modelId = lastDownloadedId ?: return
+        val engineKey = lastDownloadType ?: return
+
+        Logger.log("Download success handler. ID: $modelId, Engine: $engineKey", TAG)
+
+        val localFile = modelDownloader.resolveLocalFile(modelId, engineKey)
+        
+        if (localFile?.exists() == true) {
+            Logger.log("File/Dir verified on disk: ${localFile.absolutePath}", TAG)
+            settingsManager.setModelDownloaded(modelId, true)
+            
+            // Set as active model in state
+            if (engineKey == "nlu_llm") {
+                appStateManager.setActiveIntentModelId(modelId)
+            } else {
+                appStateManager.setActiveVoiceModelId(modelId)
             }
-            "vosk" -> {
-                val name = lastDownloadedId ?: ""
-                modelDownloader.unzipVoskModel(name) { if (it) appStateManager.onVoskDownloadComplete(name) }
-            }
-            "llama" -> {
-                val id = lastDownloadedId ?: settingsManager.getSelectedLlamaModelId()
-                if (File(context.getExternalFilesDir(null), "nlu-model-$id.bin").exists()) {
-                    settingsManager.setModelDownloaded(id, true); appStateManager.refreshAll()
-                }
-            }
+            appStateManager.refreshAll()
+        } else {
+            Logger.log("Verification failed: $modelId ($engineKey) not found at expected location", TAG)
         }
+
         lastDownloadType = null
     }
 
@@ -298,7 +324,7 @@ class ModelManagementViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        context.unregisterReceiver(onDownloadComplete)
+        context.unregisterReceiver(onDownloadCompleteLocal)
         progressJob?.cancel()
     }
 }

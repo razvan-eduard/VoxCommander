@@ -79,7 +79,8 @@ fun RulesManagerContent(
     val isDefaultModelOnDevice = remember(voiceProcessor, voiceLanguage) {
         when (voiceProcessor) {
             "WHISPER_CPP", "WHISPER_VULKAN", "WHISPER_NEON" -> {
-                settingsManager.isModelDownloaded(uiState.selectedWhisperModelId)
+                val modelId = uiState.activeVoiceModelId
+                modelId != null && settingsManager.isModelDownloaded(modelId)
             }
             "VOSK" -> {
                 val customPath = uiState.customVoskModelPaths[voiceLanguage]

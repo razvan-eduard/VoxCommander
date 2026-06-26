@@ -103,12 +103,12 @@ object VoiceManager {
         
         stateObservationJob = scope.launch {
             hub.uiState
-                .map { 
-                    Triple(it.voiceProcessor, it.voiceLanguage, it.selectedWhisperModelId) to 
-                    Pair(it.selectedVoskModelName, it.customWhisperModelPath) 
+                .map {
+                    Triple(it.voiceProcessor, it.voiceLanguage, it.activeVoiceModelId) to
+                    Pair(it.activeVoiceModelId, it.customWhisperModelPath)
                 }
                 .distinctUntilChanged()
-                .collectLatest { 
+                .collectLatest {
                     val uiState = hub.uiState.value
                     Log.d(TAG, "Engine-related change detected: ${uiState.voiceProcessor}. Updating engines...")
                     reinitializeEngines(uiState.voiceProcessor)

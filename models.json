@@ -6,6 +6,9 @@
   "engines": {
     "stt_whisper": {
       "is_multilingual": true,
+      "engine_label": "Whisper",
+      "extension": ".bin",
+      "type": "voice",
       "models": [
         {
           "id": "tiny",
@@ -32,6 +35,9 @@
     },
     "wake_vosk": {
       "is_multilingual": false,
+      "engine_label": "Vosk",
+      "extension": ".zip",
+      "type": "voice",
       "models": [
       {
         "id": "vosk-model-small-en-us-0.15",
@@ -757,6 +763,9 @@
     },
     "nlu_llm": {
       "is_multilingual": false,
+      "engine_label": "NLU (LLM)",
+      "extension": ".task",
+      "type": "llm",
       "models": [
       {
         "id": "qwen2.5-1.5b-q8",

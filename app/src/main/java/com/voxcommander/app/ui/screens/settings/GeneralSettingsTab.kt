@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import kotlinx.coroutines.launch
 
@@ -33,6 +34,11 @@ fun GeneralSettingsTab(
     
     // REACTIVE STATE (observed first)
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
+    
+    // Extract models from SSOT map
+    val whisperModels = remember(uiState.availableModels) { uiState.availableModels["stt_whisper"] ?: emptyList() }
+    val voskModels = remember(uiState.availableModels) { uiState.availableModels["wake_vosk"] ?: emptyList() }
+    val nluModels = remember(uiState.availableModels) { uiState.availableModels["nlu_llm"] ?: emptyList() }
 
     // Manage own state, synchronized with uiState
     var apiKey by remember(uiState.apiKey) { mutableStateOf(uiState.apiKey ?: "") }
@@ -172,8 +178,13 @@ fun GeneralSettingsTab(
 
         // --- VOICE FALLBACK INFO (Compact) ---
         if (uiState.defaultVoiceFallbackProcessor != null && uiState.defaultVoiceFallbackModel != null) {
+            val allVoiceModels = (uiState.availableModels["stt_whisper"] ?: emptyList()) + 
+                                (uiState.availableModels["wake_vosk"] ?: emptyList()) +
+                                (uiState.availableModels["stt_google"] ?: emptyList())
+                                
+            val voiceModelLabel = allVoiceModels.find { it.id == uiState.defaultVoiceFallbackModel }?.label ?: uiState.defaultVoiceFallbackModel
             Text(
-                text = "Voice: ${uiState.defaultVoiceFallbackProcessor} (${uiState.defaultVoiceFallbackModel})",
+                text = "Voice: ${uiState.defaultVoiceFallbackProcessor} ($voiceModelLabel)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )
@@ -181,8 +192,9 @@ fun GeneralSettingsTab(
 
         // --- INTENT FALLBACK INFO (Compact) ---
         if (uiState.defaultIntentFallbackProcessor != null && uiState.defaultIntentFallbackModel != null) {
+            val intentModelLabel = nluModels.find { it.id == uiState.defaultIntentFallbackModel }?.label ?: uiState.defaultIntentFallbackModel
             Text(
-                text = "Intent: ${uiState.defaultIntentFallbackProcessor} (${uiState.defaultIntentFallbackModel})",
+                text = "Intent: ${uiState.defaultIntentFallbackProcessor} ($intentModelLabel)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )

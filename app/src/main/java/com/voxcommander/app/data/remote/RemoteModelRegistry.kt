@@ -1,9 +1,11 @@
 package com.voxcommander.app.data.remote
 
-import com.voxcommander.app.utils.Logger
+import android.util.Log
 import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,22 +20,19 @@ import java.net.URL
 data class RemoteModelSchema(
     val schema_version: Int,
     val prompts: Map<String, String>? = null,
-    val engines: RemoteEngines
-)
-
-data class RemoteEngines(
-    val stt_whisper: RemoteEngineConfig?,
-    val wake_vosk: RemoteEngineConfig?,
-    val nlu_llm: RemoteEngineConfig?
+    val engines: Map<String, RemoteEngineConfig>
 )
 
 data class RemoteEngineConfig(
+    val engine_label: String? = null,
+    val type: String? = null, // "voice" or "llm"
     val is_multilingual: Boolean,
+    val extension: String = "",
     val models: List<RemoteModelItem>
 )
 
 /**
- * The Unified Model Item. Implements AppModel directly to avoid manual mapping.
+ * The Unified Model Item. Implements AppModel directly.
  */
 data class RemoteModelItem(
     override val id: String,
@@ -49,12 +48,25 @@ data class RemoteModelItem(
     override val url: String get() = path
     override val sizeDescription: String get() = size_label ?: "$size_mb MB"
     override val engineType: String get() = engine_type ?: ""
+    override val langCode: String? get() = lang_code
 }
+
+/**
+ * Represents a virtual model that doesn't exist as a downloadable file (e.g. Cloud APIs).
+ */
+data class VirtualModelItem(
+    override val id: String,
+    override val label: String,
+    override val engineType: String,
+    override val sizeDescription: String = "Cloud API",
+    override val url: String = "",
+    override val langCode: String? = null
+) : AppModel
 
 /**
  * Orchestrator for Dynamic Model Registration.
  * Single Source of Truth for all available models across all engines.
- * Acts as a ModelManagementParser: fetch -> cache -> wrapper.
+ * Acts as a ModelManagementParser: fetch -> cache -> wrapper -> Reactive Map.
  */
 object RemoteModelRegistry {
     private const val TAG = Strings.Tags.REMOTE_MODEL_REGISTRY
@@ -67,73 +79,129 @@ object RemoteModelRegistry {
     private val _registryUpdateSignal = MutableStateFlow(0L)
     val registryUpdateSignal: StateFlow<Long> = _registryUpdateSignal.asStateFlow()
 
-    /**
-     * Fetches models.json from network or cache and populates the memory wrapper.
-     */
+    // Centralized model map: EngineName -> List<AppModel>
+    private val _modelMap = MutableStateFlow<Map<String, List<AppModel>>>(emptyMap())
+    val modelMap: StateFlow<Map<String, List<AppModel>>> = _modelMap.asStateFlow()
+
     suspend fun fetchJson(settingsManager: SettingsManager, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
-        // 1. Try to load from assets first (new structure)
+        Logger.log("fetchJson called (force=$force)", TAG)
+        // 1. Initial load from disk cache if memory is empty
         if (cachedSchema == null) {
-            try {
-                val context = settingsManager.getContext()
-                val inputStream = context.assets.open("models.json")
-                val localJson = inputStream.bufferedReader().use { it.readText() }
-                cachedSchema = gson.fromJson(localJson, RemoteModelSchema::class.java)
-                Logger.log("Loaded from assets: ${cachedSchema?.engines?.stt_whisper?.models?.size} Whisper models", TAG)
-            } catch (e: Exception) {
-                Logger.log("Failed to load from assets: ${e.message}", TAG)
+            settingsManager.getModelsJsonCache()?.let {
+                try {
+                    Logger.log("Loading from disk cache...", TAG)
+                    cachedSchema = gson.fromJson(it, RemoteModelSchema::class.java)
+                    if (cachedSchema != null) {
+                        Logger.log("Disk cache parsed. Engines found: ${cachedSchema?.engines?.keys}", TAG)
+                        rebuildModelMap()
+                    }
+                } catch (e: Exception) {
+                    Logger.log("Failed to parse disk cache: ${e.message}", TAG)
+                }
             }
         }
 
         // 2. Return early if we have data and no force refresh is requested
         if (!force && cachedSchema != null) return@withContext true
 
-        // 3. Perform network fetch (fallback)
+        // 3. Perform network fetch
         val baseUrl = settingsManager.getModelRepoBaseUrl()
         val rawUrlBase = if (baseUrl.contains("github.com") && !baseUrl.contains("raw.githubusercontent.com")) {
             baseUrl.replace("github.com", "raw.githubusercontent.com").removeSuffix("/") + "/main/models.json"
         } else {
             if (baseUrl.endsWith("/")) "${baseUrl}models.json" else "$baseUrl/models.json"
         }
-
+        
         val rawUrl = "$rawUrlBase?t=${System.currentTimeMillis()}"
+        Logger.log("Fetching remote registry from: $rawUrl", TAG)
 
         return@withContext try {
             val jsonText = URL(rawUrl).readText()
+            Logger.log("Network fetch success. Size: ${jsonText.length} chars", TAG)
             val schema = gson.fromJson(jsonText, RemoteModelSchema::class.java)
             if (schema != null) {
                 cachedSchema = schema
+                Logger.log("Remote JSON parsed. Engines found: ${schema.engines.keys}", TAG)
                 settingsManager.saveModelsJsonCache(jsonText)
-                Logger.log("Parsed schema from network: ${schema.engines.stt_whisper?.models?.size} Whisper models, ${schema.engines.wake_vosk?.models?.size} Vosk models", TAG)
-                _registryUpdateSignal.value++ // Signal observers to re-read from getters
+                rebuildModelMap()
+                _registryUpdateSignal.value++
                 true
             } else {
-                Logger.log("Schema is null after parsing", TAG)
+                Logger.log("Failed to parse remote JSON (schema is null)", TAG)
                 false
             }
         } catch (e: Exception) {
             Logger.log("Network fetch failed: ${e.message}", TAG)
-            cachedSchema != null // Return true if we at least have local data
+            cachedSchema != null
         }
     }
 
-    // --- DIRECT GETTERS (Zero manual mapping in VM) ---
-    fun getWhisperModels(): List<RemoteModelItem> = cachedSchema?.engines?.stt_whisper?.models ?: emptyList()
-    fun getVoskModels(): List<RemoteModelItem> = cachedSchema?.engines?.wake_vosk?.models ?: emptyList()
-    fun getLlmModels(): List<RemoteModelItem> = cachedSchema?.engines?.nlu_llm?.models ?: emptyList()
+    /**
+     * Rebuilds the memory map from the current cached schema.
+     */
+    private fun rebuildModelMap() {
+        val schema = cachedSchema ?: return
+        val newMap = mutableMapOf<String, MutableList<AppModel>>()
+        
+        Logger.log("rebuildModelMap starting...", TAG)
+        
+        // Ingest from JSON and inject the key as engine_type
+        schema.engines.forEach { (key, config) ->
+            Logger.log("Ingesting engine: $key (type=${config.type}, models=${config.models.size})", TAG)
+            newMap[key] = config.models.map { it.copy(engine_type = key) }.toMutableList<AppModel>()
+        }
 
-    fun isWhisperMultilingual(): Boolean = cachedSchema?.engines?.stt_whisper?.is_multilingual ?: true
-    fun isVoskMultilingual(): Boolean = cachedSchema?.engines?.wake_vosk?.is_multilingual ?: false
-    fun isLlmMultilingual(): Boolean = cachedSchema?.engines?.nlu_llm?.is_multilingual ?: false
+        Logger.log("Final modelMap keys: ${newMap.keys}", TAG)
+        _modelMap.value = newMap
+    }
 
-    fun getVoskLanguages(): List<String> = getVoskModels()
-        .mapNotNull { it.lang_code }
-        .distinct()
-        .sorted()
+    fun getEngineTypes(): List<String> = cachedSchema?.engines?.keys?.toList() ?: emptyList()
+
+    fun getEngineKeysByType(type: String): List<String> {
+        val result = cachedSchema?.engines?.filter { it.value.type == type }?.keys?.toList() ?: emptyList()
+        Logger.log("getEngineKeysByType(type=$type) -> $result", TAG)
+        return result
+    }
+
+    fun getEngineLabel(engineKey: String, languageManager: LanguageManager): String {
+        val config = cachedSchema?.engines?.get(engineKey)
+        if (config?.engine_label != null) return config.engine_label
+        
+        // Local/Virtual fallbacks
+        return when (engineKey) {
+            Strings.Processors.GOOGLE -> languageManager.getString("engine_label_google")
+            Strings.Processors.WHISPER_API -> languageManager.getString("engine_label_whisper_api")
+            Strings.Processors.WHISPER_VULKAN -> languageManager.getString("engine_label_vulkan_experimental")
+            Strings.AiProcessors.OPENAI -> languageManager.getString("engine_label_openai_gpt")
+            Strings.AiProcessors.GEMINI_NATIVE -> languageManager.getString("engine_label_gemini_nano")
+            else -> engineKey.replace("_", " ").uppercase()
+        }
+    }
+
+    fun getModels(engineKey: String): List<AppModel> {
+        return _modelMap.value[engineKey] ?: emptyList()
+    }
+
+    fun getExtension(engineKey: String): String = cachedSchema?.engines?.get(engineKey)?.extension ?: ""
+
+    fun isMultilingual(engineKey: String): Boolean = cachedSchema?.engines?.get(engineKey)?.is_multilingual ?: false
+
+    fun getLanguages(engineKey: String): List<String> {
+        if (isMultilingual(engineKey)) return emptyList()
+        return getModels(engineKey)
+            .mapNotNull { it.langCode }
+            .distinct()
+            .sorted()
+    }
 
     fun getPrompt(id: String): String? = cachedSchema?.prompts?.get(id)
 
+    fun getModelMapNow(): Map<String, List<AppModel>> {
+        return _modelMap.value
+    }
+
     /**
-     * Resolves the final download URL from the item.
+     * Resolves the final download URL.
      */
     fun resolveUrl(item: AppModel, settingsManager: SettingsManager): String {
         if (item.url.startsWith("http")) return item.url

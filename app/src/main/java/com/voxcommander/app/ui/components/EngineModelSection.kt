@@ -16,7 +16,7 @@ import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Strings
 
 /**
- * Universal component for managing ANY engine model (Whisper, Vosk, Llama).
+ * Universal component for managing ANY engine model (Whisper, Vosk, NLU).
  * Handles: Dropdown selection, IMMEDIATE Download (No Popups), Delete confirmation, and Categorized Fallback.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,6 +60,21 @@ fun <T> EngineModelSection(
         }
     }
 
+    if (groups.isEmpty()) {
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f))
+        ) {
+            Text(
+                text = "No models available for download. Check models.json or repository URL.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+        return
+    }
+
     // 2. Main Dropdown
     GroupedDropdownMenu(
         selectedItem = selectedItem,
@@ -67,6 +82,9 @@ fun <T> EngineModelSection(
         itemLabel = itemLabel,
         isDownloaded = { item ->
             remember(modelIdProvider(item), uiState, refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
+        },
+        isDefault = { item ->
+            item == selectedItem
         },
         onDeviceLabel = languageManager.getString("on_device_label"),
         onItemSelected = { item, isDownloaded ->
@@ -100,6 +118,9 @@ fun <T> EngineModelSection(
                 itemLabel = itemLabel,
                 isDownloaded = { item ->
                     remember(modelIdProvider(item), uiState, refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
+                },
+                isDefault = { item ->
+                    item == selectedItem
                 },
                 onDeviceLabel = languageManager.getString("on_device_label"),
                 onItemSelected = { item, isDownloaded ->

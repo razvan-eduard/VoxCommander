@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
@@ -16,6 +17,7 @@ import com.voxcommander.app.ui.components.DropdownGroup
 import com.voxcommander.app.ui.components.GroupedDropdownContent
 import com.voxcommander.app.ui.components.GroupedDropdownMenu
 import com.voxcommander.app.ui.components.VoiceInputTextField
+import com.voxcommander.app.utils.Strings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,7 +25,6 @@ fun ServiceSettingsTab(
     languageManager: LanguageManager,
     settingsManager: SettingsManager,
     appStateManager: AppStateManager,
-    voskModels: List<AppModel>,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     downloadedColor: Color,
@@ -32,11 +33,13 @@ fun ServiceSettingsTab(
     onCancelDownload: () -> Unit,
     downloadProgress: Float?,
     downloadingItem: Any? = null,
-    refreshTrigger: Int = 0,
-    isVoskMultilingual: Boolean = false,
-    availableVoskLanguages: List<String> = emptyList()
+    refreshTrigger: Int = 0
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
+    val voskModels = uiState.availableModels["wake_vosk"] ?: emptyList()
+    
+    val isVoskMultilingual = RemoteModelRegistry.isMultilingual("wake_vosk")
+    val availableVoskLanguages = RemoteModelRegistry.getLanguages("wake_vosk")
 
     var showModelSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -46,7 +49,7 @@ fun ServiceSettingsTab(
         if (isVoskMultilingual) {
             voskModels
         } else {
-            voskModels.filter { (it as? com.voxcommander.app.data.remote.RemoteModelItem)?.lang_code == uiState.voiceLanguage }
+            voskModels.filter { it.langCode == uiState.voiceLanguage }
         }
     }
 
@@ -85,7 +88,7 @@ fun ServiceSettingsTab(
 
     if (uiState.wakeWordEnabled) {
         // Voice Language Selection (only for non-multilingual Vosk)
-        if (!isVoskMultilingual) {
+        if (!isVoskMultilingual && availableVoskLanguages.isNotEmpty()) {
             val languages = availableVoskLanguages.map { lang ->
                 lang to lang.uppercase()
             }

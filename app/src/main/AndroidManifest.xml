@@ -52,6 +52,16 @@
             android:enabled="true"
             android:exported="false"
             android:process=":vulkanprobe" />
+
+        <!-- BroadcastReceiver for download completion in background -->
+        <receiver
+            android:name=".data.remote.DownloadCompleteReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

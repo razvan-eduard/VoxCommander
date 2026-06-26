@@ -2,6 +2,7 @@ package com.voxcommander.app.state
 
 import android.content.Context
 import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.*
@@ -52,7 +53,9 @@ class AppStateManager private constructor(
     private val voiceMutex = Mutex()
 
     // --- CENTRALIZED UI STATE ---
-    private val _uiState = MutableStateFlow(AppState.fromSettings(settingsManager, context))
+    private val _uiState = MutableStateFlow(
+        AppState.fromSettings(settingsManager, context, RemoteModelRegistry.getModelMapNow())
+    )
     val uiState: StateFlow<AppState> = _uiState.asStateFlow()
     
     // Alias for compatibility with older components
@@ -127,6 +130,10 @@ class AppStateManager private constructor(
     // State Update Methods - Atomic updates using .copy()
     fun setVoiceProcessor(processor: String) {
         settingsManager.saveVoiceProcessor(processor)
+
+        // Do NOT auto-change activeVoiceModelId - it's set manually by user selection
+        // The green checkmark is only set when user manually selects a model from dropdown
+
         updateState {
             copy(
                 voiceProcessor = processor,
@@ -145,28 +152,18 @@ class AppStateManager private constructor(
         }
     }
 
-    fun setSelectedWhisperModelId(modelId: String) {
-        settingsManager.saveSelectedWhisperModelId(modelId)
+    fun setActiveVoiceModelId(modelId: String) {
+        settingsManager.saveActiveVoiceModelId(modelId)
         updateState {
             copy(
-                selectedWhisperModelId = modelId,
-                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
-            )
-        }
-    }
-
-    fun setSelectedVoskModelName(modelName: String) {
-        settingsManager.saveSelectedVoskModelName(modelName)
-        updateState {
-            copy(
-                selectedVoskModelName = modelName,
+                activeVoiceModelId = modelId,
                 voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
             )
         }
     }
 
     fun setCustomWhisperModelPath(path: String?) {
-        if (path != null) settingsManager.saveCustomWhisperModelPath(path)
+        if (path != null) settingsManager.saveCustomModelPath("stt_whisper", path)
         updateState {
             copy(
                 customWhisperModelPath = path,
@@ -176,7 +173,7 @@ class AppStateManager private constructor(
     }
 
     fun setCustomVoskModelPath(language: String, path: String?) {
-        if (path != null) settingsManager.saveCustomVoskModelPath(language, path)
+        if (path != null) settingsManager.saveCustomModelPath("wake_vosk", path, language)
         updateState {
             val updatedPaths = customVoskModelPaths.toMutableMap()
             if (path != null) {
@@ -236,8 +233,17 @@ class AppStateManager private constructor(
         updateState { copy(isVerboseLoggingEnabled = enabled) }
     }
 
+    fun setExperimentalVulkanEnabled(enabled: Boolean) {
+        settingsManager.saveExperimentalVulkanEnabled(enabled)
+        updateState { copy(isExperimentalVulkanEnabled = enabled) }
+    }
+
     fun setAiProcessor(processor: String) {
         settingsManager.saveAiProcessor(processor)
+
+        // Do NOT auto-change activeIntentModelId - it's set manually by user selection
+        // The green checkmark is only set when user manually selects a model from dropdown
+
         updateState {
             copy(
                 aiProcessor = processor,
@@ -246,32 +252,12 @@ class AppStateManager private constructor(
         }
     }
 
-    fun setSelectedLlamaModelId(modelId: String) {
-        settingsManager.saveSelectedLlamaModelId(modelId)
+    fun setActiveIntentModelId(modelId: String) {
+        settingsManager.saveActiveIntentModelId(modelId)
         updateState {
             copy(
-                selectedLlamaModelId = modelId,
+                activeIntentModelId = modelId,
                 intentModelReady = recalculateIntentReady(aiProcessor, settingsManager)
-            )
-        }
-    }
-
-    fun onWhisperDownloadComplete(modelId: String) {
-        settingsManager.setModelDownloaded(modelId, true)
-        updateState {
-            copy(
-                selectedWhisperModelId = modelId,
-                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
-            )
-        }
-    }
-
-    fun onVoskDownloadComplete(modelName: String) {
-        settingsManager.setModelDownloaded(modelName, true)
-        updateState {
-            copy(
-                selectedVoskModelName = modelName,
-                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
             )
         }
     }
@@ -368,7 +354,7 @@ class AppStateManager private constructor(
     fun refreshAll() {
         val current = _uiState.value
         val nextTrigger = current.refreshTrigger + 1
-        _uiState.value = AppState.fromSettings(settingsManager, context).copy(
+        _uiState.value = AppState.fromSettings(settingsManager, context, RemoteModelRegistry.getModelMapNow()).copy(
             refreshTrigger = nextTrigger,
             isWakeWordServiceListening = current.isWakeWordServiceListening,
             voiceState = current.voiceState,
@@ -399,9 +385,10 @@ class AppStateManager private constructor(
         _vulkanTestState.value = VulkanTestState.RUNNING
         _vulkanTestPassed.value = null
 
-        val modelId = _uiState.value.selectedWhisperModelId
+        val modelId = _uiState.value.activeVoiceModelId
         // FIX: Models are in getExternalFilesDir(null), NOT context.filesDir
-        val modelPath = java.io.File(context.getExternalFilesDir(null), "whisper-model-$modelId.bin").absolutePath
+        val extension = com.voxcommander.app.data.remote.RemoteModelRegistry.getExtension("whisper")
+        val modelPath = java.io.File(context.getExternalFilesDir(null), "$modelId$extension").absolutePath
 
         Logger.log("Starting Vulkan compatibility test with model: $modelPath", "VulkanTest")
 

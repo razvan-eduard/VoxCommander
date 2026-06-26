@@ -8,15 +8,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsManager
-import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
-
-object ModelsSettingsTabConfig {
-    const val SHOW_SAVE_BUTTON = true
-    var isModelOnDevice: Boolean = true
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,32 +22,16 @@ fun ModelsSettingsTab(
     hasApiKey: Boolean,
     googleSttAvailable: Boolean,
     onVoiceLanguageSelected: (String) -> Unit,
-    whisperModels: List<AppModel>,
-    llamaModels: List<AppModel>,
-    onWhisperModelSelected: (AppModel, Boolean) -> Unit,
-    onSelectCustomWhisperModel: () -> Unit,
-    voskModels: List<AppModel>,
-    selectedVoskModel: AppModel?,
-    isVoskLoading: Boolean,
-    isOffline: Boolean,
-    voskError: String?,
-    onRetryConnection: suspend () -> Unit,
-    onVoskModelSelected: (AppModel, Boolean, String) -> Unit,
-    onSelectCustomVoskModel: () -> Unit,
-    downloadProgress: Float?,
-    downloadingItem: Any? = null,
-    downloadedColor: Color,
-    onCancelDownload: () -> Unit,
-    onDownloadWhisperModel: (String, String) -> Unit,
-    onDownloadVoskModel: (String, String, String) -> Unit,
-    onDownloadLlamaModel: (AppModel) -> Unit,
-    onDeleteLlamaModel: (AppModel) -> Unit,
+    onModelSelected: (AppModel, Boolean, String) -> Unit,
+    onDownloadModel: (String, String, String?) -> Unit,
+    onDeleteModel: (String, String) -> Unit,
     onDeleteRequest: (AppModel) -> Unit,
+    onCancelDownload: () -> Unit,
+    downloadProgress: Float?,
+    downloadingItem: AppModel? = null,
+    downloadedColor: Color,
     onFallbackChanged: () -> Unit = {},
-    refreshTrigger: Int = 0,
-    isWhisperMultilingual: Boolean = true,
-    isVoskMultilingual: Boolean = false,
-    availableVoskLanguages: List<String> = emptyList()
+    refreshTrigger: Int = 0
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) }
     
@@ -93,40 +71,25 @@ fun ModelsSettingsTab(
                 hasApiKey = hasApiKey,
                 googleSttAvailable = googleSttAvailable,
                 onVoiceLanguageSelected = onVoiceLanguageSelected,
-                whisperModels = whisperModels,
-                onWhisperModelSelected = onWhisperModelSelected,
-                onSelectCustomWhisperModel = onSelectCustomWhisperModel,
-                voskModels = voskModels,
-                selectedVoskModel = selectedVoskModel,
-                isVoskLoading = isVoskLoading,
-                isOffline = isOffline,
-                voskError = voskError,
-                onRetryConnection = onRetryConnection,
-                onVoskModelSelected = onVoskModelSelected,
-                onSelectCustomVoskModel = onSelectCustomVoskModel,
-                onDownloadWhisperModel = onDownloadWhisperModel,
-                onDownloadVoskModel = onDownloadVoskModel,
+                onModelSelected = onModelSelected,
+                onDownloadModel = onDownloadModel,
                 downloadProgress = downloadProgress,
-                downloadingItem = downloadingItem as? AppModel,
+                downloadingItem = downloadingItem,
                 downloadedColor = downloadedColor,
                 onCancelDownload = onCancelDownload,
                 onDeleteRequest = onDeleteRequest,
                 onFallbackChanged = onFallbackChanged,
-                refreshTrigger = refreshTrigger,
-                isWhisperMultilingual = isWhisperMultilingual,
-                isVoskMultilingual = isVoskMultilingual,
-                availableVoskLanguages = availableVoskLanguages
+                refreshTrigger = refreshTrigger
             )
         } else {
             IntentEnginesSubTab(
-                languageManager = languageManager, 
-                settingsManager = settingsManager, 
+                languageManager = languageManager,
+                settingsManager = settingsManager,
                 appStateManager = appStateManager,
-                llamaModels = llamaModels,
-                onDownloadLlamaModel = onDownloadLlamaModel,
-                onDeleteLlamaModel = onDeleteLlamaModel,
+                onDownloadModel = onDownloadModel,
+                onDeleteModel = onDeleteModel,
                 downloadProgress = downloadProgress,
-                downloadingItem = downloadingItem as? AppModel,
+                downloadingItem = downloadingItem,
                 onCancelDownload = onCancelDownload,
                 onFallbackChanged = onFallbackChanged,
                 refreshTrigger = refreshTrigger

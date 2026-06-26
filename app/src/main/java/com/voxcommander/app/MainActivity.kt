@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
     ) { uri: Uri? ->
         uri?.let {
             pendingModelLanguage?.let { lang ->
-                appContainer.modelManagementViewModel.selectCustomVoskModel(it, lang)
+                appContainer.modelManagementViewModel.selectCustomModel(it, "wake_vosk", lang)
             }
         }
     }
@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
-            appContainer.modelManagementViewModel.selectCustomWhisperModel(it)
+            appContainer.modelManagementViewModel.selectCustomModel(it, "stt_whisper")
         }
     }
 
@@ -132,18 +132,8 @@ class MainActivity : ComponentActivity() {
                             fastMapDao = appContainer.fastMapDao,
                             viewModel = appContainer.mainViewModel,
                             modelManagementViewModel = appContainer.modelManagementViewModel,
-                            onDownloadVoskModel = { lang, url, name ->
-                                appContainer.modelManagementViewModel.downloadVoskModel(lang, url, name)
-                            },
-                            onDownloadWhisperModel = { modelId, url ->
-                                appContainer.modelManagementViewModel.downloadWhisperModel(modelId, url)
-                            },
-                            onSelectCustomVoskModel = { lang ->
-                                pendingModelLanguage = lang
-                                customVoskModelLauncher.launch(null)
-                            },
-                            onSelectCustomWhisperModel = {
-                                customWhisperModelLauncher.launch(arrayOf(MIME_TYPE_ALL))
+                            onDownloadModel = { modelId, engineType, lang ->
+                                appContainer.modelManagementViewModel.downloadModel(modelId, engineType, lang)
                             },
                             onDeleteUnusedModels = {
                                 appContainer.modelManagementViewModel.deleteUnusedModels()
@@ -153,12 +143,9 @@ class MainActivity : ComponentActivity() {
                                 appContainer.modelManagementViewModel.cancelDownload()
                                 Toast.makeText(this@MainActivity, appContainer.languageManager.getString("download_cancelled"), Toast.LENGTH_SHORT).show()
                             },
-                            onDownloadLlamaModel = { model ->
-                                appContainer.modelManagementViewModel.downloadLlamaModel(model.id, model.url)
-                            },
-                            onDeleteLlamaModel = { model ->
-                                appContainer.modelManagementViewModel.deleteLlamaModel(model.id)
-                                Toast.makeText(this@MainActivity, "Llama model deleted", Toast.LENGTH_SHORT).show()
+                            onDeleteModel = { modelId, engineKey ->
+                                appContainer.modelManagementViewModel.deleteModel(modelId, engineKey)
+                                Toast.makeText(this@MainActivity, "Model deleted", Toast.LENGTH_SHORT).show()
                             },
                             downloadProgress = currentProgress,
                             selectionSuccessMessage = successMessage,

@@ -48,15 +48,15 @@ class WhisperCppSttEngine(
             if (whisperContext != null) return@withContext
 
             // Check for custom model path first
-            val customPath = settingsManager.getCustomWhisperModelPath()
+            val customPath = settingsManager.getCustomModelPath("stt_whisper")
             var modelPath = if (!customPath.isNullOrBlank()) {
                 Log.d(TAG, "Using custom model path: $customPath")
                 customPath
             } else {
-                val selectedModelId = settingsManager.getSelectedWhisperModelId()
+                val selectedModelId = settingsManager.getActiveVoiceModelId()
                 File(
                     context.getExternalFilesDir(null),
-                    "whisper-model-$selectedModelId.bin"
+                    "$selectedModelId${com.voxcommander.app.data.remote.RemoteModelRegistry.getExtension("stt_whisper")}"
                 ).absolutePath
             }
 

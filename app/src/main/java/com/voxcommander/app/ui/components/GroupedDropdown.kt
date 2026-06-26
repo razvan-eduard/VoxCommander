@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.utils.Logger
 
 data class DropdownGroup<T>(
     val header: String,
@@ -33,6 +34,7 @@ fun <T> GroupedDropdownContent(
     groups: List<DropdownGroup<T>>,
     itemLabel: (T) -> String,
     isDownloaded: @Composable (T) -> Boolean, // UPDATED TO @Composable
+    isDefault: @Composable (T) -> Boolean = { false },
     onDeviceLabel: String,
     onItemSelected: (T, Boolean) -> Unit, // Include downloaded state
     onDownloadRequest: ((T) -> Unit)? = null,
@@ -72,12 +74,16 @@ fun <T> GroupedDropdownContent(
                 items(group.items) { item ->
                     val label = itemLabel(item)
                     val downloaded = isDownloaded(item) // Now reactive @Composable
+                    val isDefault = isDefault(item)
                     val isDownloading = downloadingItem == item
 
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onItemSelected(item, downloaded) },
+                            .clickable {
+                                Logger.log("Item clicked: label=$label, downloaded=$downloaded", "GroupedDropdown")
+                                onItemSelected(item, downloaded)
+                            },
                         shape = RoundedCornerShape(8.dp),
                         color = if (downloaded) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
@@ -87,18 +93,28 @@ fun <T> GroupedDropdownContent(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = if (downloaded) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                    if (downloaded) {
-                                        Text(
-                                            text = onDeviceLabel,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF2E7D32)
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    if (isDefault) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "Default",
+                                            tint = Color(0xFF2E7D32),
+                                            modifier = Modifier.padding(end = 8.dp)
                                         )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = if (downloaded) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        if (downloaded) {
+                                            Text(
+                                                text = onDeviceLabel,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF2E7D32)
+                                            )
+                                        }
                                     }
                                 }
 
@@ -121,15 +137,10 @@ fun <T> GroupedDropdownContent(
                                                 )
                                             }
                                         }
-                                        Icon(
-                                            Icons.Default.Check,
-                                            contentDescription = "Downloaded",
-                                            tint = Color(0xFF2E7D32)
-                                        )
                                     } else if (onDownloadRequest != null) {
-                                        IconButton(onClick = { 
+                                        IconButton(onClick = {
                                             // Click on arrow: trigger download but DO NOT close the sheet
-                                            onDownloadRequest(item) 
+                                            onDownloadRequest(item)
                                         }) {
                                             Icon(
                                                 Icons.Default.Download,
@@ -170,6 +181,7 @@ fun <T> GroupedDropdownMenu(
     groups: List<DropdownGroup<T>>,
     itemLabel: (T) -> String,
     isDownloaded: @Composable (T) -> Boolean, // UPDATED TO @Composable
+    isDefault: @Composable (T) -> Boolean = { false },
     onDeviceLabel: String,
     onItemSelected: (T, Boolean) -> Unit, // Include downloaded state
     onDownloadRequest: ((T) -> Unit)? = null,
@@ -183,6 +195,7 @@ fun <T> GroupedDropdownMenu(
     placeholder: String? = null
 ) {
     val downloaded = selectedItem?.let { isDownloaded(it) } ?: false
+    val isDefault = selectedItem?.let { isDefault(it) } ?: false
     val isDownloading = downloadingItem != null && downloadingItem == selectedItem
 
     Surface(
@@ -202,18 +215,23 @@ fun <T> GroupedDropdownMenu(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = selectedItem?.let { itemLabel(it) } ?: placeholder ?: "Select...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (selectedItem == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                    )
-                    if (downloaded) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    if (isDefault) {
+                        Icon(Icons.Default.Check, contentDescription = "Default", tint = Color(0xFF2E7D32), modifier = Modifier.padding(end = 8.dp))
+                    }
+                    Column {
                         Text(
-                            text = onDeviceLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF2E7D32)
+                            text = selectedItem?.let { itemLabel(it) } ?: placeholder ?: "Select...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (selectedItem == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                         )
+                        if (downloaded) {
+                            Text(
+                                text = onDeviceLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF2E7D32)
+                            )
+                        }
                     }
                 }
 

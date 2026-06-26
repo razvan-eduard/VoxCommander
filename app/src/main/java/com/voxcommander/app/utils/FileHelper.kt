@@ -2,6 +2,7 @@ package com.voxcommander.app.utils
 
 import android.content.Context
 import android.net.Uri
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import java.io.File
 import java.io.FileOutputStream
 
@@ -37,18 +38,27 @@ object FileHelper {
      * Deletes a model file from external storage.
      * @param context Application context
      * @param modelId Model identifier
-     * @param type Model type (whisper, llama, vosk)
+     * @param type Model type (whisper, nlu, vosk)
      */
     fun deleteModelFile(context: Context, modelId: String, type: String) {
         val fileName = when (type) {
-            "whisper" -> "whisper-model-$modelId.bin"
-            "llama" -> "llama-model-$modelId.bin"
-            "vosk" -> "vosk-model-$modelId"
+            "whisper" -> "$modelId${RemoteModelRegistry.getExtension("whisper")}"
+            "nlu" -> "$modelId${RemoteModelRegistry.getExtension("nlu")}"
+            "vosk" -> modelId // Vosk models are directories, no extension
             else -> return
         }
         val file = File(context.getExternalFilesDir(null), fileName)
+        Logger.log("Deleting model file: type=$type, modelId=$modelId, fileName=$fileName, path=${file.absolutePath}, exists=${file.exists()}", Strings.Tags.FILE_HELPER)
         if (file.exists()) {
-            file.delete()
+            if (file.isDirectory) {
+                file.deleteRecursively()
+                Logger.log("Deleted Vosk directory: $fileName", Strings.Tags.FILE_HELPER)
+            } else {
+                file.delete()
+                Logger.log("Deleted model file: $fileName", Strings.Tags.FILE_HELPER)
+            }
+        } else {
+            Logger.log("Model file does not exist: $fileName", Strings.Tags.FILE_HELPER)
         }
     }
 
