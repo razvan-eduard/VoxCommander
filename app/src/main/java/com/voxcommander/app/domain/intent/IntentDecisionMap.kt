@@ -1,7 +1,7 @@
 package com.voxcommander.app.domain.intent
 
 import com.voxcommander.app.domain.intent.interpreter.AssistantEngine
-import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.utils.Strings
 import android.util.Log
@@ -24,7 +24,7 @@ class IntentDecisionMap(
 
     private val TAG = Strings.Tags.INTENT_DECISION_MAP
 
-    override suspend fun processCommand(spokenText: String): IntentPayload? {
+    override suspend fun processCommand(spokenText: String): NluIntent? {
         if (spokenText.isBlank()) return null
         
         Log.d(TAG, "🧠 Triple AI Brain: Processing '$spokenText'")

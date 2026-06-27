@@ -3,7 +3,7 @@ package com.voxcommander.app.domain.intent.interpreter
 import android.content.Context
 import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsRepository
-import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +29,7 @@ class GeminiNanoInterpreter(
     private val TAG = Strings.Tags.GEMINI_NANO_INTERPRETER
     private val gson = Gson()
 
-    override suspend fun processCommand(spokenText: String): IntentPayload? = withContext(Dispatchers.IO) {
+    override suspend fun processCommand(spokenText: String): NluIntent? = withContext(Dispatchers.IO) {
         val snapshot = settingsRepo.getSettingsSnapshot()
         if (snapshot.geminiIncompatible) {
             Logger.log("Gemini Nano not available on this device (AICore incompatible)", TAG)

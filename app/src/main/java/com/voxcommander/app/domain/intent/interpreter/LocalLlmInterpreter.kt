@@ -3,7 +3,7 @@ package com.voxcommander.app.domain.intent.interpreter
 import android.content.Context
 import com.voxcommander.app.utils.Logger
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.data.remote.RemoteModelRegistry
@@ -63,7 +63,7 @@ class LocalLlmInterpreter(
         llmInference = instance
     }
 
-    override suspend fun processCommand(spokenText: String): IntentPayload? = withContext(Dispatchers.IO) {
+    override suspend fun processCommand(spokenText: String): NluIntent? = withContext(Dispatchers.IO) {
         setupLlm()
         val engine = llmInference ?: return@withContext null
 
@@ -73,12 +73,11 @@ class LocalLlmInterpreter(
             val response = engine.generateResponse(hydratedPrompt)
             Logger.log("LLM response: $response", TAG)
 
-            // Basic cleaning to ensure we have only JSON
             val jsonStart = response.indexOf("{")
             val jsonEnd = response.lastIndexOf("}") + 1
             if (jsonStart >= 0 && jsonEnd > jsonStart) {
                 val cleanJson = response.substring(jsonStart, jsonEnd)
-                return@withContext gson.fromJson(cleanJson, IntentPayload::class.java)
+                return@withContext NluIntentParser.parse(cleanJson)
             }
         } catch (e: Exception) {
             Logger.log("LLM generation failed: ${e.message}", TAG)

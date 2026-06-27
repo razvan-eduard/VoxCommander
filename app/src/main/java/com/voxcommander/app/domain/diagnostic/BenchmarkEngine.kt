@@ -11,7 +11,7 @@ import com.voxcommander.app.domain.intent.interpreter.GeminiNanoInterpreter
 import com.voxcommander.app.domain.intent.interpreter.GeminiCloudInterpreter
 import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
 import com.voxcommander.app.domain.intent.interpreter.OpenAiInterpreter
-import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.domain.engine.whisper.WhisperSttEngine
 import com.voxcommander.app.state.AppStateManager
@@ -371,22 +371,22 @@ class BenchmarkEngine(
 
     private data class IntentValidation(val isSuccess: Boolean, val error: String?)
 
-    private fun validateIntentPayload(payload: IntentPayload?): IntentValidation {
+    private fun validateIntentPayload(payload: NluIntent?): IntentValidation {
         if (payload == null) {
             return IntentValidation(false, "Returned null (no JSON generated)")
         }
-        if (payload.category.isBlank()) {
-            return IntentValidation(false, "category is blank")
+        if (payload.domain.isBlank()) {
+            return IntentValidation(false, "domain is blank")
         }
-        if (payload.actionType.isBlank()) {
-            return IntentValidation(false, "actionType is blank")
+        if (payload.action.isBlank()) {
+            return IntentValidation(false, "action is blank")
         }
-        // Check if category/action match expected values for the test command
-        if (payload.category != INTENT_TEST_EXPECTED_CATEGORY) {
-            return IntentValidation(false, "category='${payload.category}' (expected '$INTENT_TEST_EXPECTED_CATEGORY')")
+        // Check if domain/action match expected values for the test command
+        if (payload.domain != INTENT_TEST_EXPECTED_CATEGORY) {
+            return IntentValidation(false, "domain='${payload.domain}' (expected '$INTENT_TEST_EXPECTED_CATEGORY')")
         }
-        if (payload.actionType != INTENT_TEST_EXPECTED_ACTION) {
-            return IntentValidation(false, "actionType='${payload.actionType}' (expected '$INTENT_TEST_EXPECTED_ACTION')")
+        if (payload.action != "play") {
+            return IntentValidation(false, "action='${payload.action}' (expected 'play')")
         }
         return IntentValidation(true, null)
     }

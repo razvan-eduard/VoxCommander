@@ -222,5 +222,8 @@
   "engine_label_gemini_cloud": "Gemini Cloud (API)",
   "available_models_header": "MODELE DISPONIBILE",
   "nlu_model_selection_title": "Selectare Model NLU",
-  "engine_type_label": "Motor: %s"
+  "engine_type_label": "Motor: %s",
+  "splash_loading_assets": "Se încarcă resursele...",
+  "splash_loaded_remote": "Resurse încărcate cu succes",
+  "splash_no_network": "Fără rețea. Se folosesc resursele salvate local."
 }

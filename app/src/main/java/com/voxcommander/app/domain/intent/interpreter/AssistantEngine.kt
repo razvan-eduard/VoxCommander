@@ -1,7 +1,7 @@
 package com.voxcommander.app.domain.intent.interpreter
 
-import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.domain.intent.model.NluIntent
 
 interface AssistantEngine {
-    suspend fun processCommand(spokenText: String): IntentPayload?
+    suspend fun processCommand(spokenText: String): NluIntent?
 }

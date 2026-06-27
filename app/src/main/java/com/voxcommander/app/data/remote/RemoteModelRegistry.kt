@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.net.URL
+import android.content.Context
 
 /**
  * Models.json Schema Objects - The Wrapper
@@ -83,35 +84,45 @@ object RemoteModelRegistry {
     private val _modelMap = MutableStateFlow<Map<String, List<AppModel>>>(emptyMap())
     val modelMap: StateFlow<Map<String, List<AppModel>>> = _modelMap.asStateFlow()
 
+    private var appContext: Context? = null
+
+    // Reactive load status for splash screen
+    enum class LoadStatus { LOADING, LOADED_FROM_REMOTE, LOADED_FROM_CACHE, NO_NETWORK }
+    private val _loadStatus = MutableStateFlow(LoadStatus.LOADING)
+    val loadStatus: StateFlow<LoadStatus> = _loadStatus.asStateFlow()
+
+    private const val LOCAL_FILE_NAME = "models.json"
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
     suspend fun fetchJson(repo: SettingsRepository, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         Logger.log("fetchJson called (force=$force)", TAG)
-        // 1. Initial load from disk cache if memory is empty
+        _loadStatus.value = LoadStatus.LOADING
+
+        // 1. Ensure local file exists (copy from assets on first run)
+        ensureLocalFile()
+
+        // 2. Parse local file into memory (immediate availability)
         if (cachedSchema == null) {
-            repo.getSettingsSnapshot().modelsJsonCache?.let {
-                try {
-                    Logger.log("Loading from disk cache...", TAG)
-                    cachedSchema = gson.fromJson(it, RemoteModelSchema::class.java)
-                    if (cachedSchema != null) {
-                        Logger.log("Disk cache parsed. Engines found: ${cachedSchema?.engines?.keys}", TAG)
-                        rebuildModelMap()
-                    }
-                } catch (e: Exception) {
-                    Logger.log("Failed to parse disk cache: ${e.message}", TAG)
-                }
-            }
+            loadFromFilesDir()
         }
 
-        // 2. Return early if we have data and no force refresh is requested
-        if (!force && cachedSchema != null) return@withContext true
+        // 3. If not force and we have data, return early
+        if (!force && cachedSchema != null) {
+            _loadStatus.value = LoadStatus.LOADED_FROM_CACHE
+            return@withContext true
+        }
 
-        // 3. Perform network fetch
+        // 4. Try remote fetch to update local file
         val baseUrl = repo.getSettingsSnapshot().modelRepoBaseUrl
         val rawUrlBase = if (baseUrl.contains("github.com") && !baseUrl.contains("raw.githubusercontent.com")) {
             baseUrl.replace("github.com", "raw.githubusercontent.com").removeSuffix("/") + "/main/models.json"
         } else {
             if (baseUrl.endsWith("/")) "${baseUrl}models.json" else "$baseUrl/models.json"
         }
-        
+
         val rawUrl = "$rawUrlBase?t=${System.currentTimeMillis()}"
         Logger.log("Fetching remote registry from: $rawUrl", TAG)
 
@@ -120,19 +131,76 @@ object RemoteModelRegistry {
             Logger.log("Network fetch success. Size: ${jsonText.length} chars", TAG)
             val schema = gson.fromJson(jsonText, RemoteModelSchema::class.java)
             if (schema != null) {
+                // Overwrite local file with remote version
+                saveLocalFile(jsonText)
                 cachedSchema = schema
-                Logger.log("Remote JSON parsed. Engines found: ${schema.engines.keys}", TAG)
+                Logger.log("Remote JSON parsed and saved locally. Engines found: ${schema.engines.keys}", TAG)
                 repo.saveModelsJsonCache(jsonText)
                 rebuildModelMap()
                 _registryUpdateSignal.value++
+                _loadStatus.value = LoadStatus.LOADED_FROM_REMOTE
                 true
             } else {
                 Logger.log("Failed to parse remote JSON (schema is null)", TAG)
-                false
+                _loadStatus.value = if (cachedSchema != null) LoadStatus.LOADED_FROM_CACHE else LoadStatus.NO_NETWORK
+                cachedSchema != null
             }
         } catch (e: Exception) {
-            Logger.log("Network fetch failed: ${e.message}", TAG)
+            Logger.log("Network fetch failed: ${e.message}. Using cached local file.", TAG)
+            _loadStatus.value = if (cachedSchema != null) LoadStatus.LOADED_FROM_CACHE else LoadStatus.NO_NETWORK
             cachedSchema != null
+        }
+    }
+
+    /**
+     * Ensures models.json exists in filesDir. On first run, copies from bundled assets.
+     */
+    private fun ensureLocalFile() {
+        val ctx = appContext ?: return
+        val localFile = java.io.File(ctx.filesDir, LOCAL_FILE_NAME)
+        if (!localFile.exists()) {
+            try {
+                ctx.assets.open(LOCAL_FILE_NAME).use { input ->
+                    localFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Logger.log("Copied models.json from assets to filesDir (first run)", TAG)
+            } catch (e: Exception) {
+                Logger.log("Failed to copy models.json from assets: ${e.message}", TAG)
+            }
+        }
+    }
+
+    /**
+     * Loads and parses models.json from filesDir (the writable local copy).
+     */
+    private fun loadFromFilesDir() {
+        val ctx = appContext ?: return
+        val localFile = java.io.File(ctx.filesDir, LOCAL_FILE_NAME)
+        if (!localFile.exists()) return
+        try {
+            val jsonText = localFile.readText()
+            cachedSchema = gson.fromJson(jsonText, RemoteModelSchema::class.java)
+            if (cachedSchema != null) {
+                Logger.log("Loaded models.json from filesDir. Engines: ${cachedSchema?.engines?.keys}", TAG)
+                rebuildModelMap()
+            }
+        } catch (e: Exception) {
+            Logger.log("Failed to parse local models.json: ${e.message}", TAG)
+        }
+    }
+
+    /**
+     * Saves remote JSON text to filesDir, overwriting the local copy.
+     */
+    private fun saveLocalFile(jsonText: String) {
+        val ctx = appContext ?: return
+        try {
+            java.io.File(ctx.filesDir, LOCAL_FILE_NAME).writeText(jsonText)
+            Logger.log("Saved updated models.json to filesDir", TAG)
+        } catch (e: Exception) {
+            Logger.log("Failed to save models.json to filesDir: ${e.message}", TAG)
         }
     }
 

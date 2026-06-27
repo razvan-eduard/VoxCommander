@@ -3,7 +3,7 @@ package com.voxcommander.app.ui.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxcommander.app.domain.intent.interpreter.AssistantEngine
-import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
@@ -18,7 +18,7 @@ class MainViewModel(
     private val languageManager: LanguageManager
 ) : ViewModel() {
 
-    private val _currentIntent = MutableStateFlow<IntentPayload?>(null)
+    private val _currentIntent = MutableStateFlow<NluIntent?>(null)
     val currentIntent = _currentIntent.asStateFlow()
 
     private val _isProcessing = MutableStateFlow(false)

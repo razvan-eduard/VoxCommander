@@ -3,7 +3,8 @@ package com.voxcommander.app.domain.intent.interpreter
 import android.util.Log
 import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsRepository
-import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.domain.intent.model.NluIntent
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,15 +27,15 @@ class OpenAiInterpreter(
     private val client = OkHttpClient()
     private val gson = Gson()
 
-    override suspend fun processCommand(spokenText: String): IntentPayload? = withContext(Dispatchers.IO) {
+    override suspend fun processCommand(spokenText: String): NluIntent? = withContext(Dispatchers.IO) {
         val apiKey = settingsRepo.getApiKeySync()
         if (apiKey.isNullOrBlank()) {
             Log.e(TAG, "OpenAI API Key is missing")
             return@withContext null
         }
 
-        val systemPrompt = PromptProvider.getNluPrompt("") // Template instructions
-        val userPrompt = spokenText
+        val systemPrompt = PromptProvider.getNluSystemPrompt()
+        val userPrompt = PromptProvider.formatUserInput(spokenText)
 
         val jsonBody = JSONObject().apply {
             put("model", "gpt-4o-mini")
@@ -63,13 +64,13 @@ class OpenAiInterpreter(
                     .getJSONObject("message")
                     .getString("content")
                 
-                Log.d(TAG, "OpenAI Response: $content")
-                return@withContext gson.fromJson(content, IntentPayload::class.java)
+                Logger.log("OpenAI Response: $content", TAG)
+                return@withContext NluIntentParser.parse(content)
             } else {
-                Log.e(TAG, "OpenAI API Error: ${response.code} - $bodyString")
+                Logger.log("OpenAI API Error: ${response.code} - $bodyString", TAG)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "OpenAI Request Failed", e)
+            Logger.log("OpenAI Request Failed: ${e.message}", TAG)
         }
         null
     }

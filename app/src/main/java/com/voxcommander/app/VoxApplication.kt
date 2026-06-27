@@ -35,6 +35,9 @@ class VoxApplication : Application() {
             kotlinx.coroutines.runBlocking { container.settingsRepository.setVoiceLanguage(Strings.Preferences.DEFAULT_LANGUAGE) }
         }
         
+        // Initialize RemoteModelRegistry with app context (for assets/filesDir access)
+        RemoteModelRegistry.init(this)
+
         // Initial fetch of the remote model registry - Force update on start to bypass CDN caching
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             val success = RemoteModelRegistry.fetchJson(container.settingsRepository, force = true)

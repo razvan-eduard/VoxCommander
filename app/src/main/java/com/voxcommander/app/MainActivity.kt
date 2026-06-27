@@ -13,14 +13,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import androidx.core.content.ContextCompat
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.voxcommander.app.di.AppContainer
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.ui.screens.main.MainScreen
+import com.voxcommander.app.ui.screens.splash.SplashLoadingScreen
 import com.voxcommander.app.ui.theme.VoxCommanderTheme
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
@@ -74,9 +75,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // 1. Install Splash Screen BEFORE super.onCreate()
-        installSplashScreen()
-
         super.onCreate(savedInstanceState)
         Logger.log("MainActivity: onCreate called")
 
@@ -106,6 +104,18 @@ class MainActivity : ComponentActivity() {
                 val currentProgress by appContainer.modelManagementViewModel.downloadProgress.collectAsStateWithLifecycle()
                 val successMessage by appContainer.modelManagementViewModel.selectionSuccessMessage.collectAsStateWithLifecycle()
                 val showVulkanError by appContainer.modelManagementViewModel.showVulkanError.collectAsStateWithLifecycle()
+                val loadStatus by RemoteModelRegistry.loadStatus.collectAsStateWithLifecycle()
+
+                // Show splash screen while loading assets on startup
+                var showSplash by remember { mutableStateOf(true) }
+
+                if (showSplash) {
+                    SplashLoadingScreen(
+                        languageManager = appContainer.languageManager,
+                        onFinished = { showSplash = false }
+                    )
+                    return@VoxCommanderTheme
+                }
 
                 // --- UI STATE OBSERVERS ---
                 // Background trigger logic is now handled in WakeWordService for system-wide reliability.

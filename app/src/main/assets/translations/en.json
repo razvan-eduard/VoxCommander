@@ -224,5 +224,8 @@
   "engine_label_gemini_cloud": "Gemini Cloud (API)",
   "available_models_header": "AVAILABLE MODELS",
   "nlu_model_selection_title": "NLU Model Selection",
-  "engine_type_label": "Engine: %s"
+  "engine_type_label": "Engine: %s",
+  "splash_loading_assets": "Loading assets...",
+  "splash_loaded_remote": "Assets loaded successfully",
+  "splash_no_network": "No network available. Using cached assets."
 }

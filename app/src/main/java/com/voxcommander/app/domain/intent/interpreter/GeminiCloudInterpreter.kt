@@ -4,7 +4,7 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsRepository
-import com.voxcommander.app.domain.intent.model.IntentPayload
+import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +22,7 @@ class GeminiCloudInterpreter(
     private val TAG = Strings.Tags.GEMINI_NANO_INTERPRETER
     private val gson = Gson()
 
-    override suspend fun processCommand(spokenText: String): IntentPayload? = withContext(Dispatchers.IO) {
+    override suspend fun processCommand(spokenText: String): NluIntent? = withContext(Dispatchers.IO) {
         val apiKey = settingsRepo.getSettingsSnapshot().geminiApiKey
         if (apiKey.isNullOrBlank()) {
             Logger.log("Gemini API key not set — cannot use Gemini Cloud", TAG)
@@ -34,14 +34,13 @@ class GeminiCloudInterpreter(
             apiKey = apiKey
         )
 
-        val systemPrompt = PromptProvider.getNluPrompt("")
+        val systemPrompt = PromptProvider.getNluSystemPrompt()
 
         try {
             val response = model.generateContent(
                 content {
                     text(systemPrompt)
-                    text("Input: \"$spokenText\"")
-                    text("JSON:")
+                    text(PromptProvider.formatUserInput(spokenText))
                 }
             )
 
@@ -52,7 +51,7 @@ class GeminiCloudInterpreter(
             val jsonEnd = responseText.lastIndexOf("}") + 1
             if (jsonStart >= 0 && jsonEnd > jsonStart) {
                 val cleanJson = responseText.substring(jsonStart, jsonEnd)
-                return@withContext gson.fromJson(cleanJson, IntentPayload::class.java)
+                return@withContext NluIntentParser.parse(cleanJson)
             }
         } catch (e: Exception) {
             Logger.log("Gemini Cloud inference failed: ${e.message}", TAG)
