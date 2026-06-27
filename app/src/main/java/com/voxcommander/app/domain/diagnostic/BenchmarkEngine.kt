@@ -1,16 +1,18 @@
 package com.voxcommander.app.domain.diagnostic
 
 import android.content.Context
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.engine.google.GoogleSttEngine
 import com.voxcommander.app.domain.engine.vosk.VoskSttEngine
 import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
 import com.voxcommander.app.data.remote.RemoteModelRegistry
+import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.domain.engine.whisper.WhisperSttEngine
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.BenchmarkResult
 import com.voxcommander.app.state.VoiceState
+import com.voxcommander.app.utils.Strings
 import com.whispercpp.whisper.WhisperLib
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,8 +22,9 @@ import kotlinx.coroutines.withContext
  */
 class BenchmarkEngine(
     private val context: Context,
-    private val settingsManager: SettingsManager,
-    private val appStateManager: AppStateManager
+    private val settingsRepo: SettingsRepository,
+    private val appStateManager: AppStateManager,
+    private val modelDownloader: ModelDownloader
 ) {
     suspend fun runFullBenchmark() = withContext(Dispatchers.Default) {
         appStateManager.setVoiceState(VoiceState.BENCHMARKING)
@@ -39,13 +42,14 @@ class BenchmarkEngine(
         diagInfo.append("\n")
 
         // Add Whisper Vulkan compatibility status
+        val snapshot = settingsRepo.getSettingsSnapshot()
         diagInfo.append("--- WHISPER VULKAN COMPATIBILITY ---\n")
-        if (settingsManager.isVulkanIncompatible()) {
+        if (snapshot.vulkanIncompatible) {
             diagInfo.append("Status: INCOMPATIBLE (GPU crashes during Whisper inference)\n")
             diagInfo.append("Note: Hardware supports Vulkan but Whisper GPU workload fails.\n")
-        } else if (settingsManager.isVulkanRuntimeVerified()) {
+        } else if (snapshot.vulkanRuntimeVerified) {
             diagInfo.append("Status: VERIFIED (GPU inference tested successfully)\n")
-        } else if (settingsManager.isVulkanProbeDone()) {
+        } else if (snapshot.vulkanProbeDone) {
             diagInfo.append("Status: COMPATIBLE (probe passed, inference not yet verified)\n")
         } else {
             diagInfo.append("Status: UNKNOWN (probe not yet run)\n")
@@ -53,9 +57,10 @@ class BenchmarkEngine(
         diagInfo.append("\n")
 
         // 2. Whisper Diagnostics
-        val downloadedWhisperModels = RemoteModelRegistry.getModels("stt_whisper").filter {
-            settingsManager.isModelDownloaded(it.id)
-        }
+        val whisperKey = RemoteModelRegistry.getEngineKeyByExtension(".bin")
+        val downloadedWhisperModels = whisperKey?.let { RemoteModelRegistry.getModels(it) }?.filter {
+            snapshot.isModelDownloaded(it.id)
+        } ?: emptyList()
 
         if (downloadedWhisperModels.isNotEmpty()) {
             diagInfo.append("--- WHISPER MODELS DETECTED ---\n")
@@ -68,7 +73,7 @@ class BenchmarkEngine(
         for (model in downloadedWhisperModels) {
             runSingleWhisperBenchmark(model, forceGpu = false, dummyAudio)
             
-            if (settingsManager.isVulkanIncompatible()) {
+            if (settingsRepo.getSettingsSnapshot().vulkanIncompatible) {
                 appStateManager.updateBenchmarkResult(BenchmarkResult(
                     engine = "Whisper Vulkan",
                     model = model.label,
@@ -83,9 +88,9 @@ class BenchmarkEngine(
         }
 
         // 3. Vosk Diagnostics
-        val selectedVosk = settingsManager.getActiveVoiceModelId()
-        if (selectedVosk != null && settingsManager.isModelDownloaded(selectedVosk)) {
-            val lang = settingsManager.getVoiceLanguage()
+        val selectedVosk = snapshot.activeVoiceModelId
+        if (selectedVosk != null && snapshot.isModelDownloaded(selectedVosk)) {
+            val lang = snapshot.voiceLanguage
             diagInfo.append("--- VOSK ENGINE INFO ---\n")
             diagInfo.append("Active Model: $selectedVosk\n")
             diagInfo.append("Active Language: $lang\n")
@@ -95,7 +100,7 @@ class BenchmarkEngine(
         }
 
         // 4. API Diagnostics
-        val apiKey = settingsManager.getApiKey()
+        val apiKey = snapshot.apiKey
         if (!apiKey.isNullOrBlank()) {
             diagInfo.append("--- CLOUD CONNECTIVITY ---\n")
             diagInfo.append("Whisper API: Active (Endpoint: OpenAI)\n")
@@ -105,13 +110,13 @@ class BenchmarkEngine(
         }
 
         // 5. LLM Diagnostics (Local LLM via MediaPipe)
-        val nluModelId = settingsManager.getActiveIntentModelId()
+        val nluModelId = snapshot.activeIntentModelId
 
         diagInfo.append("--- LOCAL LLM DIAGNOSTICS ---\n")
-        val geminiSupported = !settingsManager.isGeminiIncompatible()
+        val geminiSupported = !snapshot.geminiIncompatible
         diagInfo.append("Gemini Nano Native: ${if (geminiSupported) "SUPPORTED" else "INCOMPATIBLE"}\n")
 
-        if (nluModelId != null && settingsManager.isModelDownloaded(nluModelId)) {
+        if (nluModelId != null && snapshot.isModelDownloaded(nluModelId)) {
             diagInfo.append("Active Model: $nluModelId\n\n")
             runLlamaBenchmark(nluModelId)
         } else {
@@ -130,7 +135,7 @@ class BenchmarkEngine(
     private suspend fun runSingleWhisperBenchmark(model: AppModel, forceGpu: Boolean, audioData: ByteArray) {
         val label = if (forceGpu) "Whisper Vulkan" else "Whisper NEON"
         try {
-            val engine = WhisperCppSttEngine(context, settingsManager, forceGpu = forceGpu)
+            val engine = WhisperCppSttEngine(context, settingsRepo, forceGpu = forceGpu)
             val start = System.currentTimeMillis()
             engine.transcribe(audioData)
             val end = System.currentTimeMillis()
@@ -143,7 +148,7 @@ class BenchmarkEngine(
 
     private suspend fun runVoskBenchmark(modelName: String, audioData: ByteArray) {
         try {
-            val engine = VoskSttEngine(context, settingsManager, settingsManager.getVoiceLanguage())
+            val engine = VoskSttEngine(context, settingsRepo, settingsRepo.getSettingsSnapshot().voiceLanguage)
             val start = System.currentTimeMillis()
             engine.transcribe(audioData)
             val end = System.currentTimeMillis()
@@ -181,14 +186,14 @@ class BenchmarkEngine(
 
     private suspend fun runLlamaBenchmark(modelId: String) {
         try {
-            val engine = com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter(context, settingsManager)
+            val engine = com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter(context, settingsRepo, modelDownloader)
             val start = System.currentTimeMillis()
             // We'll test with a simple "ping" command
             engine.processCommand("ping")
             val end = System.currentTimeMillis()
             
             appStateManager.updateBenchmarkResult(BenchmarkResult(
-                engine = "Llama Local",
+                engine = "Local LLM",
                 model = modelId,
                 inferenceTimeMs = end - start,
                 rtf = 0f, // RTF not applicable to LLMs
@@ -196,7 +201,7 @@ class BenchmarkEngine(
             ))
         } catch (e: Exception) {
             appStateManager.updateBenchmarkResult(BenchmarkResult(
-                engine = "Llama Local",
+                engine = "Local LLM",
                 model = modelId,
                 inferenceTimeMs = 0,
                 rtf = 0f,

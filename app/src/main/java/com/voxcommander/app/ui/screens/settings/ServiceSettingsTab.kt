@@ -8,7 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
@@ -23,7 +23,7 @@ import com.voxcommander.app.utils.Strings
 @Composable
 fun ServiceSettingsTab(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
@@ -36,10 +36,11 @@ fun ServiceSettingsTab(
     refreshTrigger: Int = 0
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
-    val voskModels = uiState.availableModels["wake_vosk"] ?: emptyList()
+    val voskKey = RemoteModelRegistry.getEngineKeyByExtension(".zip") ?: ""
+    val voskModels = uiState.availableModels[voskKey] ?: emptyList()
     
-    val isVoskMultilingual = RemoteModelRegistry.isMultilingual("wake_vosk")
-    val availableVoskLanguages = RemoteModelRegistry.getLanguages("wake_vosk")
+    val isVoskMultilingual = RemoteModelRegistry.isMultilingual(voskKey)
+    val availableVoskLanguages = RemoteModelRegistry.getLanguages(voskKey)
 
     var showModelSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -61,7 +62,7 @@ fun ServiceSettingsTab(
         } else {
             // Auto-select first downloaded model
             filteredVoskModels.firstOrNull { model ->
-                settingsManager.isModelDownloaded(model.id)
+                uiState.isModelDownloaded(model.id)
             }
         }
     }
@@ -131,7 +132,7 @@ fun ServiceSettingsTab(
 
         // Wake Word Text Field
         val isWakeWordModelOnDevice = remember(selectedWakeWordModel, refreshTrigger) {
-            selectedWakeWordModel != null && settingsManager.isModelDownloaded(selectedWakeWordModel.id)
+            selectedWakeWordModel != null && uiState.isModelDownloaded(selectedWakeWordModel.id)
         }
 
         VoiceInputTextField(
@@ -158,7 +159,7 @@ fun ServiceSettingsTab(
             selectedItem = selectedWakeWordModel,
             groups = groupedModels,
             itemLabel = { it.label + " (" + it.sizeDescription + ")" },
-            isDownloaded = { model -> remember(model.id, uiState, refreshTrigger) { settingsManager.isModelDownloaded(model.id) } },
+            isDownloaded = { model -> uiState.isModelDownloaded(model.id) },
             onDeviceLabel = languageManager.getString("on_device_label"),
             onItemSelected = { model, isDownloaded ->
                 appStateManager.setWakeWordModelPath(model.id)
@@ -183,7 +184,7 @@ fun ServiceSettingsTab(
                     title = languageManager.getString("wake_word_model"),
                     groups = groupedModels,
                     itemLabel = { it.label + " (" + it.sizeDescription + ")" },
-                    isDownloaded = { model -> remember(model.id, uiState, refreshTrigger) { settingsManager.isModelDownloaded(model.id) } },
+                    isDownloaded = { model -> uiState.isModelDownloaded(model.id) },
                     onDeviceLabel = languageManager.getString("on_device_label"),
                     onItemSelected = { model, isDownloaded ->
                         appStateManager.setWakeWordModelPath(model.id)
@@ -209,7 +210,7 @@ fun ServiceSettingsTab(
 
         // Check if selected model is on device
         val isModelOnDevice = remember(selectedWakeWordModel, uiState, refreshTrigger) {
-            selectedWakeWordModel != null && settingsManager.isModelDownloaded(selectedWakeWordModel.id)
+            selectedWakeWordModel != null && uiState.isModelDownloaded(selectedWakeWordModel.id)
         }
 
         // Start/Stop Service Button

@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.intent.interpreter.LlmModelInfo
 import com.voxcommander.app.domain.localization.LanguageManager
@@ -23,7 +23,7 @@ import com.voxcommander.app.utils.Strings
 @Composable
 fun IntentEnginesSubTab(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     onDownloadModel: (String, String, String?) -> Unit,
     onDeleteModel: (String, String) -> Unit,
@@ -35,7 +35,7 @@ fun IntentEnginesSubTab(
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
     
-    // 1. Resolve Engine Key
+    // 1. Engine key IS the processor — same value from models.json
     val engineKey = uiState.aiProcessor
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -107,7 +107,7 @@ fun IntentEnginesSubTab(
                         ) {
                             aiOptions.forEach { id ->
                                 val isEnabled = when (id) {
-                                    Strings.AiProcessors.GEMINI_NATIVE -> !settingsManager.isGeminiIncompatible()
+                                    Strings.AiProcessors.GEMINI_NATIVE -> !settingsRepo.getSettingsSnapshot().geminiIncompatible
                                     else -> true
                                 }
                                 
@@ -149,7 +149,7 @@ fun IntentEnginesSubTab(
             EngineModelSection(
                 title = languageManager.getString("nlu_model_selection_title"),
                 languageManager = languageManager,
-                settingsManager = settingsManager,
+                settingsRepo = settingsRepo,
                 appStateManager = appStateManager,
                 groups = remember(nluGroups, uiState, refreshTrigger) { nluGroups },
                 selectedItem = selectedModel,
@@ -157,9 +157,11 @@ fun IntentEnginesSubTab(
                 modelIdProvider = { it.id },
                 onItemSelected = { model, isDownloaded ->
                     appStateManager.setActiveIntentModelId(model.id)
+                    appStateManager.saveIntentModelSelection(engineKey, model.id)
                 },
                 onDownloadRequest = { model ->
                     appStateManager.setActiveIntentModelId(model.id)
+                    appStateManager.saveIntentModelSelection(engineKey, model.id)
                     onDownloadModel(model.id, engineKey, null)
                 },
                 onDeleteRequest = { model -> onDeleteModel(model.id, engineKey) },

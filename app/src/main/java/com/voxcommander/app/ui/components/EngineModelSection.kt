@@ -10,7 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Strings
@@ -24,7 +24,7 @@ import com.voxcommander.app.utils.Strings
 fun <T> EngineModelSection(
     title: String,
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     groups: List<DropdownGroup<T>>,
     selectedItem: T?,
@@ -80,9 +80,7 @@ fun <T> EngineModelSection(
         selectedItem = selectedItem,
         groups = groups,
         itemLabel = itemLabel,
-        isDownloaded = { item ->
-            remember(modelIdProvider(item), uiState, refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
-        },
+        isDownloaded = { item -> uiState.isModelDownloaded(modelIdProvider(item)) },
         isDefault = { item ->
             item == selectedItem
         },
@@ -116,15 +114,13 @@ fun <T> EngineModelSection(
                 title = title,
                 groups = groups,
                 itemLabel = itemLabel,
-                isDownloaded = { item ->
-                    remember(modelIdProvider(item), uiState, refreshTrigger) { settingsManager.isModelDownloaded(modelIdProvider(item)) }
-                },
+                isDownloaded = { item -> uiState.isModelDownloaded(modelIdProvider(item)) },
                 isDefault = { item ->
                     item == selectedItem
                 },
                 onDeviceLabel = languageManager.getString("on_device_label"),
                 onItemSelected = { item, isDownloaded ->
-                    // Full row click: select and close
+                    // Full row click: select model and close sheet
                     onItemSelected(item, isDownloaded)
                     if (!isDownloaded) {
                         onDownloadRequest(item)
@@ -147,7 +143,7 @@ fun <T> EngineModelSection(
     // 4. Categorized Fallback Logic
     if (selectedItem != null) {
         val modelId = modelIdProvider(selectedItem)
-        val isDownloaded = remember(modelId, uiState, refreshTrigger) { settingsManager.isModelDownloaded(modelId) }
+        val isDownloaded = uiState.isModelDownloaded(modelId)
         
         val defaultProcessor = if (fallbackCategory == Strings.FallbackCategories.VOICE) uiState.defaultVoiceFallbackProcessor else uiState.defaultIntentFallbackProcessor
         val defaultModelId = if (fallbackCategory == Strings.FallbackCategories.VOICE) uiState.defaultVoiceFallbackModel else uiState.defaultIntentFallbackModel
@@ -162,13 +158,13 @@ fun <T> EngineModelSection(
                         if (defaultProcessor != null && defaultModelId != null && defaultModelId != modelId) {
                             showChangeDialog = true
                         } else {
-                            if (fallbackCategory == Strings.FallbackCategories.VOICE) settingsManager.saveDefaultVoiceFallback(currentProcessor, modelId)
-                            else settingsManager.saveDefaultIntentFallback(currentProcessor, modelId)
+                            if (fallbackCategory == Strings.FallbackCategories.VOICE) kotlinx.coroutines.runBlocking { settingsRepo.setDefaultVoiceFallback(currentProcessor, modelId) }
+                            else kotlinx.coroutines.runBlocking { settingsRepo.setDefaultIntentFallback(currentProcessor, modelId) }
                             onFallbackChanged()
                         }
                     } else {
-                        if (fallbackCategory == Strings.FallbackCategories.VOICE) settingsManager.clearDefaultVoiceFallback()
-                        else settingsManager.clearDefaultIntentFallback()
+                        if (fallbackCategory == Strings.FallbackCategories.VOICE) kotlinx.coroutines.runBlocking { settingsRepo.clearDefaultVoiceFallback() }
+                        else kotlinx.coroutines.runBlocking { settingsRepo.clearDefaultIntentFallback() }
                         onFallbackChanged()
                     }
                 }
@@ -204,8 +200,8 @@ fun <T> EngineModelSection(
                 text = { Text(languageManager.getString("change_default_model_message").format(defaultModelId, modelId)) },
                 confirmButton = {
                     Button(onClick = {
-                        if (fallbackCategory == "voice") settingsManager.saveDefaultVoiceFallback(currentProcessor, modelId)
-                        else settingsManager.saveDefaultIntentFallback(currentProcessor, modelId)
+                        if (fallbackCategory == "voice") kotlinx.coroutines.runBlocking { settingsRepo.setDefaultVoiceFallback(currentProcessor, modelId) }
+                        else kotlinx.coroutines.runBlocking { settingsRepo.setDefaultIntentFallback(currentProcessor, modelId) }
                         onFallbackChanged()
                         showChangeDialog = false
                     }) { Text(languageManager.getString("change")) }

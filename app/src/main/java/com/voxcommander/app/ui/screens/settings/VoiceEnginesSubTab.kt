@@ -7,7 +7,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelItem
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
@@ -24,7 +24,7 @@ import com.voxcommander.app.utils.Strings
 @Composable
 fun VoiceEnginesSubTab(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     onProcessorSelected: (String) -> Unit,
     hasApiKey: Boolean,
@@ -43,7 +43,7 @@ fun VoiceEnginesSubTab(
     // REALTIME STATE from AppStateManager
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
-    // 1. Resolve Engine Key
+    // 1. Engine key IS the processor — same value from models.json
     val engineKey = uiState.voiceProcessor
     
     val isCurrentProcessorMultilingual = RemoteModelRegistry.isMultilingual(engineKey)
@@ -81,7 +81,7 @@ fun VoiceEnginesSubTab(
                 val enabled = when (proc) {
                     Strings.Processors.WHISPER_API -> hasApiKey
                     Strings.Processors.GOOGLE -> googleSttAvailable
-                    Strings.Processors.WHISPER_VULKAN -> !settingsManager.isVulkanIncompatible()
+                    Strings.Processors.WHISPER_VULKAN -> !settingsRepo.getSettingsSnapshot().vulkanIncompatible
                     else -> true
                 }
                 
@@ -197,7 +197,7 @@ fun VoiceEnginesSubTab(
         EngineModelSection(
             title = languageManager.getString("select_model"),
             languageManager = languageManager,
-            settingsManager = settingsManager,
+            settingsRepo = settingsRepo,
             appStateManager = appStateManager,
             groups = remember(filteredModels, refreshTrigger) {
                 listOf(DropdownGroup(languageManager.getString("available_models_header"), filteredModels))
@@ -213,6 +213,7 @@ fun VoiceEnginesSubTab(
             },
             onDownloadRequest = { model ->
                 val code = model.langCode ?: uiState.voiceLanguage
+                appStateManager.saveVoiceModelSelection(engineKey, model.id)
                 onDownloadModel(model.id, engineKey, code)
             },
             onDeleteRequest = { model -> onDeleteRequest(model) },

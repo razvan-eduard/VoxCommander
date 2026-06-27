@@ -2,7 +2,7 @@ package com.voxcommander.app.domain.intent
 
 import com.voxcommander.app.domain.intent.interpreter.AssistantEngine
 import com.voxcommander.app.domain.intent.model.IntentPayload
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.utils.Strings
 import android.util.Log
 
@@ -18,7 +18,7 @@ class IntentDecisionMap(
     private val l2CloudEngine: AssistantEngine,
     private val l3LocalEngine: AssistantEngine,
     private val geminiEngine: AssistantEngine,
-    private val settingsManager: SettingsManager
+    private val settingsRepo: SettingsRepository
 ) : AssistantEngine {
 
     private val TAG = Strings.Tags.INTENT_DECISION_MAP
@@ -36,8 +36,9 @@ class IntentDecisionMap(
         }
 
         // --- LEVEL 2: Primary Selected Model ---
-        val isCloudIntelligenceEnabled = settingsManager.isCloudIntelligenceEnabled()
-        val primaryProcessor = settingsManager.getAiProcessor()
+        val snapshot = settingsRepo.getSettingsSnapshot()
+        val isCloudIntelligenceEnabled = snapshot.cloudIntelligenceEnabled
+        val primaryProcessor = snapshot.aiProcessor
         
         Log.d(TAG, "🔍 L1 Miss. Trying Primary L2 AI ($primaryProcessor)...")
         
@@ -46,13 +47,15 @@ class IntentDecisionMap(
                 Strings.AiProcessors.OPENAI -> {
                     if (isCloudIntelligenceEnabled) l2CloudEngine.processCommand(spokenText) else null
                 }
-                Strings.AiProcessors.NLU_LOCAL -> {
-                    l3LocalEngine.processCommand(spokenText)
-                }
                 Strings.AiProcessors.GEMINI_NATIVE -> {
                     geminiEngine.processCommand(spokenText)
                 }
-                else -> null
+                else -> {
+                    // JSON-defined LLM engines
+                    if (com.voxcommander.app.data.remote.RemoteModelRegistry.isLlmEngine(primaryProcessor)) {
+                        l3LocalEngine.processCommand(spokenText)
+                    } else null
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "L2 Processing failed: ${e.message}")
@@ -66,8 +69,8 @@ class IntentDecisionMap(
 
         // --- LEVEL 3: Default Offline Fallback ---
         // Triggered if L2 fails (e.g., no internet for Cloud, or Llama failed/not present)
-        val fallbackModel = settingsManager.getDefaultIntentFallbackModel()
-        val fallbackProcessor = settingsManager.getDefaultIntentFallbackProcessor()
+        val fallbackModel = snapshot.defaultIntentFallbackModel
+        val fallbackProcessor = snapshot.defaultIntentFallbackProcessor
 
         if (fallbackModel != null && fallbackProcessor != null) {
             // Avoid re-running the same model if it was already tried in L2
@@ -76,9 +79,12 @@ class IntentDecisionMap(
             } else {
                 Log.d(TAG, "🏠 L2 Miss/Failure. Triggering L3 Offline Fallback ($fallbackProcessor)...")
                 val l3Result = when (fallbackProcessor) {
-                    Strings.AiProcessors.NLU_LOCAL -> l3LocalEngine.processCommand(spokenText)
-                    // Currently only Llama is supported for local intent fallback
-                    else -> null
+                    Strings.AiProcessors.OPENAI -> l2CloudEngine.processCommand(spokenText)
+                    else -> {
+                        if (com.voxcommander.app.data.remote.RemoteModelRegistry.isLlmEngine(fallbackProcessor)) {
+                            l3LocalEngine.processCommand(spokenText)
+                        } else null
+                    }
                 }
                 
                 if (l3Result != null) {

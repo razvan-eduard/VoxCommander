@@ -2,7 +2,7 @@ package com.voxcommander.app.domain.intent.interpreter
 
 import android.util.Log
 import com.google.gson.Gson
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.intent.model.IntentPayload
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +19,7 @@ import org.json.JSONObject
  * High intelligence, requires internet and API key.
  */
 class OpenAiInterpreter(
-    private val settingsManager: SettingsManager
+    private val settingsRepo: SettingsRepository
 ) : AssistantEngine {
 
     private val TAG = Strings.Tags.OPENAI_INTERPRETER
@@ -27,7 +27,7 @@ class OpenAiInterpreter(
     private val gson = Gson()
 
     override suspend fun processCommand(spokenText: String): IntentPayload? = withContext(Dispatchers.IO) {
-        val apiKey = settingsManager.getApiKey()
+        val apiKey = settingsRepo.getApiKeySync()
         if (apiKey.isNullOrBlank()) {
             Log.e(TAG, "OpenAI API Key is missing")
             return@withContext null

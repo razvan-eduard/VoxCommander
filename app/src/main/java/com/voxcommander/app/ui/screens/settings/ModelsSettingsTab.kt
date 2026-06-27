@@ -7,7 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
@@ -16,7 +16,7 @@ import com.voxcommander.app.state.AppStateManager
 @Composable
 fun ModelsSettingsTab(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     onProcessorSelected: (String) -> Unit,
     hasApiKey: Boolean,
@@ -65,7 +65,7 @@ fun ModelsSettingsTab(
         if (selectedSubTab == 0) {
             VoiceEnginesSubTab(
                 languageManager = languageManager,
-                settingsManager = settingsManager,
+                settingsRepo = settingsRepo,
                 appStateManager = appStateManager,
                 onProcessorSelected = onProcessorSelected,
                 hasApiKey = hasApiKey,
@@ -84,7 +84,7 @@ fun ModelsSettingsTab(
         } else {
             IntentEnginesSubTab(
                 languageManager = languageManager,
-                settingsManager = settingsManager,
+                settingsRepo = settingsRepo,
                 appStateManager = appStateManager,
                 onDownloadModel = onDownloadModel,
                 onDeleteModel = onDeleteModel,

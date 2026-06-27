@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Logger
@@ -20,7 +20,7 @@ import com.voxcommander.app.utils.LoggingFlags
 @Composable
 fun AdvancedSettingsTab(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     onCleanupRequest: () -> Unit,
     onClearDefaultFallback: () -> Unit,
@@ -33,7 +33,7 @@ fun AdvancedSettingsTab(
     var loggingFlags by remember {
         mutableStateOf(
             LoggingFlags.fromLogLevel(
-                when (settingsManager.getLogLevel()) {
+                when (settingsRepo.getSettingsSnapshot().logLevel) {
                     "NONE" -> LogLevel.NONE
                     "TOAST_ONLY" -> LogLevel.TOAST_ONLY
                     "LOGCAT_ONLY" -> LogLevel.LOGCAT_ONLY
@@ -45,7 +45,7 @@ fun AdvancedSettingsTab(
     var verboseLoggingEnabled by remember(loggingFlags.logcatEnabled) {
         mutableStateOf(
             if (loggingFlags.logcatEnabled) {
-                settingsManager.isVerboseLoggingEnabled()
+                settingsRepo.getSettingsSnapshot().verboseLoggingEnabled
             } else {
                 false
             }
@@ -56,12 +56,12 @@ fun AdvancedSettingsTab(
     LaunchedEffect(loggingFlags.logcatEnabled) {
         if (!loggingFlags.logcatEnabled) {
             verboseLoggingEnabled = false
-            settingsManager.saveVerboseLoggingEnabled(false)
+            kotlinx.coroutines.runBlocking { settingsRepo.setVerboseLoggingEnabled(false) }
             Logger.setVerboseLoggingEnabled(false)
             onVerboseLoggingChange(false)
         } else {
-            // Restore verbose logging setting from SettingsManager when logcat is enabled
-            val savedVerbose = settingsManager.isVerboseLoggingEnabled()
+            // Restore verbose logging setting from SettingsRepository when logcat is enabled
+            val savedVerbose = settingsRepo.getSettingsSnapshot().verboseLoggingEnabled
             verboseLoggingEnabled = savedVerbose
             Logger.setVerboseLoggingEnabled(savedVerbose)
             onVerboseLoggingChange(savedVerbose)
@@ -104,7 +104,7 @@ fun AdvancedSettingsTab(
             onCheckedChange = { enabled ->
                 loggingFlags = loggingFlags.copy(toastEnabled = enabled)
                 val newLogLevel = LoggingFlags.toLogLevel(loggingFlags)
-                settingsManager.saveLogLevel(newLogLevel.name)
+                kotlinx.coroutines.runBlocking { settingsRepo.setLogLevel(newLogLevel.name) }
                 Logger.setLoggingFlags(loggingFlags)
             }
         )
@@ -124,7 +124,7 @@ fun AdvancedSettingsTab(
             onCheckedChange = { enabled ->
                 loggingFlags = loggingFlags.copy(logcatEnabled = enabled)
                 val newLogLevel = LoggingFlags.toLogLevel(loggingFlags)
-                settingsManager.saveLogLevel(newLogLevel.name)
+                kotlinx.coroutines.runBlocking { settingsRepo.setLogLevel(newLogLevel.name) }
                 Logger.setLoggingFlags(loggingFlags)
             }
         )
@@ -146,7 +146,7 @@ fun AdvancedSettingsTab(
             checked = verboseLoggingEnabled,
             onCheckedChange = { enabled ->
                 verboseLoggingEnabled = enabled
-                settingsManager.saveVerboseLoggingEnabled(enabled)
+                kotlinx.coroutines.runBlocking { settingsRepo.setVerboseLoggingEnabled(enabled) }
                 Logger.setVerboseLoggingEnabled(enabled)
             },
             enabled = loggingFlags.logcatEnabled

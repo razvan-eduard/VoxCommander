@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.gson.GsonBuilder
 import com.voxcommander.app.data.local.dao.FastMapDao
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.domain.voice.VoiceManager
@@ -35,7 +35,7 @@ import java.io.File
 @Composable
 fun MainScreen(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     fastMapDao: FastMapDao,
     viewModel: MainViewModel,
@@ -159,7 +159,7 @@ fun MainScreen(
         TopHeaderContainer(
             mode = currentHeaderMode,
             languageManager = languageManager,
-            settingsManager = settingsManager,
+            settingsRepo = settingsRepo,
             appStateManager = appStateManager,
             modelManagementViewModel = modelManagementViewModel,
             fastMapDao = fastMapDao,

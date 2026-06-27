@@ -24,19 +24,20 @@ class VoxApplication : Application() {
         super.onCreate()
         
         // Initialize Logger early
-        val level = LogLevel.valueOf(container.settingsManager.getLogLevel())
+        val snapshot = container.settingsRepository.getSettingsSnapshot()
+        val level = LogLevel.valueOf(snapshot.logLevel)
         Logger.initialize(this, level)
         Logger.setLoggingFlags(LoggingFlags.fromLogLevel(level))
-        Logger.setVerboseLoggingEnabled(container.settingsManager.isVerboseLoggingEnabled())
+        Logger.setVerboseLoggingEnabled(snapshot.verboseLoggingEnabled)
 
         // Initialize default voice language if not set
-        if (container.settingsManager.getVoiceLanguage().isEmpty()) {
-            container.settingsManager.saveVoiceLanguage(Strings.Preferences.DEFAULT_LANGUAGE)
+        if (snapshot.voiceLanguage.isEmpty()) {
+            kotlinx.coroutines.runBlocking { container.settingsRepository.setVoiceLanguage(Strings.Preferences.DEFAULT_LANGUAGE) }
         }
         
         // Initial fetch of the remote model registry - Force update on start to bypass CDN caching
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            val success = RemoteModelRegistry.fetchJson(container.settingsManager, force = true)
+            val success = RemoteModelRegistry.fetchJson(container.settingsRepository, force = true)
             if (success) {
                 // Force AppStateManager to rebuild its UI state with the fresh models
                 container.appStateManager.refreshAll()

@@ -1,7 +1,7 @@
 package com.voxcommander.app.state
 
 import android.content.Context
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
@@ -47,21 +47,36 @@ enum class VulkanTestState {
 }
 
 class AppStateManager private constructor(
-    private val settingsManager: SettingsManager,
+    private val repo: SettingsRepository,
     private val context: Context
 ) {
     private val voiceMutex = Mutex()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    // --- CENTRALIZED UI STATE ---
-    private val _uiState = MutableStateFlow(
-        AppState.fromSettings(settingsManager, context, RemoteModelRegistry.getModelMapNow())
+    // --- RUNTIME EPHEMERAL STATE (not persisted) ---
+    private data class RuntimeState(
+        val voiceState: VoiceState = VoiceState.IDLE,
+        val wakeWordDetected: Boolean = false,
+        val isWakeWordServiceListening: Boolean = false,
+        val refreshTrigger: Int = 0,
+        val canDrawOverlays: Boolean = false,
+        val hasMicrophonePermission: Boolean = false,
+        val hasNotificationPermission: Boolean = false
     )
+    private val _runtimeState = MutableStateFlow(RuntimeState(
+        canDrawOverlays = com.voxcommander.app.utils.PermissionUtils.canDrawOverlays(context),
+        hasMicrophonePermission = com.voxcommander.app.utils.PermissionUtils.hasMicrophonePermission(context),
+        hasNotificationPermission = com.voxcommander.app.utils.PermissionUtils.hasNotificationPermission(context)
+    ))
+
+    // --- CENTRALIZED UI STATE (reactive combination of settings + runtime) ---
+    private val _uiState = MutableStateFlow(AppState.initial())
     val uiState: StateFlow<AppState> = _uiState.asStateFlow()
-    
+
     // Alias for compatibility with older components
     val state: StateFlow<AppState> = uiState
 
-    // --- NON-SETTINGS STATE (Kept separate as they don't come from SettingsManager) ---
+    // --- NON-SETTINGS STATE ---
     private val _benchmarkResults = MutableStateFlow<List<BenchmarkResult>>(emptyList())
     val benchmarkResults: StateFlow<List<BenchmarkResult>> = _benchmarkResults.asStateFlow()
 
@@ -79,33 +94,52 @@ class AppStateManager private constructor(
     val systemInfo: StateFlow<String> = _systemInfo.asStateFlow()
 
     init {
-        refreshNativeLibsStatus()
+        // Reactive combine: settings + modelMap + runtime -> AppState
+        combine(
+            repo.settingsFlow,
+            RemoteModelRegistry.modelMap,
+            _runtimeState
+        ) { settings, modelMap, runtime ->
+            AppState.fromAppSettings(
+                settings = settings,
+                context = context,
+                availableModels = modelMap,
+                voiceState = runtime.voiceState,
+                wakeWordDetected = runtime.wakeWordDetected,
+                isWakeWordServiceListening = runtime.isWakeWordServiceListening,
+                refreshTrigger = runtime.refreshTrigger
+            ).copy(
+                canDrawOverlays = runtime.canDrawOverlays,
+                hasMicrophonePermission = runtime.hasMicrophonePermission,
+                hasNotificationPermission = runtime.hasNotificationPermission
+            )
+        }.onEach { newState ->
+            _uiState.value = newState
+            refreshNativeLibsStatus()
+        }.launchIn(scope)
+
         refreshPermissions()
         setupVulkanTestTrigger()
     }
 
     /**
-     * Updates permission-related states in AppState.
+     * Updates permission-related states in runtime state.
      */
     fun refreshPermissions() {
-        updateState { 
-            copy(
+        _runtimeState.update {
+            it.copy(
                 canDrawOverlays = com.voxcommander.app.utils.PermissionUtils.canDrawOverlays(context),
                 hasMicrophonePermission = com.voxcommander.app.utils.PermissionUtils.hasMicrophonePermission(context),
                 hasNotificationPermission = com.voxcommander.app.utils.PermissionUtils.hasNotificationPermission(context)
-            ) 
+            )
         }
     }
 
     /**
-     * Centralized wrapper for state updates.
-     * Automatically increments refreshTrigger to notify UI observers.
+     * Centralized wrapper for runtime state updates.
      */
-    private inline fun updateState(mutation: AppState.() -> AppState) {
-        _uiState.update { currentState ->
-            val newState = currentState.mutation()
-            newState.copy(refreshTrigger = currentState.refreshTrigger + 1)
-        }
+    private inline fun updateRuntime(mutation: RuntimeState.() -> RuntimeState) {
+        _runtimeState.update { it.mutation() }
     }
 
     // Secure access to native resources
@@ -116,150 +150,128 @@ class AppStateManager private constructor(
     }
 
     fun setVoiceState(state: VoiceState) {
-        updateState { copy(voiceState = state) }
+        updateRuntime { copy(voiceState = state) }
     }
 
     fun onWakeWordDetected() {
-        updateState { copy(wakeWordDetected = true) }
+        updateRuntime { copy(wakeWordDetected = true) }
     }
 
     fun resetWakeWordDetection() {
-        updateState { copy(wakeWordDetected = false) }
+        updateRuntime { copy(wakeWordDetected = false) }
     }
 
-    // State Update Methods - Atomic updates using .copy()
+    // --- SETTINGS WRITES (delegate to SettingsRepository, flow updates _uiState reactively) ---
+
     fun setVoiceProcessor(processor: String) {
-        settingsManager.saveVoiceProcessor(processor)
-
-        // Do NOT auto-change activeVoiceModelId - it's set manually by user selection
-        // The green checkmark is only set when user manually selects a model from dropdown
-
-        updateState {
-            copy(
-                voiceProcessor = processor,
-                voiceModelReady = recalculateVoiceReady(processor, settingsManager)
-            )
+        scope.launch {
+            repo.setVoiceProcessor(processor)
+            // Auto-set activeVoiceModelId from per-engine selection mapping
+            val settings = repo.getSettingsSnapshot()
+            val models = com.voxcommander.app.data.remote.RemoteModelRegistry.getModels(processor)
+            val savedSelection = settings.engineModelSelections[processor]
+            val newActiveModelId = when {
+                // If saved selection exists and is still a valid model, use it
+                savedSelection != null && models.any { it.id == savedSelection } -> savedSelection
+                // Otherwise use first downloaded model if any
+                models.any { settings.isModelDownloaded(it.id) } -> models.first { settings.isModelDownloaded(it.id) }.id
+                // Otherwise use first model overall
+                models.isNotEmpty() -> models.first().id
+                else -> null
+            }
+            repo.setActiveVoiceModelId(newActiveModelId)
         }
     }
 
     fun setVoiceLanguage(language: String) {
-        settingsManager.saveVoiceLanguage(language)
-        updateState {
-            copy(
-                voiceLanguage = language,
-                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
-            )
-        }
+        scope.launch { repo.setVoiceLanguage(language) }
     }
 
     fun setActiveVoiceModelId(modelId: String) {
-        settingsManager.saveActiveVoiceModelId(modelId)
-        updateState {
-            copy(
-                activeVoiceModelId = modelId,
-                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
-            )
-        }
+        scope.launch { repo.setActiveVoiceModelId(modelId) }
+    }
+
+    fun saveVoiceModelSelection(engineKey: String, modelId: String) {
+        scope.launch { repo.setEngineModelSelection(engineKey, modelId) }
     }
 
     fun setCustomWhisperModelPath(path: String?) {
-        if (path != null) settingsManager.saveCustomModelPath("stt_whisper", path)
-        updateState {
-            copy(
-                customWhisperModelPath = path,
-                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
-            )
+        if (path != null) {
+            val whisperKey = com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".bin")
+            whisperKey?.let { scope.launch { repo.setCustomModelPath(it, path) } }
         }
     }
 
     fun setCustomVoskModelPath(language: String, path: String?) {
-        if (path != null) settingsManager.saveCustomModelPath("wake_vosk", path, language)
-        updateState {
-            val updatedPaths = customVoskModelPaths.toMutableMap()
-            if (path != null) {
-                updatedPaths[language] = path
-            } else {
-                updatedPaths.remove(language)
-            }
-            copy(
-                customVoskModelPaths = updatedPaths,
-                voiceModelReady = recalculateVoiceReady(voiceProcessor, settingsManager)
-            )
+        if (path != null) {
+            val voskKey = com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".zip")
+            voskKey?.let { scope.launch { repo.setCustomModelPath(it, path, language) } }
         }
     }
 
     fun setApiKey(key: String?) {
-        if (key != null) settingsManager.saveApiKey(key)
-        updateState { copy(apiKey = key) }
+        scope.launch { repo.setApiKey(key) }
     }
 
     fun setAppLanguage(lang: String) {
-        settingsManager.saveLanguage(lang)
-        updateState { copy(voiceLanguage = lang) } // Sync app language with voice default
-        refreshAll()
+        scope.launch { repo.setLanguage(lang) }
     }
 
     fun setOfflineFallbackTimeout(seconds: Int) {
-        settingsManager.saveOfflineFallbackTimeout(seconds)
-        refreshAll()
+        scope.launch { repo.setOfflineFallbackTimeout(seconds) }
     }
 
     fun setWakeWord(word: String) {
-        settingsManager.saveWakeWord(word)
-        updateState { copy(wakeWord = word) }
+        scope.launch { repo.setWakeWord(word) }
     }
 
     fun setWakeWordEnabled(enabled: Boolean) {
-        settingsManager.saveWakeWordEnabled(enabled)
-        updateState { copy(wakeWordEnabled = enabled) }
+        scope.launch { repo.setWakeWordEnabled(enabled) }
     }
 
     fun setWakeWordServiceListening(listening: Boolean) {
-        updateState { copy(isWakeWordServiceListening = listening) }
+        updateRuntime { copy(isWakeWordServiceListening = listening) }
     }
 
     fun setWakeWordModelPath(path: String?) {
-        if (path != null) settingsManager.saveWakeWordModelPath(path)
-        updateState { copy(wakeWordModelPath = path) }
+        scope.launch { repo.setWakeWordModelPath(path) }
     }
 
     fun setCloudIntelligenceEnabled(enabled: Boolean) {
-        settingsManager.saveCloudIntelligenceEnabled(enabled)
-        updateState { copy(cloudIntelligenceEnabled = enabled) }
+        scope.launch { repo.setCloudIntelligenceEnabled(enabled) }
     }
 
     fun setVerboseLoggingEnabled(enabled: Boolean) {
-        settingsManager.saveVerboseLoggingEnabled(enabled)
-        updateState { copy(isVerboseLoggingEnabled = enabled) }
+        scope.launch { repo.setVerboseLoggingEnabled(enabled) }
     }
 
     fun setExperimentalVulkanEnabled(enabled: Boolean) {
-        settingsManager.saveExperimentalVulkanEnabled(enabled)
-        updateState { copy(isExperimentalVulkanEnabled = enabled) }
+        scope.launch { repo.setExperimentalVulkanEnabled(enabled) }
     }
 
     fun setAiProcessor(processor: String) {
-        settingsManager.saveAiProcessor(processor)
-
-        // Do NOT auto-change activeIntentModelId - it's set manually by user selection
-        // The green checkmark is only set when user manually selects a model from dropdown
-
-        updateState {
-            copy(
-                aiProcessor = processor,
-                intentModelReady = recalculateIntentReady(processor, settingsManager)
-            )
+        scope.launch {
+            repo.setAiProcessor(processor)
+            // Auto-set activeIntentModelId from per-engine selection mapping
+            val settings = repo.getSettingsSnapshot()
+            val models = com.voxcommander.app.data.remote.RemoteModelRegistry.getModels(processor)
+            val savedSelection = settings.engineModelSelections[processor]
+            val newActiveModelId = when {
+                savedSelection != null && models.any { it.id == savedSelection } -> savedSelection
+                models.any { settings.isModelDownloaded(it.id) } -> models.first { settings.isModelDownloaded(it.id) }.id
+                models.isNotEmpty() -> models.first().id
+                else -> null
+            }
+            repo.setActiveIntentModelId(newActiveModelId)
         }
     }
 
     fun setActiveIntentModelId(modelId: String) {
-        settingsManager.saveActiveIntentModelId(modelId)
-        updateState {
-            copy(
-                activeIntentModelId = modelId,
-                intentModelReady = recalculateIntentReady(aiProcessor, settingsManager)
-            )
-        }
+        scope.launch { repo.setActiveIntentModelId(modelId) }
+    }
+
+    fun saveIntentModelSelection(engineKey: String, modelId: String) {
+        scope.launch { repo.setEngineModelSelection(engineKey, modelId) }
     }
 
     // Diagnostic Helpers
@@ -267,69 +279,51 @@ class AppStateManager private constructor(
         val currentState = _uiState.value
         val voiceProcessor = currentState.voiceProcessor
         val aiProcessor = currentState.aiProcessor
+        val s = repo.getSettingsSnapshot()
         
-        // List of SO files and system components we depend on
+        // (libName, description, engineCategory) — engineCategory: "whisper", "vosk", "llm", "gemini"
         val soFiles = listOf(
-            "libwhisper.so" to "Core Whisper STT Engine",
-            "libggml.so" to "GGML Tensor Library",
-            "libggml-cpu.so" to "GGML CPU Operations",
-            "libggml-base.so" to "GGML Base Library",
-            "libggml-vulkan.so" to "Vulkan GPU Acceleration",
-            "libomp.so" to "OpenMP Multi-threading",
-            "libvosk.so" to "Vosk Voice Engine",
-            "libllm_inference_engine_jni.so" to "MediaPipe Llama Engine",
-            "Google AICore" to "Gemini Nano System Service"
+            Triple("libwhisper.so", "Core Whisper STT Engine", "whisper"),
+            Triple("libggml.so", "GGML Tensor Library", "whisper"),
+            Triple("libggml-cpu.so", "GGML CPU Operations", "whisper"),
+            Triple("libggml-base.so", "GGML Base Library", "whisper"),
+            Triple("libggml-vulkan.so", "Vulkan GPU Acceleration", "whisper"),
+            Triple("libomp.so", "OpenMP Multi-threading", "whisper"),
+            Triple("libvosk.so", "Vosk Voice Engine", "vosk"),
+            Triple("libllm_inference_engine_jni.so", "MediaPipe Llama Engine", "llm"),
+            Triple("Google AICore", "Gemini Nano System Service", "gemini")
         )
 
-        val statusList = soFiles.map { (name, desc) ->
+        val statusList = soFiles.map { (name, desc, category) ->
             val exists: Boolean
             val isIncompatible: Boolean
-            
+
             if (name == "Google AICore") {
-                isIncompatible = settingsManager.isGeminiIncompatible()
+                isIncompatible = s.geminiIncompatible
                 exists = !isIncompatible
             } else {
                 val file = java.io.File(context.applicationInfo.nativeLibraryDir, name)
                 exists = file.exists()
-                isIncompatible = name.contains("ggml-vulkan") && settingsManager.isVulkanIncompatible()
+                isIncompatible = name.contains("ggml-vulkan") && s.vulkanIncompatible
             }
-            
+
             val isActive: Boolean
             val adjustedDesc: String
-            
-            when {
-                isIncompatible -> {
-                    isActive = false
-                    adjustedDesc = "$desc (Incompatible)"
+
+            if (isIncompatible) {
+                isActive = false
+                adjustedDesc = "$desc (Incompatible)"
+            } else {
+                val voiceExt = com.voxcommander.app.data.remote.RemoteModelRegistry.getExtension(voiceProcessor)
+                val active = when (category) {
+                    "whisper" -> voiceExt == ".bin" || voiceProcessor == Strings.Processors.WHISPER_VULKAN
+                    "vosk" -> voiceExt == ".zip"
+                    "llm" -> com.voxcommander.app.data.remote.RemoteModelRegistry.isLlmEngine(aiProcessor)
+                    "gemini" -> aiProcessor == Strings.AiProcessors.GEMINI_NATIVE
+                    else -> false
                 }
-                name.contains("whisper") && voiceProcessor.startsWith("WHISPER") -> {
-                    isActive = true
-                    adjustedDesc = desc
-                }
-                name.contains("ggml") && voiceProcessor.startsWith("WHISPER") -> {
-                    isActive = true
-                    adjustedDesc = desc
-                }
-                name.contains("omp") && voiceProcessor.startsWith("WHISPER") -> {
-                    isActive = true
-                    adjustedDesc = desc
-                }
-                name.contains("vosk") && voiceProcessor == "VOSK" -> {
-                    isActive = true
-                    adjustedDesc = desc
-                }
-                name.contains("llm") && aiProcessor == Strings.AiProcessors.NLU_LOCAL -> {
-                    isActive = true
-                    adjustedDesc = desc
-                }
-                name == "Google AICore" && aiProcessor == Strings.AiProcessors.GEMINI_NATIVE -> {
-                    isActive = true
-                    adjustedDesc = desc
-                }
-                else -> {
-                    isActive = false
-                    adjustedDesc = desc
-                }
+                isActive = active
+                adjustedDesc = desc
             }
             NativeLibStatus(name, exists, isActive, adjustedDesc, isIncompatible)
         }
@@ -350,17 +344,9 @@ class AppStateManager private constructor(
         _systemInfo.value = info
     }
 
-    // Simplified refreshAll - just reload everything from SettingsManager
+    // Trigger a refresh - increments refreshTrigger which causes combine to re-emit
     fun refreshAll() {
-        val current = _uiState.value
-        val nextTrigger = current.refreshTrigger + 1
-        _uiState.value = AppState.fromSettings(settingsManager, context, RemoteModelRegistry.getModelMapNow()).copy(
-            refreshTrigger = nextTrigger,
-            isWakeWordServiceListening = current.isWakeWordServiceListening,
-            voiceState = current.voiceState,
-            wakeWordDetected = current.wakeWordDetected
-        )
-        refreshNativeLibsStatus()
+        updateRuntime { copy(refreshTrigger = refreshTrigger + 1) }
     }
 
     // --- VULKAN TEST TRIGGER ---
@@ -371,14 +357,15 @@ class AppStateManager private constructor(
         ) { uiState, testState ->
             Pair(uiState, testState)
         }.onEach { (uiState, testState) ->
+            val s = repo.getSettingsSnapshot()
             if (testState == VulkanTestState.IDLE &&
                 uiState.voiceProcessor == Strings.Processors.WHISPER_VULKAN &&
                 uiState.voiceModelReady &&
-                !settingsManager.isVulkanProbeDone() &&
-                !settingsManager.isVulkanIncompatible()) {
+                !s.vulkanProbeDone &&
+                !s.vulkanIncompatible) {
                 startVulkanTest()
             }
-        }.launchIn(CoroutineScope(Dispatchers.Default + SupervisorJob()))
+        }.launchIn(scope)
     }
 
     private fun startVulkanTest() {
@@ -386,8 +373,8 @@ class AppStateManager private constructor(
         _vulkanTestPassed.value = null
 
         val modelId = _uiState.value.activeVoiceModelId
-        // FIX: Models are in getExternalFilesDir(null), NOT context.filesDir
-        val extension = com.voxcommander.app.data.remote.RemoteModelRegistry.getExtension("whisper")
+        val whisperKey = com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".bin")
+        val extension = whisperKey?.let { com.voxcommander.app.data.remote.RemoteModelRegistry.getExtension(it) } ?: ""
         val modelPath = java.io.File(context.getExternalFilesDir(null), "$modelId$extension").absolutePath
 
         Logger.log("Starting Vulkan compatibility test with model: $modelPath", "VulkanTest")
@@ -401,19 +388,16 @@ class AppStateManager private constructor(
                     Logger.log("Vulkan test PASSED", "VulkanTest")
                     _vulkanTestState.value = VulkanTestState.RESULT
                     _vulkanTestPassed.value = true
-                    settingsManager.setVulkanProbeDone(true)
+                    scope.launch { repo.setVulkanProbeDone(true) }
                 }
                 com.voxcommander.app.domain.diagnostic.VulkanProbe.Outcome.INCOMPATIBLE -> {
                     Logger.log("Vulkan test FAILED - switching to NEON", "VulkanTest")
                     _vulkanTestState.value = VulkanTestState.RESULT
                     _vulkanTestPassed.value = false
-                    settingsManager.setVulkanIncompatible(true)
-                    settingsManager.setVulkanProbeDone(true)
-                    
-                    // Force switch to NEON on Main thread
-                    CoroutineScope(Dispatchers.Main).launch {
-                        setVoiceProcessor(Strings.Processors.WHISPER_NEON)
-                        refreshAll()
+                    scope.launch {
+                        repo.setVulkanIncompatible(true)
+                        repo.setVulkanProbeDone(true)
+                        setVoiceProcessor(com.voxcommander.app.data.remote.RemoteModelRegistry.getDefaultVoiceEngineKey() ?: "")
                     }
                 }
                 com.voxcommander.app.domain.diagnostic.VulkanProbe.Outcome.UNDECIDED -> {
@@ -434,9 +418,9 @@ class AppStateManager private constructor(
         @Volatile
         private var instance: AppStateManager? = null
 
-        fun getInstance(settingsManager: SettingsManager, context: Context): AppStateManager {
+        fun getInstance(repo: SettingsRepository, context: Context): AppStateManager {
             return instance ?: synchronized(this) {
-                instance ?: AppStateManager(settingsManager, context).also { instance = it }
+                instance ?: AppStateManager(repo, context).also { instance = it }
             }
         }
     }

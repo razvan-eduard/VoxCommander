@@ -28,12 +28,12 @@ echo "Current version: $CURRENT_VERSION"
 
 # 2. Fetch latest version from JitPack (More up-to-date for Vosk)
 # JitPack API returns versions for a GitHub repo
-LATEST_VERSION=$(curl -s https://jitpack.io/api/builds/com.github.alphacep/vosk-android/latest | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
+LATEST_VERSION=$(curl -s --connect-timeout 5 --max-time 10 https://jitpack.io/api/builds/com.github.alphacep/vosk-android/latest | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")
 
 if [ -z "$LATEST_VERSION" ]; then
     log_warn "⚠️ Could not reach JitPack API. Checking Maven fallback..."
     # Fallback to a wider search if JitPack fails
-    LATEST_VERSION=$(curl -s "https://search.maven.org/solrsearch/select?q=g:com.alphacephei+AND+a:vosk-android&rows=50&wt=json" \
+    LATEST_VERSION=$(curl -s --connect-timeout 5 --max-time 10 "https://search.maven.org/solrsearch/select?q=g:com.alphacephei+AND+a:vosk-android&rows=50&wt=json" \
         | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | sort -V | tail -1)
 fi
 

@@ -119,7 +119,7 @@ fun <T> GroupedDropdownContent(
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (isDownloading && downloadProgress != null) {
+                                    if (isDownloading) {
                                         IconButton(onClick = { onCancelDownload?.invoke() }) {
                                             Icon(
                                                 Icons.Default.Close,
@@ -152,19 +152,27 @@ fun <T> GroupedDropdownContent(
                                 }
                             }
 
-                            if (isDownloading && downloadProgress != null) {
+                            if (isDownloading) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                LinearProgressIndicator(
-                                    progress = { downloadProgress },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                )
-                                Text(
-                                    text = "${(downloadProgress * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.align(Alignment.End)
-                                )
+                                if (downloadProgress != null) {
+                                    LinearProgressIndicator(
+                                        progress = { downloadProgress },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                    )
+                                    Text(
+                                        text = "${(downloadProgress * 100).toInt()}%",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.align(Alignment.End)
+                                    )
+                                } else {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -236,7 +244,7 @@ fun <T> GroupedDropdownMenu(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isDownloading && downloadProgress != null) {
+                    if (isDownloading) {
                         IconButton(onClick = { onCancelDownload?.invoke() }) {
                             Icon(Icons.Default.Close, contentDescription = "Cancel", tint = MaterialTheme.colorScheme.error)
                         }
@@ -255,14 +263,22 @@ fun <T> GroupedDropdownMenu(
                 }
             }
 
-            if (isDownloading && downloadProgress != null) {
+            if (isDownloading) {
                 Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { downloadProgress },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                )
+                if (downloadProgress != null) {
+                    LinearProgressIndicator(
+                        progress = { downloadProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                    )
+                }
             }
         }
     }

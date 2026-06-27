@@ -9,7 +9,8 @@ import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat as MediaNotificationCompat
 import com.voxcommander.app.MainActivity
 import com.voxcommander.app.R
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
+import com.voxcommander.app.data.preferences.SettingsRepositoryImpl
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.VoiceState
@@ -30,7 +31,7 @@ class WakeWordService : Service() {
     private val TAG = "WakeWordService"
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    private lateinit var settingsManager: SettingsManager
+    private lateinit var settingsRepo: SettingsRepository
     private lateinit var appStateManager: AppStateManager
     private lateinit var languageManager: com.voxcommander.app.domain.localization.LanguageManager
     private lateinit var voiceOverlayManager: com.voxcommander.app.ui.components.VoiceOverlayManager
@@ -43,10 +44,11 @@ class WakeWordService : Service() {
     override fun onCreate() {
         super.onCreate()
         Logger.log("WakeWordService created", TAG)
-        settingsManager = SettingsManager(this)
-        appStateManager = AppStateManager.getInstance(settingsManager, this)
+        val repo = SettingsRepositoryImpl(this)
+        settingsRepo = repo
+        appStateManager = AppStateManager.getInstance(repo, this)
         languageManager = com.voxcommander.app.domain.localization.LanguageManager(this).apply {
-            loadLanguage(settingsManager.getLanguage())
+            loadLanguage(settingsRepo.getSettingsSnapshot().language)
         }
         voiceOverlayManager = com.voxcommander.app.ui.components.VoiceOverlayManager(this, languageManager, appStateManager)
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -136,9 +138,10 @@ class WakeWordService : Service() {
         startForeground(NOTIFICATION_ID, createNotification())
 
         serviceScope.launch {
-            val wakeWord = settingsManager.getWakeWord()
-            val wakeWordModelName = settingsManager.getWakeWordModelPath()
-            val voiceLanguage = settingsManager.getVoiceLanguage()
+            val snapshot = settingsRepo.getSettingsSnapshot()
+            val wakeWord = snapshot.wakeWord
+            val wakeWordModelName = snapshot.wakeWordModelPath
+            val voiceLanguage = snapshot.voiceLanguage
 
             val rootDir = getExternalFilesDir(null)
             val modelPath = if (!wakeWordModelName.isNullOrBlank()) {
@@ -163,7 +166,7 @@ class WakeWordService : Service() {
             }
 
             wakeWordEngine?.release()
-            wakeWordEngine = WakeWordEngine(this@WakeWordService, settingsManager, appStateManager) {
+            wakeWordEngine = WakeWordEngine(this@WakeWordService, settingsRepo, appStateManager) {
                 onWakeWordDetected()
             }
 
@@ -265,7 +268,7 @@ class WakeWordService : Service() {
         val isListening = uiState.isWakeWordServiceListening
 
         val finalContentText = contentText ?: if (isListening) {
-            languageManager.getString("ww_listening_for").format(settingsManager.getWakeWord())
+            languageManager.getString("ww_listening_for").format(settingsRepo.getSettingsSnapshot().wakeWord)
         } else {
             languageManager.getString("ww_paused")
         }

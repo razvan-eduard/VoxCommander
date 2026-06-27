@@ -18,12 +18,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.domain.intent.model.FastMapRule
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.intent.registry.IntentRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.components.VoiceInputTextField
 import com.voxcommander.app.utils.RegexGenerator
+import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -31,7 +32,7 @@ import java.io.File
 @Composable
 fun RulesManagerContent(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     fastMapDao: FastMapDao,
     onSaveAndClose: () -> Unit,
@@ -78,21 +79,29 @@ fun RulesManagerContent(
     // Check if default voice model is on device
     val isDefaultModelOnDevice = remember(voiceProcessor, voiceLanguage) {
         when (voiceProcessor) {
-            "WHISPER_CPP", "WHISPER_VULKAN", "WHISPER_NEON" -> {
+            Strings.Processors.WHISPER_VULKAN -> {
                 val modelId = uiState.activeVoiceModelId
-                modelId != null && settingsManager.isModelDownloaded(modelId)
+                modelId != null && uiState.isModelDownloaded(modelId)
             }
-            "VOSK" -> {
-                val customPath = uiState.customVoskModelPaths[voiceLanguage]
-                if (!customPath.isNullOrBlank()) {
-                    File(customPath).exists()
+            Strings.Processors.GOOGLE, Strings.Processors.WHISPER_API -> true
+            else -> {
+                // JSON-defined voice engines — check by extension
+                if (com.voxcommander.app.data.remote.RemoteModelRegistry.isZipEngine(voiceProcessor)) {
+                    // Vosk-like (.zip) engine
+                    val customPath = uiState.customVoskModelPaths[voiceLanguage]
+                    if (!customPath.isNullOrBlank()) {
+                        File(customPath).exists()
+                    } else {
+                        val rootDir = context.getExternalFilesDir(null)
+                        val modelDir = rootDir?.listFiles()?.find { it.isDirectory && it.name.startsWith("vosk-model-") && it.name.contains(voiceLanguage, ignoreCase = true) }
+                        modelDir != null && modelDir.exists()
+                    }
                 } else {
-                    val rootDir = context.getExternalFilesDir(null)
-                    val modelDir = rootDir?.listFiles()?.find { it.isDirectory && it.name.startsWith("vosk-model-") && it.name.contains(voiceLanguage, ignoreCase = true) }
-                    modelDir != null && modelDir.exists()
+                    // Whisper-like (.bin) engine
+                    val modelId = uiState.activeVoiceModelId
+                    modelId != null && uiState.isModelDownloaded(modelId)
                 }
             }
-            else -> true
         }
     }
 

@@ -31,39 +31,44 @@ class DownloadCompleteReceiver : BroadcastReceiver() {
                 if (filePath != null) {
                     Logger.log("Downloaded file: $filePath", TAG)
 
-                    // Check if it's a Vosk ZIP file and unzip it
-                    val voskExt = RemoteModelRegistry.getExtension("vosk")
-                    if (filePath.endsWith(voskExt, ignoreCase = true)) {
-                        val modelName = File(filePath).name.removeSuffix(voskExt)
+                    // Dynamically match the downloaded file to an engine by extension
+                    val fileName = File(filePath).name
+                    val matchedEngineKey = RemoteModelRegistry.getEngineTypes().firstOrNull { key ->
+                        val ext = RemoteModelRegistry.getExtension(key)
+                        ext.isNotBlank() && fileName.endsWith(ext, ignoreCase = true)
+                    }
+
+                    if (matchedEngineKey == null) {
+                        Logger.log("Could not match file '$fileName' to any engine, ignoring", TAG)
+                        return
+                    }
+
+                    val ext = RemoteModelRegistry.getExtension(matchedEngineKey)
+                    val modelId = fileName.removeSuffix(ext)
+                    Logger.log("Matched engine: $matchedEngineKey, modelId: $modelId", TAG)
+
+                    if (ext.equals(".zip", ignoreCase = true)) {
+                        // ZIP-based engines (e.g. wake_vosk) need unzip before signaling
                         val downloader = ModelDownloader(context)
-                        downloader.unzipVoskModel(modelName) { success ->
-                            Logger.log("Unzip ${if (success) "success" else "failed"} for $modelName", TAG)
-                            // Send local broadcast AFTER unzip completes for Vosk
+                        downloader.unzipVoskModel(modelId, matchedEngineKey) { success ->
+                            Logger.log("Unzip ${if (success) "success" else "failed"} for $modelId", TAG)
                             val localIntent = Intent(ACTION_DOWNLOAD_COMPLETE_LOCAL).apply {
                                 putExtra(EXTRA_DOWNLOAD_ID, id)
                                 putExtra(EXTRA_FILE_PATH, filePath)
-                                putExtra("directory_name", modelName)
-                                putExtra("model_type", "vosk")
+                                putExtra("directory_name", modelId)
+                                putExtra("model_type", matchedEngineKey)
                             }
-                            Logger.log("Sending local broadcast for Vosk: action=$ACTION_DOWNLOAD_COMPLETE_LOCAL, id=$id, dir=$modelName", TAG)
+                            Logger.log("Sending local broadcast for $matchedEngineKey: action=$ACTION_DOWNLOAD_COMPLETE_LOCAL, id=$id, dir=$modelId", TAG)
                             context.sendBroadcast(localIntent)
                         }
                     } else {
-                        // Infer type for non-Vosk (Whisper or Llama)
-                        val whisperExt = RemoteModelRegistry.getExtension("whisper")
-                        val llmExt = RemoteModelRegistry.getExtension("nlu")
-                        val type = when {
-                            filePath.endsWith(whisperExt, ignoreCase = true) -> "whisper"
-                            filePath.endsWith(llmExt, ignoreCase = true) -> "nlu"
-                            else -> "unknown"
-                        }
-                        
+                        // File-based engines (e.g. stt_whisper, nlu_llm) are ready as-is
                         val localIntent = Intent(ACTION_DOWNLOAD_COMPLETE_LOCAL).apply {
                             putExtra(EXTRA_DOWNLOAD_ID, id)
                             putExtra(EXTRA_FILE_PATH, filePath)
-                            putExtra("model_type", type)
+                            putExtra("model_type", matchedEngineKey)
                         }
-                        Logger.log("Sending local broadcast for $type: action=$ACTION_DOWNLOAD_COMPLETE_LOCAL, id=$id", TAG)
+                        Logger.log("Sending local broadcast for $matchedEngineKey: action=$ACTION_DOWNLOAD_COMPLETE_LOCAL, id=$id", TAG)
                         context.sendBroadcast(localIntent)
                     }
                 }

@@ -44,8 +44,9 @@ fun BenchmarkSettingsTab(
     val nativeLibsStatus by appStateManager.nativeLibsStatus.collectAsStateWithLifecycle()
     val systemInfo by appStateManager.systemInfo.collectAsStateWithLifecycle()
     
-    val settingsManager = remember { com.voxcommander.app.data.preferences.SettingsManager(context) }
-    val benchmarkEngine = remember { BenchmarkEngine(context, settingsManager, appStateManager) }
+    val settingsRepo = remember { com.voxcommander.app.data.preferences.SettingsRepositoryImpl(context) }
+    val modelDownloader = remember { com.voxcommander.app.data.remote.ModelDownloader(context) }
+    val benchmarkEngine = remember { BenchmarkEngine(context, settingsRepo, appStateManager, modelDownloader) }
     
     val isRunning = uiState.voiceState == VoiceState.BENCHMARKING
 

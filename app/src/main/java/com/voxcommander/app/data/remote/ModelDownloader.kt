@@ -4,7 +4,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
@@ -21,6 +21,11 @@ class ModelDownloader(private val context: Context) {
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
+    companion object {
+        private const val TAG = "ModelDownloader"
+        private const val CLEANUP_TAG = "ModelCleanup"
+    }
+
     /**
      * Resolves the local File object for a given model.
      * Handles both directory-based (Vosk) and file-based (Whisper/NLU) models.
@@ -28,11 +33,13 @@ class ModelDownloader(private val context: Context) {
     fun resolveLocalFile(modelId: String, engineKey: String): File? {
         val rootDir = context.getExternalFilesDir(null) ?: return null
         val extension = RemoteModelRegistry.getExtension(engineKey)
-        
-        return if (extension.isBlank()) {
-            File(rootDir, modelId) // Directory (e.g. wake_vosk)
+
+        return if (RemoteModelRegistry.isZipEngine(engineKey)) {
+            // ZIP engines: downloaded as .zip, unzipped to a directory named just modelId (no extension)
+            File(rootDir, modelId)
         } else {
-            File(rootDir, "$modelId$extension") // File (e.g. stt_whisper, nlu_llm)
+            // File-based engines: model stored as modelId + extension
+            File(rootDir, "$modelId$extension")
         }
     }
 
@@ -50,17 +57,29 @@ class ModelDownloader(private val context: Context) {
             return -1L
         }
 
+        // Clean up leftover download files to prevent DownloadManager adding -N suffix
+        val downloadDir = if (RemoteModelRegistry.isZipEngine(engineKey)) {
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        } else {
+            context.getExternalFilesDir(null)
+        }
+        val leftoverFile = File(downloadDir, fileName)
+        if (leftoverFile.exists()) {
+            leftoverFile.delete()
+            Logger.log("Cleaned up leftover file: ${leftoverFile.absolutePath}", TAG)
+        }
+
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("Downloading Model ($modelId)")
             .setDescription("Preparing offline engine: $engineKey")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
 
-        // Vosk ZIPs go to temporary Downloads dir for unzip, others directly to root
-        val destination = if (engineKey == "wake_vosk") Environment.DIRECTORY_DOWNLOADS else null
+        // ZIP-based engines go to temporary Downloads dir for unzip, others directly to root
+        val destination = if (RemoteModelRegistry.isZipEngine(engineKey)) Environment.DIRECTORY_DOWNLOADS else null
         request.setDestinationInExternalFilesDir(context, destination, fileName)
 
-        // NLU specific flags
-        if (engineKey == "nlu_llm") {
+        // LLM-specific flags
+        if (RemoteModelRegistry.isLlmEngine(engineKey)) {
             request.setAllowedOverMetered(true)
             request.setAllowedOverRoaming(true)
         }
@@ -84,12 +103,14 @@ class ModelDownloader(private val context: Context) {
     }
 
     /**
-     * Unzips Vosk models from temporary downloads to app root.
+     * Unzips ZIP-based models from temporary downloads to app root.
+     * @param modelId Model identifier (without extension)
+     * @param engineKey Engine key from models.json
      */
-    fun unzipVoskModel(modelId: String, onComplete: (Boolean) -> Unit) {
-        val extension = RemoteModelRegistry.getExtension("wake_vosk")
+    fun unzipVoskModel(modelId: String, engineKey: String, onComplete: (Boolean) -> Unit) {
+        val extension = RemoteModelRegistry.getExtension(engineKey)
         val zipFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "$modelId$extension")
-        val targetDir = resolveLocalFile(modelId, "wake_vosk") ?: return onComplete(false)
+        val targetDir = resolveLocalFile(modelId, engineKey) ?: return onComplete(false)
 
         if (!zipFile.exists()) {
             Logger.log("Unzip failed: ZIP file not found: ${zipFile.absolutePath}", TAG)
@@ -127,25 +148,25 @@ class ModelDownloader(private val context: Context) {
 
     /**
      * Agnostic cleanup of unused models.
-     * Iterates through ALL engine types defined in JSON and protects only the active ones.
-     * Everything else is purged.
+     * Protects only active voice + intent models. Everything else is purged.
      */
     fun deleteUnusedModels(
-        settingsManager: SettingsManager,
+        settingsRepo: SettingsRepository,
         activeVoiceModelId: String?,
         activeIntentModelId: String?,
         appStateManager: AppStateManager? = null
     ) {
         val rootDir = context.getExternalFilesDir(null) ?: return
         val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-        
-        // 1. Build protected set based on actual files resolved from active IDs across all known engines
+
+        // 1. Build protected set: only active models
         val protectedNames = mutableSetOf<String>()
         val engineKeys = RemoteModelRegistry.getEngineTypes()
-        
+
         // Essential system items
         protectedNames.addAll(listOf("Download", "transcriptions", "logs"))
 
+        // Protect active models only
         engineKeys.forEach { key ->
             activeVoiceModelId?.let { id ->
                 resolveLocalFile(id, key)?.let { protectedNames.add(it.name) }
@@ -167,8 +188,9 @@ class ModelDownloader(private val context: Context) {
 
             Logger.log("DELETING unused item: ${file.absolutePath}", CLEANUP_TAG)
             file.deleteRecursively()
-            
-            // Sync settings: find which engine this file belonged to to strip extension and get ID
+
+            // Sync settings: extract modelId from filename
+            // For file-based engines: strip extension. For zip engines: directory name IS the modelId.
             var modelId = name
             engineKeys.forEach { key ->
                 val ext = RemoteModelRegistry.getExtension(key)
@@ -177,9 +199,24 @@ class ModelDownloader(private val context: Context) {
                 }
             }
             
-            settingsManager.setModelDownloaded(modelId, false)
-            if (settingsManager.getDefaultVoiceFallbackModel() == modelId) settingsManager.clearDefaultVoiceFallback()
-            if (settingsManager.getDefaultIntentFallbackModel() == modelId) settingsManager.clearDefaultIntentFallback()
+            kotlinx.coroutines.runBlocking { settingsRepo.setModelDownloaded(modelId, false) }
+            val snapshot = settingsRepo.getSettingsSnapshot()
+            if (snapshot.defaultVoiceFallbackModel == modelId) {
+                val activeVoice = snapshot.activeVoiceModelId
+                if (activeVoice != null && activeVoice != modelId && snapshot.isModelDownloaded(activeVoice)) {
+                    kotlinx.coroutines.runBlocking { settingsRepo.setDefaultVoiceFallback(snapshot.voiceProcessor, activeVoice) }
+                } else {
+                    kotlinx.coroutines.runBlocking { settingsRepo.clearDefaultVoiceFallback() }
+                }
+            }
+            if (snapshot.defaultIntentFallbackModel == modelId) {
+                val activeIntent = snapshot.activeIntentModelId
+                if (activeIntent != null && activeIntent != modelId && snapshot.isModelDownloaded(activeIntent)) {
+                    kotlinx.coroutines.runBlocking { settingsRepo.setDefaultIntentFallback(snapshot.aiProcessor, activeIntent) }
+                } else {
+                    kotlinx.coroutines.runBlocking { settingsRepo.clearDefaultIntentFallback() }
+                }
+            }
         }
 
         // 3. Clean temporary Downloads
@@ -196,10 +233,5 @@ class ModelDownloader(private val context: Context) {
 
         Logger.log("Cleanup complete.", CLEANUP_TAG)
         appStateManager?.refreshAll()
-    }
-
-    companion object {
-        private const val TAG = "ModelDownloader"
-        private const val CLEANUP_TAG = "ModelCleanup"
     }
 }

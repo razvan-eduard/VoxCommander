@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.service.WakeWordService
@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsContent(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     modelManagementViewModel: com.voxcommander.app.ui.viewmodels.ModelManagementViewModel,
     onDownloadModel: (String, String, String?) -> Unit,
@@ -60,17 +60,11 @@ fun SettingsContent(
     val isVoskOffline by modelManagementViewModel.isVoskOffline.collectAsStateWithLifecycle()
     val voskError by modelManagementViewModel.voskError.collectAsStateWithLifecycle()
     
-    var downloadingItemState by remember { mutableStateOf<AppModel?>(null) }
     val vmDownloadingItem by modelManagementViewModel.downloadingItem.collectAsStateWithLifecycle()
-    
-    LaunchedEffect(downloadProgress, vmDownloadingItem) {
+
+    LaunchedEffect(downloadProgress) {
         if (downloadProgress == null || downloadProgress >= 1.0f) {
-            if (downloadingItemState != null) {
-                onRefreshMain()
-            }
-            downloadingItemState = null
-        } else {
-            downloadingItemState = vmDownloadingItem
+            onRefreshMain()
         }
     }
 
@@ -138,7 +132,7 @@ fun SettingsContent(
                             when (page) {
                                 0 -> GeneralSettingsTab(
                                     languageManager = languageManager,
-                                    settingsManager = settingsManager,
+                                    settingsRepo = settingsRepo,
                                     appStateManager = appStateManager
                                 )
                                 1 -> PermissionsSettingsTab(
@@ -150,7 +144,7 @@ fun SettingsContent(
                                 )
                                 2 -> ModelsSettingsTab(
                                     languageManager = languageManager,
-                                    settingsManager = settingsManager,
+                                    settingsRepo = settingsRepo,
                                     appStateManager = appStateManager,
                                     onProcessorSelected = {
                                         appStateManager.setVoiceProcessor(it)
@@ -172,7 +166,7 @@ fun SettingsContent(
                                         modelManagementViewModel.deleteModel(modelId, engineKey) 
                                     },
                                     downloadProgress = downloadProgress,
-                                    downloadingItem = downloadingItemState,
+                                    downloadingItem = vmDownloadingItem,
                                     downloadedColor = downloadedColor,
                                     onCancelDownload = onCancelDownload,
                                     onDeleteRequest = { model ->
@@ -184,7 +178,7 @@ fun SettingsContent(
                                 )
                                 3 -> ServiceSettingsTab(
                                     languageManager = languageManager,
-                                    settingsManager = settingsManager,
+                                    settingsRepo = settingsRepo,
                                     appStateManager = appStateManager,
                                     onStartService = { WakeWordService.startService(context) },
                                     onStopService = { WakeWordService.stopService(context) },
@@ -193,12 +187,12 @@ fun SettingsContent(
                                     onDeleteRequest = { model -> modelToDelete = model as? AppModel; showDeleteConfirmDialog = true },
                                     onCancelDownload = onCancelDownload,
                                     downloadProgress = downloadProgress,
-                                    downloadingItem = downloadingItemState,
+                                    downloadingItem = vmDownloadingItem,
                                     refreshTrigger = uiState.refreshTrigger
                                 )
                                 5 -> AdvancedSettingsTab(
                                     languageManager = languageManager,
-                                    settingsManager = settingsManager,
+                                    settingsRepo = settingsRepo,
                                     appStateManager = appStateManager,
                                     onCleanupRequest = { showCleanupDialog = true },
                                     onClearDefaultFallback = { 

@@ -3,7 +3,8 @@ package com.voxcommander.app.di
 import android.content.Context
 import androidx.room.Room
 import com.voxcommander.app.data.local.db.VoxDatabase
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
+import com.voxcommander.app.data.preferences.SettingsRepositoryImpl
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.domain.intent.IntentDecisionMap
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
@@ -16,10 +17,6 @@ import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.viewmodels.MainViewModel
 import com.voxcommander.app.ui.viewmodels.ModelManagementViewModel
 import com.whispercpp.whisper.WhisperLib
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 /**
  * Dependency Injection Container for Vox Commander.
@@ -30,9 +27,11 @@ class AppContainer(context: Context) {
     // Always use the application context to avoid leaking an Activity.
     private val appContext = context.applicationContext
 
+    // --- SETTINGS REPOSITORY (DataStore-backed, singleton) ---
+    val settingsRepository: SettingsRepository = SettingsRepositoryImpl(appContext)
+
     // --- SINGLETON MANAGERS ---
-    val settingsManager = SettingsManager(appContext)
-    val appStateManager = AppStateManager.getInstance(settingsManager, appContext)
+    val appStateManager = AppStateManager.getInstance(settingsRepository, appContext)
     val modelDownloader = ModelDownloader(appContext)
     val languageManager = LanguageManager(appContext)
     val voiceOverlayManager = com.voxcommander.app.ui.components.VoiceOverlayManager(appContext, languageManager, appStateManager)
@@ -48,15 +47,15 @@ class AppContainer(context: Context) {
 
     // --- INTENT ENGINES ---
     private val l1Engine = FastMapEngine(fastMapDao)
-    private val l2Engine = OpenAiInterpreter(settingsManager)
-    private val l3Engine = LocalLlmInterpreter(appContext, settingsManager)
+    private val l2Engine = OpenAiInterpreter(settingsRepository)
+    private val l3Engine = LocalLlmInterpreter(appContext, settingsRepository, modelDownloader)
     private val geminiEngine = GeminiNanoInterpreter(appContext)
-    val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, l3Engine, geminiEngine, settingsManager)
+    val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, l3Engine, geminiEngine, settingsRepository)
 
     // --- VIEW MODELS ---
     val mainViewModel = MainViewModel(masterIntentEngine, appStateManager, languageManager)
     val modelManagementViewModel = ModelManagementViewModel(
-        settingsManager,
+        settingsRepository,
         appStateManager,
         modelDownloader,
         languageManager,
@@ -65,6 +64,10 @@ class AppContainer(context: Context) {
 
     init {
         android.util.Log.d("AppContainer", "AppContainer init - starting compatibility checks")
+        // Migrate old EncryptedSharedPreferences to DataStore synchronously (runs once, fast)
+        kotlinx.coroutines.runBlocking {
+            (settingsRepository as SettingsRepositoryImpl).migrateFromSharedPreferencesIfNeeded()
+        }
         checkVulkanCrashCookie()
         detectGeminiSupport()
     }
@@ -77,26 +80,27 @@ class AppContainer(context: Context) {
             val pm = appContext.packageManager
             pm.getPackageInfo("com.google.android.aicore", 0)
             android.util.Log.d("GeminiProbe", "AICore detected - Gemini Nano supported")
-            settingsManager.setGeminiIncompatible(false)
+            kotlinx.coroutines.runBlocking { settingsRepository.setGeminiIncompatible(false) }
         } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
             android.util.Log.w("GeminiProbe", "AICore not found - marking Gemini Nano incompatible")
-            settingsManager.setGeminiIncompatible(true)
+            kotlinx.coroutines.runBlocking { settingsRepository.setGeminiIncompatible(true) }
         } catch (e: Exception) {
             android.util.Log.e("GeminiProbe", "Error probing Gemini support", e)
         }
     }
 
     /**
-     * Crash-cookie check. Before a real GPU transcription, [SettingsManager.setVulkanRuntimeAttempt]
+     * Crash-cookie check. Before a real GPU transcription, [SettingsRepository.setVulkanRuntimeAttemptSync]
      * is committed synchronously. If the process crashed natively during that GPU work,
      * the flag survives to the next launch. Finding it pending here means the last GPU
      * attempt killed the process, so we mark Vulkan incompatible and clear the cookie.
      */
     private fun checkVulkanCrashCookie() {
-        android.util.Log.d("VulkanProbe", "checkVulkanCrashCookie: pending=\${settingsManager.isVulkanRuntimeAttemptPending()}")
-        if (settingsManager.isVulkanRuntimeAttemptPending()) {
-            settingsManager.setVulkanIncompatible(true)
-            settingsManager.setVulkanRuntimeAttempt(false)
+        val snapshot = settingsRepository.getSettingsSnapshot()
+        android.util.Log.d("VulkanProbe", "checkVulkanCrashCookie: pending=${snapshot.vulkanRuntimeAttempt}")
+        if (snapshot.vulkanRuntimeAttempt) {
+            kotlinx.coroutines.runBlocking { settingsRepository.setVulkanIncompatible(true) }
+            kotlinx.coroutines.runBlocking { settingsRepository.setVulkanRuntimeAttemptSync(false) }
             android.util.Log.w(
                 "VulkanProbe",
                 "Detected native crash during previous Vulkan GPU use -> marking incompatible"
@@ -114,14 +118,15 @@ class AppContainer(context: Context) {
             null,
             null,
             { langCode -> voiceIntentLauncher.launch(langCode) },
-            settingsManager,
+            settingsRepository,
             appStateManager
         )
 
         // Set offline fallback settings in VoiceManager
+        val snapshot = settingsRepository.getSettingsSnapshot()
         VoiceManager.setOfflineFallbackSettings(
-            settingsManager.getOfflineFallbackTimeout(),
-            settingsManager.getDefaultOfflineModel()
+            snapshot.offlineFallbackTimeout,
+            snapshot.defaultOfflineModel
         )
     }
 

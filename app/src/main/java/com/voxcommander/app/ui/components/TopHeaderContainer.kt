@@ -6,7 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.voxcommander.app.data.local.dao.FastMapDao
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
@@ -25,7 +25,7 @@ enum class TopHeaderMode {
 fun TopHeaderContainer(
     mode: TopHeaderMode,
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager,
     modelManagementViewModel: com.voxcommander.app.ui.viewmodels.ModelManagementViewModel,
     fastMapDao: FastMapDao,
@@ -60,7 +60,7 @@ fun TopHeaderContainer(
                 TopHeaderMode.SETTINGS -> {
                     SettingsContent(
                         languageManager = languageManager,
-                        settingsManager = settingsManager,
+                        settingsRepo = settingsRepo,
                         appStateManager = appStateManager,
                         modelManagementViewModel = modelManagementViewModel,
                         onDownloadModel = onDownloadModel,
@@ -79,7 +79,7 @@ fun TopHeaderContainer(
                 TopHeaderMode.RULES -> {
                     RulesManagerContent(
                         languageManager = languageManager,
-                        settingsManager = settingsManager,
+                        settingsRepo = settingsRepo,
                         appStateManager = appStateManager,
                         fastMapDao = fastMapDao,
                         onSaveAndClose = onDismissRequest

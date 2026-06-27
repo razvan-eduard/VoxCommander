@@ -9,7 +9,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.util.Log
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.VoiceState
 import com.voxcommander.app.utils.Logger
@@ -26,7 +26,7 @@ import java.io.File
 
 class WakeWordEngine(
     private val context: Context,
-    private val settingsManager: SettingsManager,
+    private val settingsRepo: SettingsRepository,
     private val appStateManager: AppStateManager,
     private val onWakeWordDetected: () -> Unit
 ) {
@@ -221,7 +221,7 @@ class WakeWordEngine(
     }
 
     private fun isValidWakeWordMatch(heardText: String): Boolean {
-        val target = settingsManager.getWakeWord().lowercase().trim()
+        val target = settingsRepo.getSettingsSnapshot().wakeWord.lowercase().trim()
         val cleanHeard = heardText.lowercase()
             .replace("[unknown]", "")
             .replace(Regex("\\s+"), " ")

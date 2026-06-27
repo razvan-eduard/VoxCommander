@@ -1,7 +1,7 @@
 package com.voxcommander.app.domain.engine.vosk
 
 import android.content.Context
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.engine.SttEngine
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +16,7 @@ import java.io.File
  */
 class VoskSttEngine(
     private val context: Context,
-    private val settingsManager: SettingsManager,
+    private val settingsRepo: SettingsRepository,
     private val langCode: String = DEFAULT_LANG
 ) : SttEngine {
     private var model: Model? = null
@@ -25,7 +25,9 @@ class VoskSttEngine(
     private suspend fun ensureModelLoaded() = withContext(Dispatchers.IO) {
         if (model == null) {
             try {
-                val customPath: String? = settingsManager.getCustomModelPath("wake_vosk", langCode)
+                val snapshot = settingsRepo.getSettingsSnapshot()
+                val voskKey = com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".zip")
+                val customPath: String? = voskKey?.let { snapshot.getCustomModelPath(it, langCode) }
                 if (!customPath.isNullOrBlank() && File(customPath).exists()) {
                     val actualPath = findModelDir(File(customPath))?.absolutePath ?: customPath
                     model = Model(actualPath)
@@ -35,7 +37,7 @@ class VoskSttEngine(
                 val rootDir = context.getExternalFilesDir(null)
 
                 // TIER 1: Specific selected model
-                val selectedModelName = settingsManager.getActiveVoiceModelId()
+                val selectedModelName = snapshot.activeVoiceModelId
                 val specificModelDir = if (!selectedModelName.isNullOrBlank()) {
                     File(rootDir, selectedModelName)
                 } else null

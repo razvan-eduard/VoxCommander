@@ -38,21 +38,17 @@ object FileHelper {
      * Deletes a model file from external storage.
      * @param context Application context
      * @param modelId Model identifier
-     * @param type Model type (whisper, nlu, vosk)
+     * @param engineKey Engine key from models.json (e.g. "stt_whisper", "wake_vosk", "nlu_llm")
      */
-    fun deleteModelFile(context: Context, modelId: String, type: String) {
-        val fileName = when (type) {
-            "whisper" -> "$modelId${RemoteModelRegistry.getExtension("whisper")}"
-            "nlu" -> "$modelId${RemoteModelRegistry.getExtension("nlu")}"
-            "vosk" -> modelId // Vosk models are directories, no extension
-            else -> return
-        }
+    fun deleteModelFile(context: Context, modelId: String, engineKey: String) {
+        val extension = RemoteModelRegistry.getExtension(engineKey)
+        val fileName = if (extension.isBlank()) modelId else "$modelId$extension"
         val file = File(context.getExternalFilesDir(null), fileName)
-        Logger.log("Deleting model file: type=$type, modelId=$modelId, fileName=$fileName, path=${file.absolutePath}, exists=${file.exists()}", Strings.Tags.FILE_HELPER)
+        Logger.log("Deleting model file: engineKey=$engineKey, modelId=$modelId, fileName=$fileName, path=${file.absolutePath}, exists=${file.exists()}", Strings.Tags.FILE_HELPER)
         if (file.exists()) {
             if (file.isDirectory) {
                 file.deleteRecursively()
-                Logger.log("Deleted Vosk directory: $fileName", Strings.Tags.FILE_HELPER)
+                Logger.log("Deleted directory: $fileName", Strings.Tags.FILE_HELPER)
             } else {
                 file.delete()
                 Logger.log("Deleted model file: $fileName", Strings.Tags.FILE_HELPER)

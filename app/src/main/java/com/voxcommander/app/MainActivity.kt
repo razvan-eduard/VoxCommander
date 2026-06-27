@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
     ) { uri: Uri? ->
         uri?.let {
             pendingModelLanguage?.let { lang ->
-                appContainer.modelManagementViewModel.selectCustomModel(it, "wake_vosk", lang)
+                appContainer.modelManagementViewModel.selectCustomModel(it, com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".zip") ?: "", lang)
             }
         }
     }
@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
-            appContainer.modelManagementViewModel.selectCustomModel(it, "stt_whisper")
+            appContainer.modelManagementViewModel.selectCustomModel(it, com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".bin") ?: "")
         }
     }
 
@@ -82,8 +82,8 @@ class MainActivity : ComponentActivity() {
 
         // Application-scoped dependency container (created once, survives rotation)
         appContainer = (application as VoxApplication).container
-        appContainer.languageManager.loadLanguage(appContainer.settingsManager.getLanguage())
-        Logger.log("MainActivity: Language loaded: ${appContainer.settingsManager.getLanguage()}")
+        appContainer.languageManager.loadLanguage(appContainer.settingsRepository.getSettingsSnapshot().language)
+        Logger.log("MainActivity: Language loaded: ${appContainer.settingsRepository.getSettingsSnapshot().language}")
 
         // Google Voice Intent launcher (lifecycle-bound, must live in the Activity)
         voiceIntentLauncher = VoiceIntentLauncher(this) { result ->
@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
                     composable(Strings.Routes.MAIN) {
                         MainScreen(
                             languageManager = appContainer.languageManager,
-                            settingsManager = appContainer.settingsManager,
+                            settingsRepo = appContainer.settingsRepository,
                             appStateManager = appContainer.appStateManager,
                             fastMapDao = appContainer.fastMapDao,
                             viewModel = appContainer.mainViewModel,

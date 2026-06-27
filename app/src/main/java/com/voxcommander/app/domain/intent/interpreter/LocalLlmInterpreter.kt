@@ -1,10 +1,12 @@
 package com.voxcommander.app.domain.intent.interpreter
 
 import android.content.Context
-import android.util.Log
+import com.voxcommander.app.utils.Logger
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.voxcommander.app.domain.intent.model.IntentPayload
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
+import com.voxcommander.app.data.remote.ModelDownloader
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.google.gson.Gson
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
@@ -12,11 +14,13 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * L2 Engine: Local LLM interpretation using MediaPipe (Llama 3.2 1B).
+ * L2/L3 Engine: Local LLM interpretation using MediaPipe GenAI.
+ * Model path resolved dynamically from models.json via ModelDownloader.
  */
 class LocalLlmInterpreter(
     private val context: Context,
-    private val settingsManager: SettingsManager
+    private val settingsRepo: SettingsRepository,
+    private val modelDownloader: ModelDownloader
 ) : AssistantEngine {
 
     private val TAG = Strings.Tags.LOCAL_LLM_INTERPRETER
@@ -26,13 +30,18 @@ class LocalLlmInterpreter(
     private fun setupLlm() {
         if (llmInference != null) return
 
-        val modelId = settingsManager.getActiveIntentModelId()
-        val modelPath = File(context.getExternalFilesDir(null), "nlu-model-$modelId.bin").absolutePath
+        val snapshot = settingsRepo.getSettingsSnapshot()
+        val modelId = snapshot.activeIntentModelId ?: return
+        val engineKey = snapshot.aiProcessor
 
-        if (!File(modelPath).exists()) {
-            Log.e(TAG, "Llama model not found at $modelPath. Make sure it is downloaded.")
+        val modelFile = modelDownloader.resolveLocalFile(modelId, engineKey)
+        if (modelFile == null || !modelFile.exists()) {
+            Logger.log("LLM model not found for $modelId ($engineKey). Make sure it is downloaded.", TAG)
             return
         }
+
+        val modelPath = modelFile.absolutePath
+        Logger.log("Loading LLM model: $modelPath", TAG)
 
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
@@ -50,7 +59,7 @@ class LocalLlmInterpreter(
 
         try {
             val response = engine.generateResponse(hydratedPrompt)
-            Log.d(TAG, "Llama response: $response")
+            Logger.log("LLM response: $response", TAG)
 
             // Basic cleaning to ensure we have only JSON
             val jsonStart = response.indexOf("{")
@@ -60,7 +69,7 @@ class LocalLlmInterpreter(
                 return@withContext gson.fromJson(cleanJson, IntentPayload::class.java)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Llama generation failed", e)
+            Logger.log("LLM generation failed: ${e.message}", TAG)
         }
         null
     }

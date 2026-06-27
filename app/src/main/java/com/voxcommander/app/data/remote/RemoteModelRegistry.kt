@@ -2,7 +2,7 @@ package com.voxcommander.app.data.remote
 
 import android.util.Log
 import com.google.gson.Gson
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.utils.Logger
@@ -83,11 +83,11 @@ object RemoteModelRegistry {
     private val _modelMap = MutableStateFlow<Map<String, List<AppModel>>>(emptyMap())
     val modelMap: StateFlow<Map<String, List<AppModel>>> = _modelMap.asStateFlow()
 
-    suspend fun fetchJson(settingsManager: SettingsManager, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+    suspend fun fetchJson(repo: SettingsRepository, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         Logger.log("fetchJson called (force=$force)", TAG)
         // 1. Initial load from disk cache if memory is empty
         if (cachedSchema == null) {
-            settingsManager.getModelsJsonCache()?.let {
+            repo.getSettingsSnapshot().modelsJsonCache?.let {
                 try {
                     Logger.log("Loading from disk cache...", TAG)
                     cachedSchema = gson.fromJson(it, RemoteModelSchema::class.java)
@@ -105,7 +105,7 @@ object RemoteModelRegistry {
         if (!force && cachedSchema != null) return@withContext true
 
         // 3. Perform network fetch
-        val baseUrl = settingsManager.getModelRepoBaseUrl()
+        val baseUrl = repo.getSettingsSnapshot().modelRepoBaseUrl
         val rawUrlBase = if (baseUrl.contains("github.com") && !baseUrl.contains("raw.githubusercontent.com")) {
             baseUrl.replace("github.com", "raw.githubusercontent.com").removeSuffix("/") + "/main/models.json"
         } else {
@@ -122,7 +122,7 @@ object RemoteModelRegistry {
             if (schema != null) {
                 cachedSchema = schema
                 Logger.log("Remote JSON parsed. Engines found: ${schema.engines.keys}", TAG)
-                settingsManager.saveModelsJsonCache(jsonText)
+                repo.saveModelsJsonCache(jsonText)
                 rebuildModelMap()
                 _registryUpdateSignal.value++
                 true
@@ -184,6 +184,25 @@ object RemoteModelRegistry {
 
     fun getExtension(engineKey: String): String = cachedSchema?.engines?.get(engineKey)?.extension ?: ""
 
+    fun getEngineType(engineKey: String): String? = cachedSchema?.engines?.get(engineKey)?.type
+
+    fun isZipEngine(engineKey: String): Boolean = getExtension(engineKey).equals(".zip", ignoreCase = true)
+
+    fun isLlmEngine(engineKey: String): Boolean = getEngineType(engineKey) == "llm"
+
+    fun getEngineKeyByExtension(ext: String): String? {
+        return cachedSchema?.engines?.entries
+            ?.firstOrNull { it.value.extension.equals(ext, ignoreCase = true) }?.key
+    }
+
+    fun getDefaultVoiceEngineKey(): String? {
+        return getEngineKeysByType("voice").firstOrNull()
+    }
+
+    fun getDefaultLlmEngineKey(): String? {
+        return getEngineKeysByType("llm").firstOrNull()
+    }
+
     fun isMultilingual(engineKey: String): Boolean = cachedSchema?.engines?.get(engineKey)?.is_multilingual ?: false
 
     fun getLanguages(engineKey: String): List<String> {
@@ -203,9 +222,9 @@ object RemoteModelRegistry {
     /**
      * Resolves the final download URL.
      */
-    fun resolveUrl(item: AppModel, settingsManager: SettingsManager): String {
+    fun resolveUrl(item: AppModel, repo: SettingsRepository): String {
         if (item.url.startsWith("http")) return item.url
-        val baseUrl = settingsManager.getModelRepoBaseUrl()
+        val baseUrl = repo.getSettingsSnapshot().modelRepoBaseUrl
         return if (baseUrl.contains("github.com")) {
             val cleanBase = baseUrl.removeSuffix("/")
             "$cleanBase/releases/download/${item.url}"

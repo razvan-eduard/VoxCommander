@@ -10,7 +10,7 @@ import android.os.Environment
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.DownloadCompleteReceiver
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.data.remote.RemoteModelRegistry
@@ -36,7 +36,7 @@ import java.io.File
  * Orchestrates UI state for all model types (Vosk, Whisper, Llama) directly from RemoteModelRegistry.
  */
 class ModelManagementViewModel(
-    private val settingsManager: SettingsManager,
+    private val settingsRepo: SettingsRepository,
     private val appStateManager: AppStateManager,
     private val modelDownloader: ModelDownloader,
     private val languageManager: LanguageManager,
@@ -111,11 +111,8 @@ class ModelManagementViewModel(
                     lastDownloadType = modelType
                 }
 
-                // For Vosk, use the actual directory name from broadcast
-                if (directoryName != null) {
-                    lastDownloadedId = directoryName
-                }
-
+                // Don't overwrite lastDownloadedId — it was set correctly in downloadModel()
+                // directoryName from broadcast may have -N suffix from DownloadManager
                 Logger.log("Calling handleDownloadSuccess: type=$lastDownloadType, id=$lastDownloadedId", Strings.Tags.MODEL_MANAGEMENT_VIEW_MODEL)
                 handleDownloadSuccess()
             } else {
@@ -139,9 +136,21 @@ class ModelManagementViewModel(
     }
 
     private fun rebuildUiLists() {
-        _whisperModels.value = RemoteModelRegistry.getModels("stt_whisper")
-        _voskModels.value = RemoteModelRegistry.getModels("wake_vosk")
-        _nluModels.value = RemoteModelRegistry.getModels("nlu_llm")
+        // Dynamically resolve all engine keys from models.json
+        val voiceKeys = RemoteModelRegistry.getEngineKeysByType("voice")
+        val llmKeys = RemoteModelRegistry.getEngineKeysByType("llm")
+
+        // Whisper models = voice engines with .bin extension
+        val whisperKey = voiceKeys.firstOrNull { !RemoteModelRegistry.isZipEngine(it) }
+        _whisperModels.value = whisperKey?.let { RemoteModelRegistry.getModels(it) } ?: emptyList()
+
+        // Vosk models = voice engines with .zip extension
+        val voskKey = voiceKeys.firstOrNull { RemoteModelRegistry.isZipEngine(it) }
+        _voskModels.value = voskKey?.let { RemoteModelRegistry.getModels(it) } ?: emptyList()
+
+        // NLU models = LLM engines
+        val nluKey = llmKeys.firstOrNull()
+        _nluModels.value = nluKey?.let { RemoteModelRegistry.getModels(it) } ?: emptyList()
 
         _isVoskOffline.value = _voskModels.value.isEmpty()
 
@@ -150,7 +159,7 @@ class ModelManagementViewModel(
 
     suspend fun loadModels(force: Boolean = false) {
         _isVoskLoading.value = true
-        RemoteModelRegistry.fetchJson(settingsManager, force)
+        RemoteModelRegistry.fetchJson(settingsRepo, force)
         rebuildUiLists()
         _isVoskLoading.value = false
     }
@@ -170,10 +179,16 @@ class ModelManagementViewModel(
         val localFile = modelDownloader.resolveLocalFile(modelId, engineType)
         if (localFile?.exists() == true) {
             Logger.log("Model already exists, marking as downloaded: $modelId", TAG)
-            settingsManager.setModelDownloaded(modelId, true)
+            viewModelScope.launch { settingsRepo.setModelDownloaded(modelId, true) }
             when (engineType) {
-                "nlu_llm" -> appStateManager.setActiveIntentModelId(modelId)
-                else -> appStateManager.setActiveVoiceModelId(modelId)
+                RemoteModelRegistry.getEngineKeysByType("llm").firstOrNull() -> {
+                    appStateManager.setActiveIntentModelId(modelId)
+                    appStateManager.saveIntentModelSelection(engineType, modelId)
+                }
+                else -> {
+                    appStateManager.setActiveVoiceModelId(modelId)
+                    appStateManager.saveVoiceModelSelection(engineType, modelId)
+                }
             }
             appStateManager.refreshAll()
             _downloadingItem.value = null
@@ -181,7 +196,7 @@ class ModelManagementViewModel(
         }
 
         // Start real download
-        val id = modelDownloader.downloadModel(modelId, RemoteModelRegistry.resolveUrl(item, settingsManager), engineType)
+        val id = modelDownloader.downloadModel(modelId, RemoteModelRegistry.resolveUrl(item, settingsRepo), engineType)
         if (id != -1L) {
             currentDownloadId = id
             startProgressTracking(id)
@@ -190,13 +205,18 @@ class ModelManagementViewModel(
 
     fun selectVoiceModel(modelId: String, engineKey: String, langCode: String? = null) {
         if (langCode != null) appStateManager.setVoiceLanguage(langCode)
-        
+
+        // Set active immediately — model can be active even if not on device
+        appStateManager.setActiveVoiceModelId(modelId)
+        // Save selection per engine so switching back restores it
+        viewModelScope.launch { settingsRepo.setEngineModelSelection(engineKey, modelId) }
+
+        // If already on disk, mark as downloaded
         val file = modelDownloader.resolveLocalFile(modelId, engineKey)
         if (file?.exists() == true) {
-            appStateManager.setActiveVoiceModelId(modelId)
-            settingsManager.setModelDownloaded(modelId, true)
-            appStateManager.refreshAll()
+            viewModelScope.launch { settingsRepo.setModelDownloaded(modelId, true) }
         }
+        appStateManager.refreshAll()
     }
 
     fun selectCustomModel(uri: Uri, engineKey: String, langCode: String? = null) {
@@ -205,13 +225,13 @@ class ModelManagementViewModel(
         if (extension.isBlank()) {
             // Directory-based strategy (e.g. wake_vosk)
             val path = uri.path ?: uri.toString()
-            settingsManager.saveCustomModelPath(engineKey, path, langCode)
+            viewModelScope.launch { settingsRepo.setCustomModelPath(engineKey, path, langCode) }
             showSuccessMessage(languageManager.getString("success_custom_vosk"))
         } else {
             // File-based strategy (e.g. stt_whisper, nlu_llm)
             val fileName = "$engineKey$extension"
             FileHelper.copyUriToInternal(context, uri, fileName)?.let { internalPath ->
-                settingsManager.saveCustomModelPath(engineKey, internalPath)
+                viewModelScope.launch { settingsRepo.setCustomModelPath(engineKey, internalPath) }
                 showSuccessMessage(languageManager.getString("success_custom_whisper"))
             }
         }
@@ -237,26 +257,40 @@ class ModelManagementViewModel(
         }
     }
 
-    fun clearDefaultOfflineFallback() { settingsManager.clearDefaultOfflineFallback(); appStateManager.refreshAll() }
+    fun clearDefaultOfflineFallback() { viewModelScope.launch { settingsRepo.clearDefaultOfflineFallback() }; appStateManager.refreshAll() }
 
     fun deleteUnusedModels() {
-        val activeVoiceModelId = settingsManager.getActiveVoiceModelId()
-        val activeIntentModelId = settingsManager.getActiveIntentModelId()
+        val snapshot = settingsRepo.getSettingsSnapshot()
+        val activeVoiceModelId = snapshot.activeVoiceModelId
+        val activeIntentModelId = snapshot.activeIntentModelId
 
-        modelDownloader.deleteUnusedModels(settingsManager, activeVoiceModelId, activeIntentModelId, appStateManager)
-        appStateManager.refreshAll()
+        viewModelScope.launch(Dispatchers.IO) {
+            modelDownloader.deleteUnusedModels(settingsRepo, activeVoiceModelId, activeIntentModelId, appStateManager)
+            appStateManager.refreshAll()
+        }
     }
 
     fun deleteModel(modelId: String, engineKey: String) {
         modelDownloader.deleteModelFile(modelId, engineKey)
-        settingsManager.setModelDownloaded(modelId, false)
+        viewModelScope.launch { settingsRepo.setModelDownloaded(modelId, false) }
 
-        // Clear fallback if this was the default model
-        if (settingsManager.getDefaultVoiceFallbackModel() == modelId) {
-            settingsManager.clearDefaultVoiceFallback()
+        // Reassign fallback to active model if the deleted model was the fallback
+        val snapshot = settingsRepo.getSettingsSnapshot()
+        if (snapshot.defaultVoiceFallbackModel == modelId) {
+            val activeVoice = snapshot.activeVoiceModelId
+            if (activeVoice != null && activeVoice != modelId && snapshot.isModelDownloaded(activeVoice)) {
+                viewModelScope.launch { settingsRepo.setDefaultVoiceFallback(snapshot.voiceProcessor, activeVoice) }
+            } else {
+                viewModelScope.launch { settingsRepo.clearDefaultVoiceFallback() }
+            }
         }
-        if (settingsManager.getDefaultIntentFallbackModel() == modelId) {
-            settingsManager.clearDefaultIntentFallback()
+        if (snapshot.defaultIntentFallbackModel == modelId) {
+            val activeIntent = snapshot.activeIntentModelId
+            if (activeIntent != null && activeIntent != modelId && snapshot.isModelDownloaded(activeIntent)) {
+                viewModelScope.launch { settingsRepo.setDefaultIntentFallback(snapshot.aiProcessor, activeIntent) }
+            } else {
+                viewModelScope.launch { settingsRepo.clearDefaultIntentFallback() }
+            }
         }
 
         appStateManager.refreshAll()
@@ -296,15 +330,10 @@ class ModelManagementViewModel(
         
         if (localFile?.exists() == true) {
             Logger.log("File/Dir verified on disk: ${localFile.absolutePath}", TAG)
-            settingsManager.setModelDownloaded(modelId, true)
-            
-            // Set as active model in state
-            if (engineKey == "nlu_llm") {
-                appStateManager.setActiveIntentModelId(modelId)
-            } else {
-                appStateManager.setActiveVoiceModelId(modelId)
+            viewModelScope.launch {
+                settingsRepo.setModelDownloaded(modelId, true)
+                appStateManager.refreshAll()
             }
-            appStateManager.refreshAll()
         } else {
             Logger.log("Verification failed: $modelId ($engineKey) not found at expected location", TAG)
         }

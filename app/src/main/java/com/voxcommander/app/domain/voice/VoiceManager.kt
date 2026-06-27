@@ -3,7 +3,7 @@ package com.voxcommander.app.domain.voice
 import android.content.Context
 import android.media.*
 import android.util.Log
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.engine.SttEngine
 import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
 import com.voxcommander.app.domain.engine.google.GoogleSttEngine
@@ -42,7 +42,7 @@ object VoiceManager {
     private val _isListeningFlow = MutableStateFlow(false)
     val isListeningFlow = _isListeningFlow.asStateFlow()
 
-    private var settingsManager: SettingsManager? = null
+    private var settingsRepo: SettingsRepository? = null
     private var appStateManager: AppStateManager? = null
 
     private val _volumeFlow = MutableStateFlow(0f)
@@ -75,7 +75,7 @@ object VoiceManager {
         google: GoogleSttEngine?,
         vosk: VoskSttEngine?,
         launchGoogleIntent: (String) -> Unit,
-        settingsManager: SettingsManager,
+        settingsRepo: SettingsRepository,
         appStateManager: AppStateManager
     ) {
         this.context = context.applicationContext
@@ -84,7 +84,7 @@ object VoiceManager {
         this.googleSttEngine = google
         this.voskSttEngine = vosk
         this.launchGoogleIntentCallback = launchGoogleIntent
-        this.settingsManager = settingsManager
+        this.settingsRepo = settingsRepo
         this.appStateManager = appStateManager
         
         Log.d(TAG, "VoiceManager initialized")
@@ -118,7 +118,7 @@ object VoiceManager {
 
     private suspend fun reinitializeEngines(processor: String) = withContext(Dispatchers.Main) {
         val hub = appStateManager ?: return@withContext
-        val settings = settingsManager ?: return@withContext
+        val settings = settingsRepo ?: return@withContext
         val ctx = context ?: return@withContext
 
         // 1. Enter CLEANING state
@@ -128,8 +128,9 @@ object VoiceManager {
         release()
         
         // 3. RE-INITIALIZE based on new selection
-        val apiKey = settings.getApiKey()
-        val voiceLang = settings.getVoiceLanguage()
+        val snapshot = settings.getSettingsSnapshot()
+        val apiKey = snapshot.apiKey
+        val voiceLang = snapshot.voiceLanguage
         
         whisperCppEngine = WhisperCppSttEngine(
             ctx, 
@@ -178,27 +179,23 @@ object VoiceManager {
         Log.d(TAG, "Selecting engine for preference: $userPreference")
         
         val selectedEngine = when (userPreference) {
-            Strings.Processors.WHISPER_CPP, 
-            Strings.Processors.WHISPER_VULKAN,
-            Strings.Processors.WHISPER_NEON -> {
-                if (whisperCppEngine != null) {
-                    Log.d(TAG, "Selected Whisper.cpp")
-                    whisperCppEngine
-                } else {
-                    googleSttEngine
-                }
-            }
             Strings.Processors.WHISPER_API -> {
                 whisperApiEngine ?: whisperCppEngine ?: googleSttEngine
             }
             Strings.Processors.GOOGLE -> {
                 googleSttEngine ?: whisperCppEngine
             }
-            Strings.Processors.VOSK -> {
-                voskSttEngine ?: whisperCppEngine ?: googleSttEngine
+            Strings.Processors.WHISPER_VULKAN -> {
+                whisperCppEngine ?: googleSttEngine
             }
             else -> {
-                whisperCppEngine ?: googleSttEngine
+                // JSON-defined engines — route by extension
+                val ext = com.voxcommander.app.data.remote.RemoteModelRegistry.getExtension(userPreference)
+                when (ext) {
+                    ".zip" -> voskSttEngine ?: whisperCppEngine ?: googleSttEngine
+                    ".bin" -> whisperCppEngine ?: googleSttEngine
+                    else -> whisperCppEngine ?: googleSttEngine
+                }
             }
         }
 

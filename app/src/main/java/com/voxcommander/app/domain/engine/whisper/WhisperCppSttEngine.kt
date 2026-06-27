@@ -2,7 +2,7 @@ package com.voxcommander.app.domain.engine.whisper
 
 import android.content.Context
 import android.util.Log
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.engine.SttEngine
 import com.voxcommander.app.utils.Strings
 import com.whispercpp.whisper.WhisperContext
@@ -20,7 +20,7 @@ import java.nio.ByteOrder
  */
 class WhisperCppSttEngine(
     private val context: Context,
-    private val settingsManager: SettingsManager,
+    private val settingsRepo: SettingsRepository,
     private val forceGpu: Boolean = false,
     private val onVulkanIncompatible: () -> Unit = {}
 ) : SttEngine {
@@ -48,15 +48,17 @@ class WhisperCppSttEngine(
             if (whisperContext != null) return@withContext
 
             // Check for custom model path first
-            val customPath = settingsManager.getCustomModelPath("stt_whisper")
+            val snapshot = settingsRepo.getSettingsSnapshot()
+            val whisperKey = com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".bin")
+            val customPath = whisperKey?.let { snapshot.getCustomModelPath(it) }
             var modelPath = if (!customPath.isNullOrBlank()) {
                 Log.d(TAG, "Using custom model path: $customPath")
                 customPath
             } else {
-                val selectedModelId = settingsManager.getActiveVoiceModelId()
+                val selectedModelId = snapshot.activeVoiceModelId
                 File(
                     context.getExternalFilesDir(null),
-                    "$selectedModelId${com.voxcommander.app.data.remote.RemoteModelRegistry.getExtension("stt_whisper")}"
+                    "$selectedModelId${whisperKey?.let { com.voxcommander.app.data.remote.RemoteModelRegistry.getExtension(it) } ?: ""}"
                 ).absolutePath
             }
 
@@ -66,7 +68,7 @@ class WhisperCppSttEngine(
             }
 
             // TIER 1: Try Vulkan (GPU)
-            val attemptVulkan = forceGpu && !settingsManager.isVulkanIncompatible()
+            val attemptVulkan = forceGpu && !snapshot.vulkanIncompatible
             if (attemptVulkan) {
                 Log.d(TAG, "Attempting to initialize with VULKAN...")
                 try {
@@ -78,7 +80,7 @@ class WhisperCppSttEngine(
                     }
                 } catch (e: Throwable) {
                     Log.e(TAG, "VULKAN init failed. Marking as incompatible.", e)
-                    settingsManager.setVulkanIncompatible(true)
+                    kotlinx.coroutines.runBlocking { settingsRepo.setVulkanIncompatible(true) }
                     withContext(Dispatchers.Main) { onVulkanIncompatible() }
                 }
             }
@@ -120,22 +122,23 @@ class WhisperCppSttEngine(
             // Crash-cookie: a native GPU crash during inference cannot be caught by
             // try/catch. Commit a marker before real GPU work; if the process dies,
             // AppContainer detects the leftover cookie next launch and disables Vulkan.
-            val guardGpu = isUsingGpu && !settingsManager.isVulkanRuntimeVerified()
-            if (guardGpu) settingsManager.setVulkanRuntimeAttempt(true)
+            val snapshot = settingsRepo.getSettingsSnapshot()
+            val guardGpu = isUsingGpu && !snapshot.vulkanRuntimeVerified
+            if (guardGpu) settingsRepo.setVulkanRuntimeAttemptSync(true)
 
             // Force language if provided to prevent Cyrillic/Slavic hallucinations
             val result = currentContext.transcribeData(floatAudio, threads, language = langCode, printTimestamp = false)
 
             if (guardGpu) {
                 // Survived a real GPU transcription -> device is genuinely compatible.
-                settingsManager.setVulkanRuntimeAttempt(false)
-                settingsManager.setVulkanRuntimeVerified(true)
+                settingsRepo.setVulkanRuntimeAttemptSync(false)
+                kotlinx.coroutines.runBlocking { settingsRepo.setVulkanRuntimeVerified(true) }
             }
 
             return@withContext result.trim()
         } catch (e: Exception) {
             Log.e(TAG, "Transcription failed", e)
-            if (isUsingGpu) settingsManager.setVulkanRuntimeAttempt(false)
+            if (isUsingGpu) settingsRepo.setVulkanRuntimeAttemptSync(false)
             "Error: ${e.message}"
         }
     }

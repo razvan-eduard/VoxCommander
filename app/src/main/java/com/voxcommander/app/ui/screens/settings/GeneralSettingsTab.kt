@@ -16,7 +16,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun GeneralSettingsTab(
     languageManager: LanguageManager,
-    settingsManager: SettingsManager,
+    settingsRepo: SettingsRepository,
     appStateManager: AppStateManager
 ) {
     val scope = rememberCoroutineScope()
@@ -42,9 +42,9 @@ fun GeneralSettingsTab(
 
     // Manage own state, synchronized with uiState
     var apiKey by remember(uiState.apiKey) { mutableStateOf(uiState.apiKey ?: "") }
-    var modelRepoUrl by remember { mutableStateOf(settingsManager.getModelRepoBaseUrl()) }
+    var modelRepoUrl by remember { mutableStateOf(settingsRepo.getSettingsSnapshot().modelRepoBaseUrl) }
     var selectedLanguage by remember(uiState.voiceLanguage) { mutableStateOf(uiState.voiceLanguage) }
-    var offlineFallbackTimeout by remember(uiState.refreshTrigger) { mutableIntStateOf(settingsManager.getOfflineFallbackTimeout()) }
+    var offlineFallbackTimeout by remember(uiState.refreshTrigger) { mutableIntStateOf(settingsRepo.getSettingsSnapshot().offlineFallbackTimeout) }
 
     var expanded by remember { mutableStateOf(false) }
     val languages = languageManager.getAvailableLanguages()
@@ -84,7 +84,7 @@ fun GeneralSettingsTab(
             value = modelRepoUrl,
             onValueChange = { 
                 modelRepoUrl = it
-                settingsManager.saveModelRepoBaseUrl(it)
+                kotlinx.coroutines.runBlocking { settingsRepo.setModelRepoBaseUrl(it) }
             },
             label = { Text(languageManager.getString("model_repository_url")) },
             placeholder = { Text(languageManager.getString("repository_url_placeholder")) },
@@ -94,7 +94,7 @@ fun GeneralSettingsTab(
             trailingIcon = {
                 IconButton(onClick = {
                     scope.launch {
-                        val success = RemoteModelRegistry.fetchJson(settingsManager, force = true)
+                        val success = RemoteModelRegistry.fetchJson(settingsRepo, force = true)
                         if (success) {
                             appStateManager.refreshAll()
                         }

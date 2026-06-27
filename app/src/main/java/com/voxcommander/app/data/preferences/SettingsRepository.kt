@@ -1,0 +1,85 @@
+package com.voxcommander.app.data.preferences
+
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * Single source of truth for all persisted settings.
+ * Wraps DataStore and exposes reactive Flows + suspend writers.
+ * AppStateManager observes [settingsFlow] and combines with runtime state.
+ *
+ * Flow: UI write → AppStateManager → SettingsRepository → DataStore → Flow → AppStateManager → UI
+ */
+interface SettingsRepository {
+
+    /**
+     * Reactive snapshot of all persisted settings.
+     * Emits a new [AppSettings] whenever any value changes.
+     */
+    val settingsFlow: Flow<AppSettings>
+
+    // --- SYNCHRONOUS READS (for non-coroutine consumers during migration) ---
+    fun getSettingsSnapshot(): AppSettings
+    fun getApiKeySync(): String?
+
+    // --- SYNCHRONOUS WRITE (crash cookie: must survive process death immediately) ---
+    fun setVulkanRuntimeAttemptSync(active: Boolean)
+
+    // --- API / CLOUD ---
+    suspend fun setApiKey(key: String?)
+
+    // --- LANGUAGE ---
+    suspend fun setLanguage(lang: String)
+    suspend fun setVoiceLanguage(lang: String)
+
+    // --- VOICE ENGINE ---
+    suspend fun setVoiceProcessor(processor: String)
+    suspend fun setActiveVoiceModelId(modelId: String?)
+
+    // --- INTENT ENGINE ---
+    suspend fun setAiProcessor(processor: String)
+    suspend fun setActiveIntentModelId(modelId: String?)
+    suspend fun setCloudIntelligenceEnabled(enabled: Boolean)
+
+    // --- PER-ENGINE MODEL SELECTIONS ---
+    suspend fun setEngineModelSelection(engineKey: String, modelId: String)
+
+    // --- WAKE WORD ---
+    suspend fun setWakeWord(word: String)
+    suspend fun setWakeWordEnabled(enabled: Boolean)
+    suspend fun setWakeWordModelPath(path: String?)
+
+    // --- OFFLINE FALLBACK ---
+    suspend fun setOfflineFallbackTimeout(seconds: Int)
+    suspend fun setDefaultOfflineModel(modelId: String)
+    suspend fun clearDefaultOfflineModel()
+    suspend fun setDefaultVoiceFallback(processor: String, modelId: String)
+    suspend fun clearDefaultVoiceFallback()
+    suspend fun setDefaultIntentFallback(processor: String, modelId: String)
+    suspend fun clearDefaultIntentFallback()
+    suspend fun clearDefaultOfflineFallback()
+
+    // --- LOGGING ---
+    suspend fun setLogLevel(level: String)
+    suspend fun setVerboseLoggingEnabled(enabled: Boolean)
+
+    // --- VULKAN ---
+    suspend fun setVulkanIncompatible(incompatible: Boolean)
+    suspend fun setVulkanProbeDone(done: Boolean)
+    suspend fun setVulkanRuntimeVerified(verified: Boolean)
+    suspend fun setExperimentalVulkanEnabled(enabled: Boolean)
+
+    // --- GEMINI ---
+    suspend fun setGeminiIncompatible(incompatible: Boolean)
+
+    // --- REMOTE REPOSITORY ---
+    suspend fun setModelRepoBaseUrl(url: String)
+    suspend fun saveModelsJsonCache(json: String)
+    suspend fun clearModelsJsonCache()
+
+    // --- MODEL DOWNLOAD STATE ---
+    suspend fun setModelDownloaded(modelId: String, isDownloaded: Boolean)
+    suspend fun clearUnusedModelFlags(protectedIds: Set<String>)
+
+    // --- CUSTOM MODEL PATHS ---
+    suspend fun setCustomModelPath(engineKey: String, path: String, langCode: String? = null)
+}
