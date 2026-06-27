@@ -1,4 +1,5 @@
 package com.voxcommander.app.ui.screens.settings
+import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.voxcommander.app.domain.diagnostic.BenchmarkEngine
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.state.BenchmarkResult
 import com.voxcommander.app.state.VoiceState
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -44,9 +47,17 @@ fun BenchmarkSettingsTab(
     val nativeLibsStatus by appStateManager.nativeLibsStatus.collectAsStateWithLifecycle()
     val systemInfo by appStateManager.systemInfo.collectAsStateWithLifecycle()
     
-    val settingsRepo = remember { com.voxcommander.app.data.preferences.SettingsRepositoryImpl(context) }
-    val modelDownloader = remember { com.voxcommander.app.data.remote.ModelDownloader(context) }
-    val benchmarkEngine = remember { BenchmarkEngine(context, settingsRepo, appStateManager, modelDownloader) }
+    val appContainer = remember { (context.applicationContext as com.voxcommander.app.VoxApplication).container }
+    val benchmarkEngine = remember {
+        BenchmarkEngine(
+            context,
+            appContainer.settingsRepository,
+            appStateManager,
+            appContainer.modelDownloader,
+            appContainer.localLlmInterpreter,
+            appContainer.geminiNanoInterpreter
+        )
+    }
     
     val isRunning = uiState.voiceState == VoiceState.BENCHMARKING
 
@@ -88,7 +99,26 @@ fun BenchmarkSettingsTab(
         }
 
         if (benchmarkResults.isNotEmpty()) {
-            item { Text(text = languageManager.getString("performance_metrics"), style = MaterialTheme.typography.titleSmall) }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = languageManager.getString("performance_metrics"), style = MaterialTheme.typography.titleSmall)
+                    IconButton(onClick = {
+                        val report = buildBenchmarkReport(benchmarkResults, systemInfo)
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Vox Commander Benchmark Report")
+                            putExtra(Intent.EXTRA_TEXT, report)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Benchmark Report"))
+                    }) {
+                        Icon(Icons.Default.Share, contentDescription = "Share", modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
             items(benchmarkResults) { result -> BenchmarkResultItem(result, languageManager) }
         }
 
@@ -144,13 +174,25 @@ fun BenchmarkSettingsTab(
 }
 
 @Composable
-fun BenchmarkResultItem(result: com.voxcommander.app.state.BenchmarkResult, languageManager: LanguageManager) {
+fun BenchmarkResultItem(result: BenchmarkResult, languageManager: LanguageManager) {
     Card(modifier = Modifier.fillMaxWidth(), border = BorderStroke(1.dp, if (result.isSuccess) Color.Gray.copy(alpha = 0.3f) else Color.Red)) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = "${result.engine} (${result.model})", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 if (result.isSuccess) {
-                    Text(text = languageManager.getString("time_rtf_format").format(result.inferenceTimeMs, String.format(Locale.US, "%.2f", result.rtf)), style = MaterialTheme.typography.bodySmall, color = if (result.rtf < 0.5f) Color(0xFF4CAF50) else Color.Gray)
+                    if (result.rtf > 0f) {
+                        Text(
+                            text = languageManager.getString("time_rtf_format").format(result.inferenceTimeMs, String.format(Locale.US, "%.2f", result.rtf)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (result.rtf < 0.5f) Color(0xFF4CAF50) else Color.Gray
+                        )
+                    } else {
+                        Text(
+                            text = "${result.inferenceTimeMs} ms",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
                 } else {
                     Text(text = languageManager.getString("error_format").format(result.error), style = MaterialTheme.typography.bodySmall, color = Color.Red)
                 }
@@ -159,6 +201,31 @@ fun BenchmarkResultItem(result: com.voxcommander.app.state.BenchmarkResult, lang
             else Icon(Icons.Default.Error, contentDescription = null, tint = Color.Red)
         }
     }
+}
+
+private fun buildBenchmarkReport(results: List<BenchmarkResult>, systemInfo: String): String {
+    val sb = StringBuilder()
+    sb.append("=== Vox Commander Benchmark Report ===\n")
+    sb.append("Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(java.util.Date())}\n\n")
+
+    sb.append("--- PERFORMANCE METRICS ---\n")
+    for (r in results) {
+        val status = if (r.isSuccess) "OK" else "FAIL"
+        val detail = if (r.isSuccess) {
+            if (r.rtf > 0f) "${r.inferenceTimeMs}ms, RTF=${String.format(Locale.US, "%.2f", r.rtf)}" else "${r.inferenceTimeMs}ms"
+        } else {
+            r.error ?: "unknown"
+        }
+        sb.append("[$status] ${r.engine} (${r.model}): $detail\n")
+    }
+
+    if (systemInfo.isNotBlank()) {
+        sb.append("\n--- SYSTEM DIAGNOSTICS ---\n")
+        sb.append(systemInfo)
+    }
+
+    sb.append("\n=== End of Report ===\n")
+    return sb.toString()
 }
 
 @Composable

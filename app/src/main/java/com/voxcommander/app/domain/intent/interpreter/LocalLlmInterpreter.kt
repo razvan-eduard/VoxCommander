@@ -40,15 +40,27 @@ class LocalLlmInterpreter(
             return
         }
 
+        // Clear potentially corrupted XNNPACK cache files from previous native crashes
+        val cacheDir = context.cacheDir
+        cacheDir.listFiles { f -> f.name.contains("xnnpack_cache") }?.forEach { f ->
+            Logger.log("Removing stale XNNPACK cache: ${f.name}", TAG)
+            f.delete()
+        }
+
         val modelPath = modelFile.absolutePath
         Logger.log("Loading LLM model: $modelPath", TAG)
 
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
-            .setMaxTokens(128)
+            .setMaxTokens(512)
             .build()
 
-        llmInference = LlmInference.createFromOptions(context, options)
+        val instance = LlmInference.createFromOptions(context, options)
+        if (instance == null) {
+            Logger.log("LlmInference.createFromOptions returned null — model failed to load", TAG)
+            return
+        }
+        llmInference = instance
     }
 
     override suspend fun processCommand(spokenText: String): IntentPayload? = withContext(Dispatchers.IO) {

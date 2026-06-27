@@ -48,9 +48,9 @@ class AppContainer(context: Context) {
     // --- INTENT ENGINES ---
     private val l1Engine = FastMapEngine(fastMapDao)
     private val l2Engine = OpenAiInterpreter(settingsRepository)
-    private val l3Engine = LocalLlmInterpreter(appContext, settingsRepository, modelDownloader)
-    private val geminiEngine = GeminiNanoInterpreter(appContext)
-    val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, l3Engine, geminiEngine, settingsRepository)
+    val localLlmInterpreter = LocalLlmInterpreter(appContext, settingsRepository, modelDownloader)
+    val geminiNanoInterpreter = GeminiNanoInterpreter(appContext)
+    val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, localLlmInterpreter, geminiNanoInterpreter, settingsRepository)
 
     // --- VIEW MODELS ---
     val mainViewModel = MainViewModel(masterIntentEngine, appStateManager, languageManager)

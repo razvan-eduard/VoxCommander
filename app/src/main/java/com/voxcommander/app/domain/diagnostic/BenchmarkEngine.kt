@@ -7,11 +7,16 @@ import com.voxcommander.app.domain.engine.vosk.VoskSttEngine
 import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.data.remote.ModelDownloader
+import com.voxcommander.app.domain.intent.interpreter.GeminiNanoInterpreter
+import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
+import com.voxcommander.app.domain.intent.interpreter.OpenAiInterpreter
+import com.voxcommander.app.domain.intent.model.IntentPayload
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.domain.engine.whisper.WhisperSttEngine
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.BenchmarkResult
 import com.voxcommander.app.state.VoiceState
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import com.whispercpp.whisper.WhisperLib
 import kotlinx.coroutines.Dispatchers
@@ -24,29 +29,40 @@ class BenchmarkEngine(
     private val context: Context,
     private val settingsRepo: SettingsRepository,
     private val appStateManager: AppStateManager,
-    private val modelDownloader: ModelDownloader
+    private val modelDownloader: ModelDownloader,
+    private val localLlmInterpreter: LocalLlmInterpreter? = null,
+    private val geminiNanoInterpreter: GeminiNanoInterpreter? = null
 ) {
+    companion object {
+        private const val TAG = "BenchmarkEngine"
+        private const val DUMMY_AUDIO_DURATION_MS = 5000L
+        private const val SAMPLE_RATE = 16000
+
+        // Standardized test command for intent engines — exercises audio category with artist/track extraction
+        private const val INTENT_TEST_COMMAND = "play bohemian rhapsody by queen on youtube"
+        private const val INTENT_TEST_EXPECTED_CATEGORY = "audio"
+        private const val INTENT_TEST_EXPECTED_ACTION = "audio_youtube"
+    }
+
     suspend fun runFullBenchmark() = withContext(Dispatchers.Default) {
         appStateManager.setVoiceState(VoiceState.BENCHMARKING)
         appStateManager.clearBenchmarkResults()
 
-        // 5 seconds dummy audio
-        val dummyAudio = ByteArray(80000 * 2) { 0 }
+        // 5 seconds dummy audio (silence — measures init + inference overhead)
+        val dummyAudio = ByteArray(SAMPLE_RATE * 2 * (DUMMY_AUDIO_DURATION_MS / 1000).toInt()) { 0 }
 
-        // Start collecting comprehensive system info
         val diagInfo = StringBuilder()
-        
-        // 1. Hardware Info (from Whisper/GGML)
+        val snapshot = settingsRepo.getSettingsSnapshot()
+
+        // --- 1. HARDWARE INFO ---
         diagInfo.append("--- HARDWARE CAPABILITIES ---\n")
         diagInfo.append(WhisperLib.getSystemInfo())
         diagInfo.append("\n")
 
-        // Add Whisper Vulkan compatibility status
-        val snapshot = settingsRepo.getSettingsSnapshot()
+        // --- 2. VULKAN STATUS ---
         diagInfo.append("--- WHISPER VULKAN COMPATIBILITY ---\n")
         if (snapshot.vulkanIncompatible) {
             diagInfo.append("Status: INCOMPATIBLE (GPU crashes during Whisper inference)\n")
-            diagInfo.append("Note: Hardware supports Vulkan but Whisper GPU workload fails.\n")
         } else if (snapshot.vulkanRuntimeVerified) {
             diagInfo.append("Status: VERIFIED (GPU inference tested successfully)\n")
         } else if (snapshot.vulkanProbeDone) {
@@ -56,7 +72,7 @@ class BenchmarkEngine(
         }
         diagInfo.append("\n")
 
-        // 2. Whisper Diagnostics
+        // --- 3. WHISPER STT BENCHMARKS (CPU + GPU per downloaded model) ---
         val whisperKey = RemoteModelRegistry.getEngineKeyByExtension(".bin")
         val downloadedWhisperModels = whisperKey?.let { RemoteModelRegistry.getModels(it) }?.filter {
             snapshot.isModelDownloaded(it.id)
@@ -72,7 +88,6 @@ class BenchmarkEngine(
 
         for (model in downloadedWhisperModels) {
             runSingleWhisperBenchmark(model, forceGpu = false, dummyAudio)
-            
             if (settingsRepo.getSettingsSnapshot().vulkanIncompatible) {
                 appStateManager.updateBenchmarkResult(BenchmarkResult(
                     engine = "Whisper Vulkan",
@@ -87,48 +102,74 @@ class BenchmarkEngine(
             }
         }
 
-        // 3. Vosk Diagnostics
-        val selectedVosk = snapshot.activeVoiceModelId
-        if (selectedVosk != null && snapshot.isModelDownloaded(selectedVosk)) {
-            val lang = snapshot.voiceLanguage
-            diagInfo.append("--- VOSK ENGINE INFO ---\n")
-            diagInfo.append("Active Model: $selectedVosk\n")
-            diagInfo.append("Active Language: $lang\n")
+        // --- 4. VOSK STT BENCHMARKS (all downloaded Vosk models) ---
+        val voskKey = RemoteModelRegistry.getEngineKeyByExtension(".zip")
+        val downloadedVoskModels = voskKey?.let { RemoteModelRegistry.getModels(it) }?.filter {
+            snapshot.isModelDownloaded(it.id)
+        } ?: emptyList()
+
+        if (downloadedVoskModels.isNotEmpty()) {
+            diagInfo.append("--- VOSK MODELS DETECTED ---\n")
+            downloadedVoskModels.forEach {
+                diagInfo.append("ID: ${it.id} | Label: ${it.label} | Lang: ${it.langCode ?: "multi"}\n")
+            }
             diagInfo.append("Backend: Kaldi-based (libvosk.so)\n\n")
 
-            runVoskBenchmark(selectedVosk, dummyAudio)
+            for (model in downloadedVoskModels) {
+                val langCode = model.langCode ?: snapshot.voiceLanguage
+                runVoskBenchmark(model.id, model.label, langCode, dummyAudio)
+            }
         }
 
-        // 4. API Diagnostics
+        // --- 5. WHISPER API STT BENCHMARK ---
         val apiKey = snapshot.apiKey
         if (!apiKey.isNullOrBlank()) {
             diagInfo.append("--- CLOUD CONNECTIVITY ---\n")
             diagInfo.append("Whisper API: Active (Endpoint: OpenAI)\n")
             diagInfo.append("Key Masked: ${apiKey.take(4)}...${apiKey.takeLast(4)}\n\n")
-            
             runApiBenchmark(apiKey, dummyAudio)
         }
 
-        // 5. LLM Diagnostics (Local LLM via MediaPipe)
-        val nluModelId = snapshot.activeIntentModelId
-
-        diagInfo.append("--- LOCAL LLM DIAGNOSTICS ---\n")
-        val geminiSupported = !snapshot.geminiIncompatible
-        diagInfo.append("Gemini Nano Native: ${if (geminiSupported) "SUPPORTED" else "INCOMPATIBLE"}\n")
-
-        if (nluModelId != null && snapshot.isModelDownloaded(nluModelId)) {
-            diagInfo.append("Active Model: $nluModelId\n\n")
-            runLlamaBenchmark(nluModelId)
-        } else {
-            diagInfo.append("NLU Model: Not Downloaded\n\n")
-        }
-
-        // Finalize system info view
-        appStateManager.setSystemInfo(diagInfo.toString())
-        
-        // 5. Google STT
+        // --- 6. GOOGLE STT (Initialization-only — intent-based, no direct API) ---
         runGoogleBenchmark()
 
+        // --- 7. LOCAL LLM INTENT BENCHMARK (MediaPipe GenAI) ---
+        // Reuse the shared LocalLlmInterpreter from AppContainer to avoid native crash
+        // (two LlmInference instances loading the same model causes SIGSEGV in MediaPipe)
+        diagInfo.append("--- LOCAL LLM DIAGNOSTICS ---\n")
+        if (localLlmInterpreter != null) {
+            val activeModelId = snapshot.activeIntentModelId
+            if (activeModelId != null) {
+                val nluKey = RemoteModelRegistry.getEngineKeysByType("llm").firstOrNull()
+                val activeModel = nluKey?.let { RemoteModelRegistry.getModels(it) }?.find { it.id == activeModelId }
+                val modelLabel = activeModel?.label ?: activeModelId
+                diagInfo.append("Model: $activeModelId | Label: $modelLabel (active)\n")
+                runLocalLlmBenchmark(modelLabel, localLlmInterpreter)
+            } else {
+                diagInfo.append("NLU Model: No active model selected\n")
+            }
+        } else {
+            diagInfo.append("NLU Model: Interpreter not available\n")
+        }
+        diagInfo.append("\n")
+
+        // --- 8. OPENAI INTENT BENCHMARK (Cloud) ---
+        if (!apiKey.isNullOrBlank() && snapshot.cloudIntelligenceEnabled) {
+            diagInfo.append("--- OPENAI INTENT ENGINE ---\n")
+            runOpenAiIntentBenchmark()
+            diagInfo.append("\n")
+        }
+
+        // --- 9. GEMINI NANO INTENT BENCHMARK ---
+        diagInfo.append("--- GEMINI NANO DIAGNOSTICS ---\n")
+        val geminiSupported = !snapshot.geminiIncompatible
+        diagInfo.append("AICore: ${if (geminiSupported) "SUPPORTED" else "INCOMPATIBLE"}\n")
+        if (geminiSupported) {
+            runGeminiNanoBenchmark()
+        }
+        diagInfo.append("\n")
+
+        appStateManager.setSystemInfo(diagInfo.toString())
         appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
@@ -146,16 +187,17 @@ class BenchmarkEngine(
         }
     }
 
-    private suspend fun runVoskBenchmark(modelName: String, audioData: ByteArray) {
+    private suspend fun runVoskBenchmark(modelId: String, modelLabel: String, langCode: String, audioData: ByteArray) {
         try {
-            val engine = VoskSttEngine(context, settingsRepo, settingsRepo.getSettingsSnapshot().voiceLanguage)
+            val engine = VoskSttEngine(context, settingsRepo, langCode)
             val start = System.currentTimeMillis()
             engine.transcribe(audioData)
             val end = System.currentTimeMillis()
-            appStateManager.updateBenchmarkResult(BenchmarkResult("Vosk", modelName, end - start, (end - start).toFloat() / 5000f, true))
+            val elapsed = end - start
+            appStateManager.updateBenchmarkResult(BenchmarkResult("Vosk", "$modelLabel ($langCode)", elapsed, elapsed.toFloat() / DUMMY_AUDIO_DURATION_MS, true))
             engine.release()
         } catch (e: Exception) {
-            appStateManager.updateBenchmarkResult(BenchmarkResult("Vosk", modelName, 0, 0f, false, e.message))
+            appStateManager.updateBenchmarkResult(BenchmarkResult("Vosk", "$modelLabel ($langCode)", 0, 0f, false, e.message))
         }
     }
 
@@ -164,10 +206,18 @@ class BenchmarkEngine(
             val start = System.currentTimeMillis()
             val engine = GoogleSttEngine(context)
             val end = System.currentTimeMillis()
-            appStateManager.updateBenchmarkResult(BenchmarkResult("Google STT", "Native", end - start, 0f, true))
+            val available = engine.isAvailable
             engine.release()
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                "Google STT",
+                "Intent-based",
+                end - start,
+                0f,
+                available,
+                if (available) null else "SpeechRecognizer not available"
+            ))
         } catch (e: Exception) {
-            appStateManager.updateBenchmarkResult(BenchmarkResult("Google STT", "Native", 0, 0f, false, e.message))
+            appStateManager.updateBenchmarkResult(BenchmarkResult("Google STT", "Intent-based", 0, 0f, false, e.message))
         }
     }
 
@@ -177,37 +227,129 @@ class BenchmarkEngine(
             val start = System.currentTimeMillis()
             engine.transcribe(audioData)
             val end = System.currentTimeMillis()
-            appStateManager.updateBenchmarkResult(BenchmarkResult("Whisper API", "Cloud", end - start, (end - start).toFloat() / 5000f, true))
+            val elapsed = end - start
+            appStateManager.updateBenchmarkResult(BenchmarkResult("Whisper API", "Cloud", elapsed, elapsed.toFloat() / DUMMY_AUDIO_DURATION_MS, true))
             engine.release()
         } catch (e: Exception) {
             appStateManager.updateBenchmarkResult(BenchmarkResult("Whisper API", "Cloud", 0, 0f, false, e.message))
         }
     }
 
-    private suspend fun runLlamaBenchmark(modelId: String) {
+    private suspend fun runLocalLlmBenchmark(modelLabel: String, interpreter: LocalLlmInterpreter) {
         try {
-            val engine = com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter(context, settingsRepo, modelDownloader)
             val start = System.currentTimeMillis()
-            // We'll test with a simple "ping" command
-            engine.processCommand("ping")
+            val result = interpreter.processCommand(INTENT_TEST_COMMAND)
             val end = System.currentTimeMillis()
-            
+            val elapsed = end - start
+
+            val validation = validateIntentPayload(result)
             appStateManager.updateBenchmarkResult(BenchmarkResult(
                 engine = "Local LLM",
-                model = modelId,
-                inferenceTimeMs = end - start,
-                rtf = 0f, // RTF not applicable to LLMs
-                isSuccess = true
+                model = modelLabel,
+                inferenceTimeMs = elapsed,
+                rtf = 0f,
+                isSuccess = validation.isSuccess,
+                error = validation.error
             ))
         } catch (e: Exception) {
             appStateManager.updateBenchmarkResult(BenchmarkResult(
                 engine = "Local LLM",
-                model = modelId,
+                model = modelLabel,
                 inferenceTimeMs = 0,
                 rtf = 0f,
                 isSuccess = false,
                 error = e.message
             ))
         }
+    }
+
+    private suspend fun runOpenAiIntentBenchmark() {
+        try {
+            val engine = OpenAiInterpreter(settingsRepo)
+            val start = System.currentTimeMillis()
+            val result = engine.processCommand(INTENT_TEST_COMMAND)
+            val end = System.currentTimeMillis()
+            val elapsed = end - start
+
+            val validation = validateIntentPayload(result)
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "OpenAI Intent",
+                model = "gpt-4o-mini",
+                inferenceTimeMs = elapsed,
+                rtf = 0f,
+                isSuccess = validation.isSuccess,
+                error = validation.error
+            ))
+        } catch (e: Exception) {
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "OpenAI Intent",
+                model = "gpt-4o-mini",
+                inferenceTimeMs = 0,
+                rtf = 0f,
+                isSuccess = false,
+                error = e.message
+            ))
+        }
+    }
+
+    private suspend fun runGeminiNanoBenchmark() {
+        if (geminiNanoInterpreter == null) {
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "Gemini Nano",
+                model = "gemini-1.5-flash",
+                inferenceTimeMs = 0,
+                rtf = 0f,
+                isSuccess = false,
+                error = "Interpreter not available"
+            ))
+            return
+        }
+        try {
+            val start = System.currentTimeMillis()
+            val result = geminiNanoInterpreter.processCommand(INTENT_TEST_COMMAND)
+            val end = System.currentTimeMillis()
+            val elapsed = end - start
+
+            val validation = validateIntentPayload(result)
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "Gemini Nano",
+                model = "gemini-1.5-flash",
+                inferenceTimeMs = elapsed,
+                rtf = 0f,
+                isSuccess = validation.isSuccess,
+                error = validation.error
+            ))
+        } catch (e: Exception) {
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "Gemini Nano",
+                model = "gemini-1.5-flash",
+                inferenceTimeMs = 0,
+                rtf = 0f,
+                isSuccess = false,
+                error = e.message
+            ))
+        }
+    }
+
+    private data class IntentValidation(val isSuccess: Boolean, val error: String?)
+
+    private fun validateIntentPayload(payload: IntentPayload?): IntentValidation {
+        if (payload == null) {
+            return IntentValidation(false, "Returned null (no JSON generated)")
+        }
+        if (payload.category.isBlank()) {
+            return IntentValidation(false, "category is blank")
+        }
+        if (payload.actionType.isBlank()) {
+            return IntentValidation(false, "actionType is blank")
+        }
+        // Check if category/action match expected values for the test command
+        if (payload.category != INTENT_TEST_EXPECTED_CATEGORY) {
+            return IntentValidation(false, "category='${payload.category}' (expected '$INTENT_TEST_EXPECTED_CATEGORY')")
+        }
+        if (payload.actionType != INTENT_TEST_EXPECTED_ACTION) {
+            return IntentValidation(false, "actionType='${payload.actionType}' (expected '$INTENT_TEST_EXPECTED_ACTION')")
+        }
+        return IntentValidation(true, null)
     }
 }
