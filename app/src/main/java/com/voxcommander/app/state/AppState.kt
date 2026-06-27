@@ -33,6 +33,7 @@ data class AppState(
     
     // --- API SETTINGS ---
     val apiKey: String?,
+    val geminiApiKey: String?,
     
     // --- RUNTIME STATE ---
     val voiceState: VoiceState,
@@ -111,6 +112,9 @@ data class AppState(
                 Strings.AiProcessors.GEMINI_NATIVE -> {
                     !settings.geminiIncompatible
                 }
+                Strings.AiProcessors.GEMINI_CLOUD -> {
+                    !settings.geminiApiKey.isNullOrBlank()
+                }
                 Strings.AiProcessors.OPENAI -> true
                 else -> {
                     // JSON-defined LLM engines
@@ -147,6 +151,7 @@ data class AppState(
                 isVerboseLoggingEnabled = settings.verboseLoggingEnabled,
                 isExperimentalVulkanEnabled = settings.experimentalVulkanEnabled,
                 apiKey = settings.apiKey,
+                geminiApiKey = settings.geminiApiKey,
                 voiceState = voiceState,
                 wakeWordDetected = wakeWordDetected,
                 defaultVoiceFallbackProcessor = settings.defaultVoiceFallbackProcessor,
@@ -180,6 +185,7 @@ data class AppState(
             isVerboseLoggingEnabled = false,
             isExperimentalVulkanEnabled = false,
             apiKey = null,
+            geminiApiKey = null,
             voiceState = VoiceState.IDLE,
             wakeWordDetected = false,
             defaultVoiceFallbackProcessor = null,

@@ -17,7 +17,8 @@ class IntentDecisionMap(
     private val l1Engine: AssistantEngine,
     private val l2CloudEngine: AssistantEngine,
     private val l3LocalEngine: AssistantEngine,
-    private val geminiEngine: AssistantEngine,
+    private val geminiNanoEngine: AssistantEngine,
+    private val geminiCloudEngine: AssistantEngine,
     private val settingsRepo: SettingsRepository
 ) : AssistantEngine {
 
@@ -48,7 +49,10 @@ class IntentDecisionMap(
                     if (isCloudIntelligenceEnabled) l2CloudEngine.processCommand(spokenText) else null
                 }
                 Strings.AiProcessors.GEMINI_NATIVE -> {
-                    geminiEngine.processCommand(spokenText)
+                    geminiNanoEngine.processCommand(spokenText)
+                }
+                Strings.AiProcessors.GEMINI_CLOUD -> {
+                    if (isCloudIntelligenceEnabled) geminiCloudEngine.processCommand(spokenText) else null
                 }
                 else -> {
                     // JSON-defined LLM engines
@@ -80,6 +84,8 @@ class IntentDecisionMap(
                 Log.d(TAG, "🏠 L2 Miss/Failure. Triggering L3 Offline Fallback ($fallbackProcessor)...")
                 val l3Result = when (fallbackProcessor) {
                     Strings.AiProcessors.OPENAI -> l2CloudEngine.processCommand(spokenText)
+                    Strings.AiProcessors.GEMINI_CLOUD -> geminiCloudEngine.processCommand(spokenText)
+                    Strings.AiProcessors.GEMINI_NATIVE -> geminiNanoEngine.processCommand(spokenText)
                     else -> {
                         if (com.voxcommander.app.data.remote.RemoteModelRegistry.isLlmEngine(fallbackProcessor)) {
                             l3LocalEngine.processCommand(spokenText)

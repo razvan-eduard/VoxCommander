@@ -8,6 +8,7 @@ import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.domain.intent.interpreter.GeminiNanoInterpreter
+import com.voxcommander.app.domain.intent.interpreter.GeminiCloudInterpreter
 import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
 import com.voxcommander.app.domain.intent.interpreter.OpenAiInterpreter
 import com.voxcommander.app.domain.intent.model.IntentPayload
@@ -31,7 +32,8 @@ class BenchmarkEngine(
     private val appStateManager: AppStateManager,
     private val modelDownloader: ModelDownloader,
     private val localLlmInterpreter: LocalLlmInterpreter? = null,
-    private val geminiNanoInterpreter: GeminiNanoInterpreter? = null
+    private val geminiNanoInterpreter: GeminiNanoInterpreter? = null,
+    private val geminiCloudInterpreter: GeminiCloudInterpreter? = null
 ) {
     companion object {
         private const val TAG = "BenchmarkEngine"
@@ -160,7 +162,7 @@ class BenchmarkEngine(
             diagInfo.append("\n")
         }
 
-        // --- 9. GEMINI NANO INTENT BENCHMARK ---
+        // --- 9. GEMINI NANO INTENT BENCHMARK (On-Device) ---
         diagInfo.append("--- GEMINI NANO DIAGNOSTICS ---\n")
         val geminiSupported = !snapshot.geminiIncompatible
         diagInfo.append("AICore: ${if (geminiSupported) "SUPPORTED" else "INCOMPATIBLE"}\n")
@@ -168,6 +170,14 @@ class BenchmarkEngine(
             runGeminiNanoBenchmark()
         }
         diagInfo.append("\n")
+
+        // --- 10. GEMINI CLOUD INTENT BENCHMARK (Cloud API) ---
+        val geminiKey = settingsRepo.getGeminiApiKeySync()
+        if (!geminiKey.isNullOrBlank() && snapshot.cloudIntelligenceEnabled) {
+            diagInfo.append("--- GEMINI CLOUD INTENT ENGINE ---\n")
+            runGeminiCloudBenchmark()
+            diagInfo.append("\n")
+        }
 
         appStateManager.setSystemInfo(diagInfo.toString())
         appStateManager.setVoiceState(VoiceState.IDLE)
@@ -296,7 +306,7 @@ class BenchmarkEngine(
         if (geminiNanoInterpreter == null) {
             appStateManager.updateBenchmarkResult(BenchmarkResult(
                 engine = "Gemini Nano",
-                model = "gemini-1.5-flash",
+                model = "on-device (AICore)",
                 inferenceTimeMs = 0,
                 rtf = 0f,
                 isSuccess = false,
@@ -313,6 +323,34 @@ class BenchmarkEngine(
             val validation = validateIntentPayload(result)
             appStateManager.updateBenchmarkResult(BenchmarkResult(
                 engine = "Gemini Nano",
+                model = "on-device (AICore)",
+                inferenceTimeMs = elapsed,
+                rtf = 0f,
+                isSuccess = validation.isSuccess,
+                error = validation.error ?: "On-device inference not yet implemented (awaiting AICore SDK)"
+            ))
+        } catch (e: Exception) {
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "Gemini Nano",
+                model = "on-device (AICore)",
+                inferenceTimeMs = 0,
+                rtf = 0f,
+                isSuccess = false,
+                error = e.message
+            ))
+        }
+    }
+
+    private suspend fun runGeminiCloudBenchmark() {
+        try {
+            val start = System.currentTimeMillis()
+            val result = geminiCloudInterpreter?.processCommand(INTENT_TEST_COMMAND)
+            val end = System.currentTimeMillis()
+            val elapsed = end - start
+
+            val validation = validateIntentPayload(result)
+            appStateManager.updateBenchmarkResult(BenchmarkResult(
+                engine = "Gemini Cloud",
                 model = "gemini-1.5-flash",
                 inferenceTimeMs = elapsed,
                 rtf = 0f,
@@ -321,7 +359,7 @@ class BenchmarkEngine(
             ))
         } catch (e: Exception) {
             appStateManager.updateBenchmarkResult(BenchmarkResult(
-                engine = "Gemini Nano",
+                engine = "Gemini Cloud",
                 model = "gemini-1.5-flash",
                 inferenceTimeMs = 0,
                 rtf = 0f,

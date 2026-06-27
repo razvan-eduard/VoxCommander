@@ -87,6 +87,7 @@ fun IntentEnginesSubTab(
                         // Inject Virtual Services
                         if (!list.contains(Strings.AiProcessors.OPENAI)) list.add(Strings.AiProcessors.OPENAI)
                         if (!list.contains(Strings.AiProcessors.GEMINI_NATIVE)) list.add(Strings.AiProcessors.GEMINI_NATIVE)
+                        if (!list.contains(Strings.AiProcessors.GEMINI_CLOUD)) list.add(Strings.AiProcessors.GEMINI_CLOUD)
                         list
                     }
 
@@ -108,6 +109,7 @@ fun IntentEnginesSubTab(
                             aiOptions.forEach { id ->
                                 val isEnabled = when (id) {
                                     Strings.AiProcessors.GEMINI_NATIVE -> !settingsRepo.getSettingsSnapshot().geminiIncompatible
+                                    Strings.AiProcessors.GEMINI_CLOUD -> !settingsRepo.getSettingsSnapshot().geminiApiKey.isNullOrBlank()
                                     else -> true
                                 }
                                 

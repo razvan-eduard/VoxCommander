@@ -42,6 +42,7 @@ fun GeneralSettingsTab(
 
     // Manage own state, synchronized with uiState
     var apiKey by remember(uiState.apiKey) { mutableStateOf(uiState.apiKey ?: "") }
+    var geminiApiKey by remember(uiState.geminiApiKey) { mutableStateOf(uiState.geminiApiKey ?: "") }
     var modelRepoUrl by remember { mutableStateOf(settingsRepo.getSettingsSnapshot().modelRepoBaseUrl) }
     var selectedLanguage by remember(uiState.voiceLanguage) { mutableStateOf(uiState.voiceLanguage) }
     var offlineFallbackTimeout by remember(uiState.refreshTrigger) { mutableIntStateOf(settingsRepo.getSettingsSnapshot().offlineFallbackTimeout) }
@@ -73,6 +74,27 @@ fun GeneralSettingsTab(
             singleLine = !isApiFocused,
             maxLines = if (isApiFocused) 5 else 1,
             colors = if (!isApiFocused) TextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                unfocusedIndicatorColor = Color.Transparent
+            ) else TextFieldDefaults.colors()
+        )
+
+        // GEMINI API KEY with masking
+        var isGeminiKeyFocused by remember { mutableStateOf(false) }
+        TextField(
+            value = geminiApiKey,
+            onValueChange = {
+                geminiApiKey = it
+                appStateManager.setGeminiApiKey(it)
+            },
+            label = { Text(languageManager.getString("gemini_api_key")) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { isGeminiKeyFocused = it.isFocused },
+            visualTransformation = if (isGeminiKeyFocused) VisualTransformation.None else PasswordVisualTransformation(),
+            singleLine = !isGeminiKeyFocused,
+            maxLines = if (isGeminiKeyFocused) 5 else 1,
+            colors = if (!isGeminiKeyFocused) TextFieldDefaults.colors(
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 unfocusedIndicatorColor = Color.Transparent
             ) else TextFieldDefaults.colors()

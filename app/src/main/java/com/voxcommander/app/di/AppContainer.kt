@@ -11,6 +11,7 @@ import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
 import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
 import com.voxcommander.app.domain.intent.interpreter.OpenAiInterpreter
 import com.voxcommander.app.domain.intent.interpreter.GeminiNanoInterpreter
+import com.voxcommander.app.domain.intent.interpreter.GeminiCloudInterpreter
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
@@ -49,8 +50,9 @@ class AppContainer(context: Context) {
     private val l1Engine = FastMapEngine(fastMapDao)
     private val l2Engine = OpenAiInterpreter(settingsRepository)
     val localLlmInterpreter = LocalLlmInterpreter(appContext, settingsRepository, modelDownloader)
-    val geminiNanoInterpreter = GeminiNanoInterpreter(appContext)
-    val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, localLlmInterpreter, geminiNanoInterpreter, settingsRepository)
+    val geminiNanoInterpreter = GeminiNanoInterpreter(appContext, settingsRepository)
+    val geminiCloudInterpreter = GeminiCloudInterpreter(settingsRepository)
+    val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, localLlmInterpreter, geminiNanoInterpreter, geminiCloudInterpreter, settingsRepository)
 
     // --- VIEW MODELS ---
     val mainViewModel = MainViewModel(masterIntentEngine, appStateManager, languageManager)

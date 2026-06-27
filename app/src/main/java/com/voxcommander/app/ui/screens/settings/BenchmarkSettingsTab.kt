@@ -55,7 +55,8 @@ fun BenchmarkSettingsTab(
             appStateManager,
             appContainer.modelDownloader,
             appContainer.localLlmInterpreter,
-            appContainer.geminiNanoInterpreter
+            appContainer.geminiNanoInterpreter,
+            appContainer.geminiCloudInterpreter
         )
     }
     

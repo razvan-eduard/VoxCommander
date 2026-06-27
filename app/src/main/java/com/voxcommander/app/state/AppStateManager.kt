@@ -213,6 +213,10 @@ class AppStateManager private constructor(
         scope.launch { repo.setApiKey(key) }
     }
 
+    fun setGeminiApiKey(key: String?) {
+        scope.launch { repo.setGeminiApiKey(key) }
+    }
+
     fun setAppLanguage(lang: String) {
         scope.launch { repo.setLanguage(lang) }
     }

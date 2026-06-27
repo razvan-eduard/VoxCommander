@@ -10,6 +10,7 @@ import com.voxcommander.app.utils.Strings
 data class AppSettings(
     // --- API / CLOUD ---
     val apiKey: String? = null,
+    val geminiApiKey: String? = null,
 
     // --- LANGUAGE ---
     val language: String = Strings.Preferences.DEFAULT_LANGUAGE,

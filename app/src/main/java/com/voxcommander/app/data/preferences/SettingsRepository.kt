@@ -20,12 +20,14 @@ interface SettingsRepository {
     // --- SYNCHRONOUS READS (for non-coroutine consumers during migration) ---
     fun getSettingsSnapshot(): AppSettings
     fun getApiKeySync(): String?
+    fun getGeminiApiKeySync(): String?
 
     // --- SYNCHRONOUS WRITE (crash cookie: must survive process death immediately) ---
     fun setVulkanRuntimeAttemptSync(active: Boolean)
 
     // --- API / CLOUD ---
     suspend fun setApiKey(key: String?)
+    suspend fun setGeminiApiKey(key: String?)
 
     // --- LANGUAGE ---
     suspend fun setLanguage(lang: String)

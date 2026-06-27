@@ -216,6 +216,7 @@ class SettingsRepositoryImpl(
     override val settingsFlow: Flow<AppSettings> = dataStore.data.map { prefs ->
         AppSettings(
             apiKey = encryptedPrefs.getString("api_key", null),
+            geminiApiKey = encryptedPrefs.getString("gemini_api_key", null),
 
             language = prefs[Keys.LANGUAGE] ?: Strings.Preferences.DEFAULT_LANGUAGE,
             voiceLanguage = prefs[Keys.VOICE_LANGUAGE] ?: Strings.Preferences.DEFAULT_LANGUAGE,
@@ -263,6 +264,7 @@ class SettingsRepositoryImpl(
     override fun getSettingsSnapshot(): AppSettings = runBlocking { settingsFlow.first() }
 
     override fun getApiKeySync(): String? = encryptedPrefs.getString("api_key", null)
+    override fun getGeminiApiKeySync(): String? = encryptedPrefs.getString("gemini_api_key", null)
 
     // --- SYNCHRONOUS WRITE (crash cookie) ---
     override fun setVulkanRuntimeAttemptSync(active: Boolean) {
@@ -279,6 +281,12 @@ class SettingsRepositoryImpl(
     override suspend fun setApiKey(key: String?) {
         encryptedPrefs.edit().apply {
             if (key != null) putString("api_key", key) else remove("api_key")
+        }.apply()
+    }
+
+    override suspend fun setGeminiApiKey(key: String?) {
+        encryptedPrefs.edit().apply {
+            if (key != null) putString("gemini_api_key", key) else remove("gemini_api_key")
         }.apply()
     }
 

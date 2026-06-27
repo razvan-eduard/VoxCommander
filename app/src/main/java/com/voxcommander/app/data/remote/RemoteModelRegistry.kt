@@ -174,6 +174,7 @@ object RemoteModelRegistry {
             Strings.Processors.WHISPER_VULKAN -> languageManager.getString("engine_label_vulkan_experimental")
             Strings.AiProcessors.OPENAI -> languageManager.getString("engine_label_openai_gpt")
             Strings.AiProcessors.GEMINI_NATIVE -> languageManager.getString("engine_label_gemini_nano")
+            Strings.AiProcessors.GEMINI_CLOUD -> languageManager.getString("engine_label_gemini_cloud")
             else -> engineKey.replace("_", " ").uppercase()
         }
     }

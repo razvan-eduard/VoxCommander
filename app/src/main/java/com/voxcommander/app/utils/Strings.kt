@@ -33,6 +33,7 @@ object Strings {
         // Local injections (not in models.json — no dynamic key available)
         const val OPENAI = "OPENAI"
         const val GEMINI_NATIVE = "GEMINI_NATIVE"
+        const val GEMINI_CLOUD = "GEMINI_CLOUD"
     }
 
     object Routes {
