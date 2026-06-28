@@ -229,6 +229,7 @@
   "spotify_oauth_title": "Conectare Spotify Necesară",
   "spotify_oauth_message": "Spotify necesită conectare OAuth pentru redare vocală. Conectezi acum?",
   "spotify_oauth_skip": "Sari peste",
+  "offline_banner": "Fără conexiune la internet. Apelurile API (Spotify, YouTube, descărcare modele) sunt dezactivate. Funcțiile locale funcționează.",
   "expert_settings": "Setări Expert",
   "expert_settings_show": "Arată Setări Expert",
   "expert_settings_hide": "Ascunde Setări Expert",

@@ -1,6 +1,7 @@
 package com.voxcommander.app.service
 
 import com.voxcommander.app.utils.Logger
+import com.voxcommander.app.utils.NetworkMonitor
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -32,6 +33,11 @@ object SpotifyWebApi {
      * @return true if playback was started successfully
      */
     fun playSearch(clientId: String, query: String): Boolean {
+        if (!NetworkMonitor.isOnline) {
+            Logger.log("SpotifyWebApi: no internet connection, skipping playSearch", TAG)
+            return false
+        }
+
         val token = SpotifyPkceManager.getValidAccessToken(clientId)
         if (token == null) {
             Logger.log("SpotifyWebApi: no valid access token", TAG)
@@ -47,26 +53,31 @@ object SpotifyWebApi {
 
         Logger.log("SpotifyWebApi: found track $trackUri, starting playback", TAG)
 
-        // 2. Try to play on active device
-        val played = startPlayback(token, trackUri)
-        if (played) {
-            Logger.log("SpotifyWebApi: playback started successfully", TAG)
-            return true
-        }
-
-        // 3. No active device — try to find one and transfer playback
-        Logger.log("SpotifyWebApi: no active device, searching for devices...", TAG)
+        // 2. Find the best device (prefer this phone)
         val deviceId = findAvailableDevice(token)
         if (deviceId != null) {
-            Logger.log("SpotifyWebApi: found device $deviceId, transferring playback", TAG)
-            if (transferPlayback(token, deviceId)) {
-                // Retry play after transfer
-                val retried = startPlayback(token, trackUri)
-                if (retried) {
-                    Logger.log("SpotifyWebApi: playback started after device transfer", TAG)
-                    return true
-                }
+            // Transfer playback to the selected device, then play
+            Logger.log("SpotifyWebApi: transferring playback to device $deviceId", TAG)
+            transferPlayback(token, deviceId)
+            Thread.sleep(500)
+
+            if (startPlaybackOnDevice(token, trackUri, deviceId)) {
+                Logger.log("SpotifyWebApi: playback started on device $deviceId", TAG)
+                return true
             }
+            // Retry after longer delay
+            Thread.sleep(2000)
+            if (startPlaybackOnDevice(token, trackUri, deviceId)) {
+                Logger.log("SpotifyWebApi: playback started on second retry", TAG)
+                return true
+            }
+        }
+
+        // 3. Fallback: try playing on active device
+        val played = startPlayback(token, trackUri)
+        if (played) {
+            Logger.log("SpotifyWebApi: playback started on active device", TAG)
+            return true
         }
 
         Logger.log("SpotifyWebApi: could not start playback — no active device", TAG)
@@ -123,26 +134,56 @@ object SpotifyWebApi {
     }
 
     /**
+     * Starts playback of a specific track URI on a specific device.
+     */
+    private fun startPlaybackOnDevice(token: String, trackUri: String, deviceId: String): Boolean {
+        val body = JSONObject().put("uris", org.json.JSONArray().put(trackUri)).toString()
+        val encodedDeviceId = URLEncoder.encode(deviceId, "UTF-8")
+        return putRequest("$BASE_URL/me/player/play?device_id=$encodedDeviceId", token, body)
+    }
+
+    /**
      * Finds an available Spotify device (e.g. the phone running Spotify app).
      */
     private fun findAvailableDevice(token: String): String? {
         val response = getRequest("$BASE_URL/me/player/devices", token) ?: return null
         val json = JSONObject(response)
         val devices = json.optJSONArray("devices") ?: return null
+
+        val deviceList = mutableListOf<JSONObject>()
         for (i in 0 until devices.length()) {
             val device = devices.getJSONObject(i)
-            val id = device.optString("id", null) ?: continue
-            // Prefer the "Computer" or "Smartphone" type, or any active device
-            return id
+            deviceList.add(device)
+            Logger.log("SpotifyWebApi: device[${i}] name=${device.optString("name")} type=${device.optString("type")} id=${device.optString("id")} active=${device.optBoolean("is_active")}", TAG)
         }
-        return null
+
+        // 1. Prefer Smartphone (likely this phone)
+        deviceList.firstOrNull { it.optString("type") == "Smartphone" }?.let {
+            Logger.log("SpotifyWebApi: selecting smartphone device: ${it.optString("name")}", TAG)
+            return it.optString("id")
+        }
+
+        // 2. Prefer active device
+        deviceList.firstOrNull { it.optBoolean("is_active") }?.let {
+            Logger.log("SpotifyWebApi: selecting active device: ${it.optString("name")}", TAG)
+            return it.optString("id")
+        }
+
+        // 3. Prefer Computer
+        deviceList.firstOrNull { it.optString("type") == "Computer" }?.let {
+            Logger.log("SpotifyWebApi: selecting computer device: ${it.optString("name")}", TAG)
+            return it.optString("id")
+        }
+
+        // 4. Fallback: first available
+        return deviceList.firstOrNull()?.optString("id")
     }
 
     /**
      * Transfers playback to a specific device.
      */
     private fun transferPlayback(token: String, deviceId: String): Boolean {
-        val body = JSONObject().put("device_ids", org.json.JSONArray().put(deviceId)).put("play", true).toString()
+        val body = JSONObject().put("device_ids", org.json.JSONArray().put(deviceId)).put("play", false).toString()
         return putRequest("$BASE_URL/me/player", token, body)
     }
 

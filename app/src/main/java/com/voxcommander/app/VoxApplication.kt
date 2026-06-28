@@ -3,9 +3,11 @@ package com.voxcommander.app
 import android.app.Application
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.di.AppContainer
+import com.voxcommander.app.service.SpotifyPkceManager
 import com.voxcommander.app.utils.LogLevel
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.LoggingFlags
+import com.voxcommander.app.utils.NetworkMonitor
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,8 +40,18 @@ class VoxApplication : Application() {
         // Initialize RemoteModelRegistry with app context (for assets/filesDir access)
         RemoteModelRegistry.init(this)
 
+        // Initialize network monitor for realtime connectivity tracking
+        NetworkMonitor.init(this)
+
+        // Initialize Spotify PKCE manager and load persisted tokens
+        SpotifyPkceManager.init(container.settingsRepository)
+
         // Initial fetch of the remote model registry - Force update on start to bypass CDN caching
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            if (!NetworkMonitor.isOnline) {
+                Logger.log("No internet connection — skipping remote model registry fetch", "VoxApplication")
+                return@launch
+            }
             val success = RemoteModelRegistry.fetchJson(container.settingsRepository, force = true)
             if (success) {
                 // Force AppStateManager to rebuild its UI state with the fresh models

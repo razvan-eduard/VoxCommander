@@ -52,7 +52,7 @@ class LocalLlmInterpreter(
 
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
-            .setMaxTokens(512)
+            .setMaxTokens(1024)
             .build()
 
         val instance = LlmInference.createFromOptions(context, options)

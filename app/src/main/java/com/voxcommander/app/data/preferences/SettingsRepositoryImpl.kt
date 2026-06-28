@@ -597,6 +597,19 @@ class SettingsRepositoryImpl(
         }
     }
 
+    // --- SPOTIFY PKCE TOKENS (stored in encrypted prefs) ---
+    override fun getSpotifyAccessTokenSync(): String? = encryptedPrefs.getString("spotify_access_token", null)
+    override fun getSpotifyRefreshTokenSync(): String? = encryptedPrefs.getString("spotify_refresh_token", null)
+    override fun getSpotifyTokenExpirySync(): Long = encryptedPrefs.getLong("spotify_token_expiry", 0)
+
+    override suspend fun setSpotifyTokens(accessToken: String?, refreshToken: String?, expiry: Long) {
+        encryptedPrefs.edit().apply {
+            if (accessToken != null) putString("spotify_access_token", accessToken) else remove("spotify_access_token")
+            if (refreshToken != null) putString("spotify_refresh_token", refreshToken) else remove("spotify_refresh_token")
+            putLong("spotify_token_expiry", expiry)
+        }.apply()
+    }
+
     // --- HELPERS ---
     private fun parseCustomModelPaths(json: String?): Map<String, String> = parseStringMap(json)
 

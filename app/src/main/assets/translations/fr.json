@@ -227,6 +227,7 @@
   "spotify_oauth_title": "Connexion Spotify Requise",
   "spotify_oauth_message": "Spotify nécessite une connexion OAuth pour la lecture vocale. Connecter maintenant?",
   "spotify_oauth_skip": "Passer",
+  "offline_banner": "Pas de connexion Internet. Les appels API (Spotify, YouTube, téléchargement de modèles) sont désactivés. Les fonctions locales fonctionnent.",
   "expert_settings": "Paramètres Expert",
   "expert_settings_show": "Afficher Paramètres Expert",
   "expert_settings_hide": "Masquer Paramètres Expert",

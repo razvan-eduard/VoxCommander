@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.google.gson.GsonBuilder
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.data.preferences.SettingsRepository
@@ -29,6 +30,7 @@ import com.voxcommander.app.ui.components.TopHeaderContainer
 import com.voxcommander.app.ui.components.TopHeaderMode
 import com.voxcommander.app.ui.components.VulkanTestModal
 import com.voxcommander.app.ui.viewmodels.MainViewModel
+import com.voxcommander.app.utils.NetworkMonitor
 import com.voxcommander.app.utils.Strings
 import java.io.File
 
@@ -58,6 +60,7 @@ fun MainScreen(
     val transcription by viewModel.transcription.collectAsStateWithLifecycle()
     val isListening by VoiceManager.isListeningFlow.collectAsStateWithLifecycle()
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
+    val isOnline by NetworkMonitor.onlineFlow.collectAsStateWithLifecycle()
 
     var currentHeaderMode by remember { mutableStateOf(TopHeaderMode.NONE) }
     
@@ -87,6 +90,22 @@ fun MainScreen(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // --- OFFLINE BANNER ---
+                if (!isOnline) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Text(
+                            text = languageManager.getString("offline_banner"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+
                 // Manual Text Input
                 OutlinedTextField(
                     value = manualText,

@@ -64,26 +64,14 @@ object PromptProvider {
             5. confidence: Your confidence level from 0.0 to 1.0.
             6. DEFAULT: If music platform is not specified, use the user's default audio app if set, otherwise use targetApp="youtube".
             7. RETURN: Return EXCLUSIVELY a JSON object with these 5 keys: domain, action, targetApp, parameters, confidence.
-            8. IMPORTANT: When the user says "play <artist/song> on spotify", the domain is ALWAYS "audio" and action is ALWAYS "play". Never use domain="settings" for music playback.
+            8. "play X on spotify" → domain="audio", action="play". Never domain="settings" for music.
 
             Examples:
-            Input: "play bohemian rhapsody by queen on youtube"
-            Output: {"domain":"audio","action":"play","targetApp":"youtube","parameters":{"artist":"Queen","track":"Bohemian Rhapsody"},"confidence":0.95}
-
-            Input: "play spotify"
-            Output: {"domain":"audio","action":"play","targetApp":"spotify","parameters":{},"confidence":0.9}
-
             Input: "play scorpions on spotify"
             Output: {"domain":"audio","action":"play","targetApp":"spotify","parameters":{"artist":"Scorpions"},"confidence":0.95}
 
             Input: "play scorpions"
             Output: {"domain":"audio","action":"play","targetApp":null,"parameters":{"artist":"Scorpions"},"confidence":0.9}
-
-            Input: "play rock you like a hurricane on spotify"
-            Output: {"domain":"audio","action":"play","targetApp":"spotify","parameters":{"track":"Rock You Like A Hurricane"},"confidence":0.95}
-
-            Input: "navigate to bucharest via waze"
-            Output: {"domain":"maps","action":"navigate","targetApp":"waze","parameters":{"destination":"Bucharest"},"confidence":0.95}
 
             Input: "volume up"
             Output: {"domain":"settings","action":"volume_up","targetApp":null,"parameters":{},"confidence":1.0}

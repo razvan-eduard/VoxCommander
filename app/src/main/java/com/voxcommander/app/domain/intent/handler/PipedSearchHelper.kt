@@ -6,6 +6,7 @@ import android.net.Uri
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.voxcommander.app.utils.Logger
+import com.voxcommander.app.utils.NetworkMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -134,6 +135,10 @@ object PipedSearchHelper {
      * Returns true if a video was found and the intent was launched.
      */
     suspend fun searchAndPlay(context: Context, query: String): Boolean = withContext(Dispatchers.IO) {
+        if (!NetworkMonitor.isOnline) {
+            Logger.log("Piped search: no internet connection, skipping", TAG)
+            return@withContext false
+        }
         val videoId = searchFirstVideoId(query)
         if (videoId == null) {
             Logger.log("Piped search returned no results for: $query", TAG)

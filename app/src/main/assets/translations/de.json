@@ -227,6 +227,7 @@
   "spotify_oauth_title": "Spotify-Anmeldung Erforderlich",
   "spotify_oauth_message": "Spotify erfordert OAuth-Anmeldung für sprachgesteuerte Wiedergabe. Jetzt verbinden?",
   "spotify_oauth_skip": "Überspringen",
+  "offline_banner": "Keine Internetverbindung. API-Aufrufe (Spotify, YouTube, Modell-Downloads) sind deaktiviert. Lokale Funktionen funktionieren weiterhin.",
   "expert_settings": "Experteneinstellungen",
   "expert_settings_show": "Experteneinstellungen anzeigen",
   "expert_settings_hide": "Experteneinstellungen ausblenden",

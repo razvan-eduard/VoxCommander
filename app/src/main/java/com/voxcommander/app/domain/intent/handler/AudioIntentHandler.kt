@@ -8,6 +8,9 @@ import android.view.KeyEvent
 import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.domain.intent.registry.AppRegistry
 import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
+import com.voxcommander.app.service.SpotifyPkceManager
+import com.voxcommander.app.service.SpotifyRemoteManager
+import com.voxcommander.app.service.SpotifyWebApi
 import com.voxcommander.app.utils.Logger
 
 /**
@@ -58,6 +61,16 @@ class AudioIntentHandler : IntentHandler {
      */
     private fun playSearch(context: Context, intent: NluIntent, resolvedApp: AppRegistry.AppEntry?, query: String): Boolean {
         val pkg = resolvedApp?.packageName
+
+        // 0. For Spotify, try Web API first (uses PKCE token for direct playback)
+        if (pkg == "com.spotify.music" && SpotifyPkceManager.isAuthorized) {
+            val clientId = SpotifyRemoteManager.getClientId()
+            if (clientId != null && SpotifyWebApi.playSearch(clientId, query)) {
+                Logger.log("playSearch via Spotify Web API succeeded", TAG)
+                return true
+            }
+            Logger.log("Spotify Web API failed, falling back to intent", TAG)
+        }
 
         // 1. Try MEDIA_PLAY_FROM_SEARCH (standard Android, plays directly)
         if (pkg != null) {

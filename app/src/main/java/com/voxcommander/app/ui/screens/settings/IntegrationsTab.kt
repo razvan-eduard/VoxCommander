@@ -175,6 +175,7 @@ fun IntegrationsTab(
                                     spotifyConnected = ok
                                     if (!ok) {
                                         connectError = when (errorMsg) {
+                                            "no_internet" -> languageManager.getString("offline_banner")
                                             "access_denied" -> languageManager.getString("spotify_error_auth_required")
                                             "token_exchange_failed" -> languageManager.getString("spotify_connect_failed")
                                             else -> languageManager.getString("spotify_connect_failed")
@@ -257,6 +258,7 @@ fun IntegrationsTab(
                         spotifyConnected = ok
                         if (!ok) {
                             connectError = when (errorMsg) {
+                                "no_internet" -> languageManager.getString("offline_banner")
                                 "access_denied" -> languageManager.getString("spotify_error_auth_required")
                                 "token_exchange_failed" -> languageManager.getString("spotify_connect_failed")
                                 else -> languageManager.getString("spotify_connect_failed")

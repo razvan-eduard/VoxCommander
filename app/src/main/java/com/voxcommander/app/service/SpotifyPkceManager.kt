@@ -3,7 +3,9 @@ package com.voxcommander.app.service
 import android.content.Context
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.utils.Logger
+import com.voxcommander.app.utils.NetworkMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -42,6 +44,44 @@ object SpotifyPkceManager {
     var isAuthorized: Boolean = false
         private set
 
+    private var settingsRepo: SettingsRepository? = null
+
+    /**
+     * Initializes PKCE manager with settings repo and loads persisted tokens.
+     * Call from Application.onCreate.
+     */
+    fun init(repo: SettingsRepository) {
+        settingsRepo = repo
+        loadPersistedTokens()
+    }
+
+    private fun loadPersistedTokens() {
+        val repo = settingsRepo ?: return
+        val token = repo.getSpotifyAccessTokenSync()
+        val refresh = repo.getSpotifyRefreshTokenSync()
+        val expiry = repo.getSpotifyTokenExpirySync()
+
+        if (token != null && refresh != null && expiry > System.currentTimeMillis()) {
+            accessToken = token
+            refreshToken = refresh
+            tokenExpiry = expiry
+            isAuthorized = true
+            Logger.log("PKCE tokens loaded from storage, expires in ${(expiry - System.currentTimeMillis()) / 1000}s", TAG)
+        } else if (refresh != null) {
+            // Access token expired but we have refresh token — will refresh on demand
+            refreshToken = refresh
+            tokenExpiry = 0
+            Logger.log("PKCE refresh token loaded, access token expired", TAG)
+        }
+    }
+
+    private fun persistTokens() {
+        val repo = settingsRepo ?: return
+        kotlinx.coroutines.runBlocking {
+            repo.setSpotifyTokens(accessToken, refreshToken, tokenExpiry)
+        }
+    }
+
     /** Callback invoked when the OAuth redirect is received */
     private var authCallback: ((Boolean, String?) -> Unit)? = null
 
@@ -50,6 +90,12 @@ object SpotifyPkceManager {
      * The activity must handle the redirect URI in onNewIntent / onIntent.
      */
     fun startAuthFlow(context: Context, clientId: String, onResult: (Boolean, String?) -> Unit) {
+        if (!NetworkMonitor.isOnline) {
+            Logger.log("PKCE auth flow: no internet connection", TAG)
+            onResult(false, "no_internet")
+            return
+        }
+
         pendingClientId = clientId
         authCallback = onResult
 
@@ -115,6 +161,7 @@ object SpotifyPkceManager {
                     tokenExpiry = System.currentTimeMillis() + expiresIn * 1000
                     isAuthorized = true
                     Logger.log("PKCE token exchange successful, expires in ${expiresIn}s", TAG)
+                    persistTokens()
                     val cb = authCallback
                     authCallback = null
                     mainHandler.post { cb?.invoke(true, null) }
@@ -227,6 +274,7 @@ object SpotifyPkceManager {
         codeVerifier = null
         pendingClientId = null
         authCallback = null
+        persistTokens()
         Logger.log("PKCE logout", TAG)
     }
 

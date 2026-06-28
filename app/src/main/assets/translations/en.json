@@ -231,6 +231,7 @@
   "spotify_oauth_title": "Spotify Login Required",
   "spotify_oauth_message": "Spotify requires OAuth login to enable voice-controlled playback. Connect now?",
   "spotify_oauth_skip": "Skip",
+  "offline_banner": "No internet connection. API calls (Spotify, YouTube, model downloads) are disabled. Local features still work.",
   "expert_settings": "Expert Settings",
   "expert_settings_show": "Show Expert Settings",
   "expert_settings_hide": "Hide Expert Settings",

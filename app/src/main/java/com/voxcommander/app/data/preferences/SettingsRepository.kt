@@ -101,4 +101,10 @@ interface SettingsRepository {
     suspend fun setSpotifyClientId(clientId: String?)
     suspend fun setPipedApiUrl(url: String?)
     suspend fun setPipedRegion(region: String?)
+
+    // --- SPOTIFY PKCE TOKENS ---
+    fun getSpotifyAccessTokenSync(): String?
+    fun getSpotifyRefreshTokenSync(): String?
+    fun getSpotifyTokenExpirySync(): Long
+    suspend fun setSpotifyTokens(accessToken: String?, refreshToken: String?, expiry: Long)
 }

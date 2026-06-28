@@ -6,6 +6,7 @@ import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.utils.Logger
+import com.voxcommander.app.utils.NetworkMonitor
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,6 +100,11 @@ object RemoteModelRegistry {
 
     suspend fun fetchJson(repo: SettingsRepository, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         Logger.log("fetchJson called (force=$force)", TAG)
+        if (!NetworkMonitor.isOnline) {
+            Logger.log("No internet — skipping remote registry fetch", TAG)
+            _loadStatus.value = LoadStatus.NO_NETWORK
+            return@withContext false
+        }
         _loadStatus.value = LoadStatus.LOADING
 
         // 1. Ensure local file exists (copy from assets on first run)
