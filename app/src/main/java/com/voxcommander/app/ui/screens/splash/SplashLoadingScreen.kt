@@ -9,26 +9,47 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voxcommander.app.R
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelRegistry
+import com.voxcommander.app.domain.intent.registry.AppRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SplashLoadingScreen(
     languageManager: LanguageManager,
+    settingsRepo: SettingsRepository,
     onFinished: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val loadStatus by RemoteModelRegistry.loadStatus.collectAsStateWithLifecycle()
+    val scanStatus by AppRegistry.scanStatus.collectAsStateWithLifecycle()
 
-    // Auto-advance when loading is done (with small delay for UX)
-    LaunchedEffect(loadStatus) {
-        if (loadStatus != RemoteModelRegistry.LoadStatus.LOADING) {
+    // Trigger app scan if not already done (cache was empty)
+    LaunchedEffect(scanStatus) {
+        if (scanStatus == AppRegistry.ScanStatus.IDLE) {
+            scope.launch {
+                AppRegistry.init(context)
+                settingsRepo.setAppCache(AppRegistry.toJsonCache())
+            }
+        }
+    }
+
+    val assetsReady = loadStatus != RemoteModelRegistry.LoadStatus.LOADING
+    val appsReady = scanStatus == AppRegistry.ScanStatus.DONE
+
+    // Auto-advance when both assets and apps are ready
+    LaunchedEffect(assetsReady, appsReady) {
+        if (assetsReady && appsReady) {
             delay(800)
             onFinished()
         }
@@ -43,7 +64,7 @@ fun SplashLoadingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Logo — full width with small margins
+            // Logo
             Image(
                 painter = painterResource(id = R.drawable.splash_logo),
                 contentDescription = null,
@@ -55,17 +76,57 @@ fun SplashLoadingScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Loading indicator
+            // Scanning apps indicator
+            AnimatedVisibility(
+                visible = scanStatus == AppRegistry.ScanStatus.SCANNING,
+                enter = fadeIn()
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(36.dp),
+                        strokeWidth = 3.dp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Scanning installed apps...",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            // Apps loaded
+            AnimatedVisibility(
+                visible = scanStatus == AppRegistry.ScanStatus.DONE,
+                enter = fadeIn()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Apps ready",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Loading assets indicator
             AnimatedVisibility(
                 visible = loadStatus == RemoteModelRegistry.LoadStatus.LOADING,
                 enter = fadeIn()
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(48.dp),
-                        strokeWidth = 4.dp
+                        modifier = Modifier.size(36.dp),
+                        strokeWidth = 3.dp
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = languageManager.getString("splash_loading_assets"),
                         fontSize = 14.sp,
@@ -75,27 +136,27 @@ fun SplashLoadingScreen(
                 }
             }
 
-            // Loaded from remote
+            // Assets loaded from remote
             AnimatedVisibility(
                 visible = loadStatus == RemoteModelRegistry.LoadStatus.LOADED_FROM_REMOTE,
                 enter = fadeIn()
             ) {
                 Text(
                     text = languageManager.getString("splash_loaded_remote"),
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.primary,
                     textAlign = TextAlign.Center
                 )
             }
 
-            // Loaded from cache
+            // Assets loaded from cache
             AnimatedVisibility(
                 visible = loadStatus == RemoteModelRegistry.LoadStatus.LOADED_FROM_CACHE,
                 enter = fadeIn()
             ) {
                 Text(
                     text = languageManager.getString("splash_no_network"),
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     textAlign = TextAlign.Center
                 )
@@ -108,7 +169,7 @@ fun SplashLoadingScreen(
             ) {
                 Text(
                     text = languageManager.getString("splash_no_network"),
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center
                 )

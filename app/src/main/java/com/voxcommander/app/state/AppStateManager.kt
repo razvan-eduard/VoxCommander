@@ -3,6 +3,7 @@ package com.voxcommander.app.state
 import android.content.Context
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelRegistry
+import com.voxcommander.app.domain.intent.registry.AppRegistry
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.*
@@ -44,6 +45,12 @@ enum class VulkanTestState {
     IDLE,
     RUNNING,
     RESULT
+}
+
+sealed class AppScanState {
+    object Idle : AppScanState()
+    data class Scanning(val current: Int, val total: Int, val appName: String) : AppScanState()
+    data class Done(val totalApps: Int, val durationMs: Long) : AppScanState()
 }
 
 class AppStateManager private constructor(
@@ -89,6 +96,10 @@ class AppStateManager private constructor(
 
     private val _vulkanTestPassed = MutableStateFlow<Boolean?>(null)
     val vulkanTestPassed: StateFlow<Boolean?> = _vulkanTestPassed.asStateFlow()
+
+    // --- APP SCAN STATE ---
+    private val _appScanState = MutableStateFlow<AppScanState>(AppScanState.Idle)
+    val appScanState: StateFlow<AppScanState> = _appScanState.asStateFlow()
 
     private val _systemInfo = MutableStateFlow<String>("")
     val systemInfo: StateFlow<String> = _systemInfo.asStateFlow()
@@ -416,6 +427,24 @@ class AppStateManager private constructor(
     fun dismissVulkanTestResult() {
         _vulkanTestState.value = VulkanTestState.IDLE
         _vulkanTestPassed.value = null
+    }
+
+    fun startAppScan() {
+        if (_appScanState.value is AppScanState.Scanning) return
+        scope.launch(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
+            val json = AppRegistry.rescanAndCache(context) { current, total, appName ->
+                _appScanState.value = AppScanState.Scanning(current, total, appName)
+            }
+            val duration = System.currentTimeMillis() - startTime
+            repo.setAppCache(json)
+            val totalApps = AppRegistry.allInstalledApps().size
+            _appScanState.value = AppScanState.Done(totalApps, duration)
+        }
+    }
+
+    fun dismissAppScanResult() {
+        _appScanState.value = AppScanState.Idle
     }
 
     companion object {

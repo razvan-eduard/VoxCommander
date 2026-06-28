@@ -88,6 +88,10 @@ dependencies {
     implementation(libs.mediapipe.genai)
     implementation(libs.androidx.media)
     implementation(libs.androidx.datastore.preferences)
+    // Chrome Custom Tabs for Spotify dashboard setup
+    implementation("androidx.browser:browser:1.8.0")
+    // Spotify App Remote SDK (local AAR)
+    implementation(files("libs/spotify-app-remote.aar"))
     // Gemini Nano (Google AI Edge) - System LLM SDK
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
     // STT Engines (Whisper.cpp integration)

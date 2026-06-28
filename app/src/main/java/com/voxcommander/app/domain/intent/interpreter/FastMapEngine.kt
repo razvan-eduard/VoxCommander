@@ -2,7 +2,7 @@ package com.voxcommander.app.domain.intent.interpreter
 
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.domain.intent.model.NluIntent
-import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
+import com.voxcommander.app.utils.RegexGenerator
 
 import kotlinx.coroutines.flow.first
 
@@ -14,29 +14,51 @@ class FastMapEngine(
         val rules = fastMapDao.getAllRules().first()
 
         for (rule in rules) {
-            val regex = Regex(rule.triggerPattern, RegexOption.IGNORE_CASE)
-            val matchResult = regex.find(spokenText)
+            // Build trigger regex from triggerWords (if any)
+            val triggerRegexStr = RegexGenerator.fromWords(rule.triggerWords)
+            val hasTrigger = triggerRegexStr.isNotBlank()
+            val hasQuery = rule.queryWords.isNotEmpty()
 
-            if (matchResult != null) {
-                val extractedValue = if (matchResult.groups.size > 1) {
-                    matchResult.groups[1]?.value
+            if (!hasTrigger && !hasQuery) continue
+
+            // If no trigger, always match (query-only rule)
+            val triggerMatched = if (!hasTrigger) {
+                true
+            } else {
+                Regex(triggerRegexStr, RegexOption.IGNORE_CASE).containsMatchIn(spokenText)
+            }
+
+            if (triggerMatched) {
+                // Build query
+                val query = if (rule.lazyQuery) {
+                    // Lazy: extract everything from spokenText except trigger words + app name
+                    var remaining = spokenText
+                    if (hasTrigger) {
+                        remaining = remaining.replace(Regex(triggerRegexStr, RegexOption.IGNORE_CASE), " ")
+                    }
+                    // Remove app display name if present
+                    val appEntry = com.voxcommander.app.domain.intent.registry.AppRegistry.resolveByPackage(rule.targetPackage)
+                    if (appEntry != null) {
+                        val appNamePattern = Regex("(?i)\\b${Regex.escape(appEntry.displayName)}\\b")
+                        remaining = remaining.replace(appNamePattern, " ")
+                    }
+                    remaining.trim().replace(Regex("\\s+"), " ").ifBlank { null }
                 } else {
-                    null
+                    rule.queryWords.joinToString(" ").ifBlank { null }
                 }
 
-                // Map legacy actionType to new domain+action+targetApp
-                val mapped = IntentTaxonomy.LegacyMapper.fromActionType(rule.actionType)
-                val domain = mapped?.domain ?: rule.category
-                val action = mapped?.action ?: rule.actionType
-                val targetApp = mapped?.targetApp
-
                 val params = mutableMapOf<String, String>()
-                rule.artist?.let { params[NluIntent.PARAM_ARTIST] = it }
-                (rule.track ?: extractedValue)?.let { params[NluIntent.PARAM_TRACK] = it }
-                rule.album?.let { params[NluIntent.PARAM_ALBUM] = it }
-                (rule.destination ?: if (rule.category == "maps") extractedValue else null)?.let { params[NluIntent.PARAM_DESTINATION] = it }
+                query?.let { params[NluIntent.PARAM_QUERY] = it }
 
-                return NluIntent(domain, action, targetApp, params, 1.0f)
+                return NluIntent(
+                    domain = "custom",
+                    action = "launch",
+                    targetApp = rule.targetPackage,
+                    parameters = params,
+                    confidence = 1.0f,
+                    intentAction = rule.intentAction.ifBlank { null },
+                    uriTemplate = rule.uriTemplate
+                )
             }
         }
 

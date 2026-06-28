@@ -11,13 +11,13 @@ object RegexGenerator {
      * allowing any characters between them and ignoring diacritics.
      * 
      * Input: ["aprinde", "bucătărie"]
-     * Output: "aprinde.*buc[aăâ]t[aăâ]rie"
+     * Output: "\\baprinde\\b.*?\\bbuc[aăâ]t[aăâ]rie\\b"
      */
     fun fromWords(selectedWords: List<String>): String {
         if (selectedWords.isEmpty()) return ""
         
-        return selectedWords.joinToString(".*") { word ->
-            makeDiacriticInsensitive(word.lowercase())
+        return selectedWords.joinToString(".*?") { word ->
+            "\\b" + makeDiacriticInsensitive(word.lowercase()) + "\\b"
         }
     }
 

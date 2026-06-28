@@ -12,6 +12,8 @@ import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
 import com.voxcommander.app.domain.intent.interpreter.OpenAiInterpreter
 import com.voxcommander.app.domain.intent.interpreter.GeminiNanoInterpreter
 import com.voxcommander.app.domain.intent.interpreter.GeminiCloudInterpreter
+import com.voxcommander.app.domain.intent.registry.AppRegistry
+import com.voxcommander.app.domain.intent.router.IntentRouter
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
@@ -53,9 +55,10 @@ class AppContainer(context: Context) {
     val geminiNanoInterpreter = GeminiNanoInterpreter(appContext, settingsRepository)
     val geminiCloudInterpreter = GeminiCloudInterpreter(settingsRepository)
     val masterIntentEngine = IntentDecisionMap(l1Engine, l2Engine, localLlmInterpreter, geminiNanoInterpreter, geminiCloudInterpreter, settingsRepository)
+    val intentRouter = IntentRouter(appContext, settingsRepository)
 
     // --- VIEW MODELS ---
-    val mainViewModel = MainViewModel(masterIntentEngine, appStateManager, languageManager)
+    val mainViewModel = MainViewModel(masterIntentEngine, intentRouter, appStateManager, languageManager)
     val modelManagementViewModel = ModelManagementViewModel(
         settingsRepository,
         appStateManager,
@@ -65,11 +68,19 @@ class AppContainer(context: Context) {
     )
 
     init {
-        android.util.Log.d("AppContainer", "AppContainer init - starting compatibility checks")
-        // Migrate old EncryptedSharedPreferences to DataStore synchronously (runs once, fast)
         kotlinx.coroutines.runBlocking {
             (settingsRepository as SettingsRepositoryImpl).migrateFromSharedPreferencesIfNeeded()
+            // Try loading from cache (fast path). If cache empty, splash screen will scan.
+            val cache = settingsRepository.getSettingsSnapshot().appCacheJson
+            AppRegistry.initFromCache(cache)
+
+            // Load media service settings
+            val snapshot = settingsRepository.getSettingsSnapshot()
+            com.voxcommander.app.service.SpotifyRemoteManager.setClientId(snapshot.spotifyClientId)
+            com.voxcommander.app.domain.intent.handler.PipedSearchHelper.setPipedApiUrl(snapshot.pipedApiUrl)
+            com.voxcommander.app.domain.intent.handler.PipedSearchHelper.setPipedRegion(snapshot.pipedRegion)
         }
+        android.util.Log.d("AppContainer", "AppContainer init - starting compatibility checks")
         checkVulkanCrashCookie()
         detectGeminiSupport()
     }

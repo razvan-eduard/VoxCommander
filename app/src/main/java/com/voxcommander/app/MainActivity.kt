@@ -23,6 +23,7 @@ import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.ui.screens.main.MainScreen
 import com.voxcommander.app.ui.screens.splash.SplashLoadingScreen
 import com.voxcommander.app.ui.theme.VoxCommanderTheme
+import com.voxcommander.app.service.SpotifyPkceManager
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 import com.voxcommander.app.utils.VoiceIntentLauncher
@@ -83,6 +84,9 @@ class MainActivity : ComponentActivity() {
         appContainer.languageManager.loadLanguage(appContainer.settingsRepository.getSettingsSnapshot().language)
         Logger.log("MainActivity: Language loaded: ${appContainer.settingsRepository.getSettingsSnapshot().language}")
 
+        // Handle Spotify PKCE redirect if app was launched via deep link (cold start)
+        handleSpotifyRedirect(intent)
+
         // Google Voice Intent launcher (lifecycle-bound, must live in the Activity)
         voiceIntentLauncher = VoiceIntentLauncher(this) { result ->
             VoiceManager.handleIntentResult(result)
@@ -112,6 +116,7 @@ class MainActivity : ComponentActivity() {
                 if (showSplash) {
                     SplashLoadingScreen(
                         languageManager = appContainer.languageManager,
+                        settingsRepo = appContainer.settingsRepository,
                         onFinished = { showSplash = false }
                     )
                     return@VoxCommanderTheme
@@ -182,6 +187,20 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         appContainer.appStateManager.refreshPermissions()
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSpotifyRedirect(intent)
+    }
+
+    private fun handleSpotifyRedirect(intent: android.content.Intent) {
+        val uri = intent.data ?: return
+        if (uri.scheme == "voxcommander" && uri.host == "spotify") {
+            Logger.log("MainActivity: Spotify PKCE redirect received: $uri")
+            SpotifyPkceManager.handleRedirect(uri)
+        }
     }
 
     override fun onDestroy() {

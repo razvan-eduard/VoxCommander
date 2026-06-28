@@ -19,9 +19,10 @@ import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.domain.intent.model.FastMapRule
 import com.voxcommander.app.data.preferences.SettingsRepository
-import com.voxcommander.app.domain.intent.registry.IntentRegistry
+import com.voxcommander.app.domain.intent.registry.AppRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.ui.components.AppSelectorDropdown
 import com.voxcommander.app.ui.components.VoiceInputTextField
 import com.voxcommander.app.utils.RegexGenerator
 import com.voxcommander.app.utils.Strings
@@ -40,35 +41,33 @@ fun RulesManagerContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    
-    val rules by fastMapDao.getAllRules().collectAsStateWithLifecycle(initialValue = emptyList())
-    
-    var triggerPattern by remember { mutableStateOf("") }
-    var artist by remember { mutableStateOf("") }
-    var track by remember { mutableStateOf("") }
-    var album by remember { mutableStateOf("") }
-    var destination by remember { mutableStateOf("") }
 
-    // Edit State
+    val rules by fastMapDao.getAllRules().collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // Voice input text (shared between trigger and query)
+    var voiceInputText by remember { mutableStateOf("") }
+
+    // Token state — shared tokens from voice input
+    var allTokens by remember { mutableStateOf<List<String>>(emptyList()) }
+    val triggerSelectedIndices = remember { mutableStateListOf<Int>() }
+    val querySelectedIndices = remember { mutableStateListOf<Int>() }
+
+    // App + Intent selection
+    var selectedTargetPackage by remember { mutableStateOf<String?>(null) }
+    var selectedIntentIndex by remember { mutableStateOf(-1) }
+    var availableIntents by remember { mutableStateOf<List<AppRegistry.KnownIntents.IntentOption>>(emptyList()) }
+    var lazyQuery by remember { mutableStateOf(false) }
+
+    // Edit state
     var editingRuleId by remember { mutableStateOf<Long?>(null) }
 
-    // Regex Wizard State
-    var wizardTokens by remember { mutableStateOf<List<String>>(emptyList()) }
-    val selectedWizardIndices = remember { mutableStateListOf<Int>() }
-
-    val categories = remember { IntentRegistry.getAllCategories() }
-    var selectedCategory by remember { mutableStateOf(categories[0]) }
-    var categoryExpanded by remember { mutableStateOf(false) }
-
-    val actions = remember(selectedCategory) { IntentRegistry.getActionsForCategory(selectedCategory) }
-    var selectedAction by remember(selectedCategory) { mutableStateOf(actions[0]) }
-    var actionExpanded by remember { mutableStateOf(false) }
-    
-    // Logic to handle voice input completion for the wizard
+    // Voice input handler — splits into tokens
     val onVoiceResult: (String) -> Unit = { spokenText ->
         if (spokenText.isNotBlank()) {
-            wizardTokens = RegexGenerator.splitIntoTokens(spokenText)
-            selectedWizardIndices.clear()
+            voiceInputText = spokenText
+            allTokens = RegexGenerator.splitIntoTokens(spokenText)
+            triggerSelectedIndices.clear()
+            querySelectedIndices.clear()
         }
     }
 
@@ -76,7 +75,6 @@ fun RulesManagerContent(
     val voiceLanguage = uiState.voiceLanguage
     val voiceProcessor = uiState.voiceProcessor
 
-    // Check if default voice model is on device
     val isDefaultModelOnDevice = remember(voiceProcessor, voiceLanguage) {
         when (voiceProcessor) {
             Strings.Processors.WHISPER_VULKAN -> {
@@ -85,9 +83,7 @@ fun RulesManagerContent(
             }
             Strings.Processors.GOOGLE, Strings.Processors.WHISPER_API -> true
             else -> {
-                // JSON-defined voice engines — check by extension
                 if (com.voxcommander.app.data.remote.RemoteModelRegistry.isZipEngine(voiceProcessor)) {
-                    // Vosk-like (.zip) engine
                     val customPath = uiState.customVoskModelPaths[voiceLanguage]
                     if (!customPath.isNullOrBlank()) {
                         File(customPath).exists()
@@ -97,12 +93,34 @@ fun RulesManagerContent(
                         modelDir != null && modelDir.exists()
                     }
                 } else {
-                    // Whisper-like (.bin) engine
                     val modelId = uiState.activeVoiceModelId
                     modelId != null && uiState.isModelDownloaded(modelId)
                 }
             }
         }
+    }
+
+    // Update available intents when app changes
+    LaunchedEffect(selectedTargetPackage) {
+        if (selectedTargetPackage != null) {
+            availableIntents = AppRegistry.KnownIntents.probeSupported(context, selectedTargetPackage!!)
+            selectedIntentIndex = if (availableIntents.isNotEmpty()) 0 else -1
+        } else {
+            availableIntents = emptyList()
+            selectedIntentIndex = -1
+        }
+    }
+
+    fun resetForm() {
+        voiceInputText = ""
+        allTokens = emptyList()
+        triggerSelectedIndices.clear()
+        querySelectedIndices.clear()
+        selectedTargetPackage = null
+        selectedIntentIndex = -1
+        availableIntents = emptyList()
+        lazyQuery = false
+        editingRuleId = null
     }
 
     Column(
@@ -131,7 +149,7 @@ fun RulesManagerContent(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
-            // --- ADD NEW RULE FORM ---
+            // --- ADD/EDIT RULE FORM ---
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -152,34 +170,28 @@ fun RulesManagerContent(
                                 color = if (editingRuleId == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
                             )
                             if (editingRuleId != null) {
-                                TextButton(onClick = {
-                                    editingRuleId = null
-                                    triggerPattern = ""
-                                    artist = ""
-                                    track = ""
-                                    album = ""
-                                    destination = ""
-                                    wizardTokens = emptyList()
-                                    selectedWizardIndices.clear()
-                                }) {
+                                TextButton(onClick = { resetForm() }) {
                                     Text(languageManager.getString("cancel_edit"), style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
-                        
+
+                        // Voice input
                         VoiceInputTextField(
-                            value = triggerPattern,
-                            onValueChange = { newValue -> 
-                                triggerPattern = newValue
-                                // Populate wizard even when typing manually
-                                if (newValue.isNotBlank() && !newValue.contains(".*")) {
-                                    wizardTokens = RegexGenerator.splitIntoTokens(newValue)
-                                } else if (newValue.isBlank()) {
-                                    wizardTokens = emptyList()
-                                    selectedWizardIndices.clear()
+                            value = voiceInputText,
+                            onValueChange = { newValue ->
+                                voiceInputText = newValue
+                                if (newValue.isNotBlank()) {
+                                    allTokens = RegexGenerator.splitIntoTokens(newValue)
+                                    triggerSelectedIndices.clear()
+                                    querySelectedIndices.clear()
+                                } else {
+                                    allTokens = emptyList()
+                                    triggerSelectedIndices.clear()
+                                    querySelectedIndices.clear()
                                 }
                             },
-                            label = { Text(languageManager.getString("trigger_pattern")) },
+                            label = { Text(languageManager.getString("voice_input_label")) },
                             languageManager = languageManager,
                             voiceLanguage = voiceLanguage,
                             voiceProcessor = voiceProcessor,
@@ -187,151 +199,134 @@ fun RulesManagerContent(
                             onVoiceResult = onVoiceResult
                         )
 
-                        // --- REGEX WIZARD UI ---
-                        if (wizardTokens.isNotEmpty()) {
-                            Card(
+                        // --- DUAL TOKEN SELECTOR ---
+                        if (allTokens.isNotEmpty()) {
+                            // Trigger tokens
+                            TokenSelectorSection(
+                                title = languageManager.getString("trigger_section_title"),
+                                tokens = allTokens,
+                                selectedIndices = triggerSelectedIndices,
+                                greyedIndices = querySelectedIndices,
+                                onToggle = { index ->
+                                    if (triggerSelectedIndices.contains(index)) {
+                                        triggerSelectedIndices.remove(index)
+                                    } else {
+                                        triggerSelectedIndices.add(index)
+                                    }
+                                },
+                                languageManager = languageManager
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Lazy query toggle
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(text = languageManager.getString("regex_wizard_title"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Checkbox(
+                                    checked = lazyQuery,
+                                    onCheckedChange = {
+                                        lazyQuery = it
+                                        if (it) querySelectedIndices.clear()
                                     }
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    
-                                    FlowRow(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        wizardTokens.forEachIndexed { index, token ->
-                                            val isSelected = selectedWizardIndices.contains(index)
-                                            FilterChip(
-                                                selected = isSelected,
-                                                onClick = {
-                                                    if (isSelected) selectedWizardIndices.remove(index)
-                                                    else selectedWizardIndices.add(index)
-                                                    
-                                                    // Update Regex automatically
-                                                    val selectedWords = selectedWizardIndices.sorted().map { wizardTokens[it] }
-                                                    triggerPattern = RegexGenerator.fromWords(selectedWords)
-                                                },
-                                                label = { Text(token) },
-                                                shape = RoundedCornerShape(16.dp)
-                                            )
-                                        }
+                                )
+                                Text(
+                                    text = languageManager.getString("lazy_processing_label"),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+
+                            // Query tokens (disabled when lazy)
+                            TokenSelectorSection(
+                                title = if (lazyQuery) languageManager.getString("query_auto_title") else languageManager.getString("query_manual_title"),
+                                tokens = allTokens,
+                                selectedIndices = querySelectedIndices,
+                                greyedIndices = triggerSelectedIndices,
+                                onToggle = { index ->
+                                    if (lazyQuery) return@TokenSelectorSection
+                                    if (querySelectedIndices.contains(index)) {
+                                        querySelectedIndices.remove(index)
+                                    } else {
+                                        querySelectedIndices.add(index)
                                     }
-                                    
-                                    if (selectedWizardIndices.isEmpty()) {
-                                        Text(
-                                            text = languageManager.getString("regex_wizard_desc"),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                                            modifier = Modifier.padding(top = 4.dp)
+                                },
+                                languageManager = languageManager
+                            )
+                        }
+
+                        // --- APP SELECTOR ---
+                        AppSelectorDropdown(
+                            selectedPackage = selectedTargetPackage,
+                            onAppSelected = { app ->
+                                selectedTargetPackage = app?.packageName
+                            },
+                            domain = null,
+                            label = languageManager.getString("target_app_label"),
+                            modifier = Modifier.fillMaxWidth(),
+                            allowNone = false,
+                            languageManager = languageManager
+                        )
+
+                        // --- INTENT DROPDOWN ---
+                        if (availableIntents.isNotEmpty()) {
+                            var intentExpanded by remember { mutableStateOf(false) }
+                            val selectedOption = availableIntents.getOrNull(selectedIntentIndex) ?: availableIntents.first()
+                            val selectedIntentLabel = selectedOption.variant.label
+
+                            ExposedDropdownMenuBox(
+                                expanded = intentExpanded,
+                                onExpandedChange = { intentExpanded = !intentExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedIntentLabel,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text(languageManager.getString("intent_action_label")) },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = intentExpanded) },
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                                )
+                                ExposedDropdownMenu(expanded = intentExpanded, onDismissRequest = { intentExpanded = false }) {
+                                    availableIntents.forEachIndexed { idx, option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option.variant.label) },
+                                            onClick = {
+                                                selectedIntentIndex = idx
+                                                intentExpanded = false
+                                            }
                                         )
                                     }
                                 }
                             }
                         }
 
-                        // New Fields based on category
-                        if (selectedCategory == "audio") {
-                            OutlinedTextField(
-                                value = artist,
-                                onValueChange = { artist = it },
-                                label = { Text(languageManager.getString("artist_static")) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = track,
-                                onValueChange = { track = it },
-                                label = { Text(languageManager.getString("track_static")) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        } else if (selectedCategory == "maps") {
-                            OutlinedTextField(
-                                value = destination,
-                                onValueChange = { destination = it },
-                                label = { Text(languageManager.getString("destination_static")) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Category Dropdown
-                            ExposedDropdownMenuBox(
-                                expanded = categoryExpanded,
-                                onExpandedChange = { categoryExpanded = !categoryExpanded },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                OutlinedTextField(
-                                    value = selectedCategory,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text(languageManager.getString("category_label")) },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                                )
-                                ExposedDropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
-                                    categories.forEach { category ->
-                                        DropdownMenuItem(text = { Text(category) }, onClick = { selectedCategory = category; categoryExpanded = false })
-                                    }
-                                }
-                            }
-
-                            // Action Dropdown
-                            ExposedDropdownMenuBox(
-                                expanded = actionExpanded,
-                                onExpandedChange = { actionExpanded = !actionExpanded },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                OutlinedTextField(
-                                    value = selectedAction,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text(languageManager.getString("action_label")) },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = actionExpanded) },
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                                )
-                                ExposedDropdownMenu(expanded = actionExpanded, onDismissRequest = { actionExpanded = false }) {
-                                    actions.forEach { action ->
-                                        DropdownMenuItem(text = { Text(action) }, onClick = { selectedAction = action; actionExpanded = false })
-                                    }
-                                }
-                            }
-                        }
+                        // --- SAVE BUTTON ---
+                        val canSave = (triggerSelectedIndices.isNotEmpty() || querySelectedIndices.isNotEmpty() || lazyQuery) &&
+                                      selectedTargetPackage != null
 
                         Button(
                             onClick = {
                                 scope.launch {
+                                    val triggerWords = triggerSelectedIndices.sorted().map { allTokens[it] }
+                                    val queryWords = querySelectedIndices.sorted().map { allTokens[it] }
+                                    val selectedOption = availableIntents.getOrNull(selectedIntentIndex)
                                     val rule = FastMapRule(
                                         id = editingRuleId ?: 0,
-                                        category = selectedCategory,
-                                        actionType = selectedAction,
-                                        triggerPattern = triggerPattern,
-                                        artist = artist.takeIf { it.isNotBlank() },
-                                        track = track.takeIf { it.isNotBlank() },
-                                        album = album.takeIf { it.isNotBlank() },
-                                        destination = destination.takeIf { it.isNotBlank() }
+                                        allWords = allTokens,
+                                        triggerWords = triggerWords,
+                                        queryWords = queryWords,
+                                        targetPackage = selectedTargetPackage ?: "",
+                                        intentAction = selectedOption?.action ?: "",
+                                        uriTemplate = selectedOption?.variant?.uriTemplate,
+                                        lazyQuery = lazyQuery
                                     )
                                     fastMapDao.insertRule(rule)
-                                    
-                                    // Reset form
-                                    triggerPattern = ""
-                                    artist = ""
-                                    track = ""
-                                    album = ""
-                                    destination = ""
-                                    wizardTokens = emptyList()
-                                    selectedWizardIndices.clear()
-                                    editingRuleId = null
+                                    resetForm()
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = triggerPattern.isNotBlank()
+                            enabled = canSave
                         ) {
                             Text(if (editingRuleId == null) languageManager.getString("add_rule_button") else languageManager.getString("update_rule"))
                         }
@@ -344,36 +339,48 @@ fun RulesManagerContent(
                 item {
                     Text(text = languageManager.getString("active_fast_triggers"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                 }
-                
+
                 items(rules) { rule ->
                     RuleItem(
                         rule = rule,
                         isEditing = editingRuleId == rule.id,
                         onClick = {
                             editingRuleId = rule.id
-                            triggerPattern = rule.triggerPattern
-                            artist = rule.artist ?: ""
-                            track = rule.track ?: ""
-                            album = rule.album ?: ""
-                            destination = rule.destination ?: ""
-                            selectedCategory = categories.find { it == rule.category } ?: categories[0]
-                            // selectedAction will be updated by the remember(selectedCategory)
-                            wizardTokens = emptyList()
-                            selectedWizardIndices.clear()
+                            allTokens = rule.allWords
+                            triggerSelectedIndices.clear()
+                            querySelectedIndices.clear()
+                            // Reconstruct selected indices from words
+                            rule.triggerWords.forEach { word ->
+                                val idx = allTokens.indexOf(word)
+                                if (idx >= 0) triggerSelectedIndices.add(idx)
+                            }
+                            rule.queryWords.forEach { word ->
+                                val idx = allTokens.indexOf(word)
+                                if (idx >= 0) querySelectedIndices.add(idx)
+                            }
+                            selectedTargetPackage = rule.targetPackage.ifBlank { null }
+                            lazyQuery = rule.lazyQuery
+                            // Re-probe to get available intents, then find matching index
+                            if (!rule.targetPackage.isNullOrBlank()) {
+                                availableIntents = AppRegistry.KnownIntents.probeSupported(context, rule.targetPackage)
+                                selectedIntentIndex = availableIntents.indexOfFirst {
+                                    it.action == rule.intentAction && it.variant.uriTemplate == rule.uriTemplate
+                                }.let { if (it < 0) 0 else it }
+                            } else {
+                                availableIntents = emptyList()
+                                selectedIntentIndex = -1
+                            }
+                            voiceInputText = rule.allWords.joinToString(" ")
                         },
-                        onDelete = { 
-                            scope.launch { 
+                        onDelete = {
+                            scope.launch {
                                 fastMapDao.deleteRule(rule)
                                 if (editingRuleId == rule.id) {
-                                    editingRuleId = null
-                                    triggerPattern = ""
-                                    artist = ""
-                                    track = ""
-                                    album = ""
-                                    destination = ""
+                                    resetForm()
                                 }
-                            } 
-                        }
+                            }
+                        },
+                        languageManager = languageManager
                     )
                 }
             }
@@ -390,11 +397,67 @@ fun RulesManagerContent(
 }
 
 @Composable
-fun RuleItem(rule: FastMapRule, isEditing: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
+fun TokenSelectorSection(
+    title: String,
+    tokens: List<String>,
+    selectedIndices: List<Int>,
+    greyedIndices: List<Int>,
+    onToggle: (Int) -> Unit,
+    languageManager: LanguageManager
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                tokens.forEachIndexed { index, token ->
+                    val isSelected = selectedIndices.contains(index)
+                    val isGreyed = greyedIndices.contains(index)
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onToggle(index) },
+                        label = { Text(token) },
+                        shape = RoundedCornerShape(16.dp),
+                        enabled = !isGreyed,
+                        colors = FilterChipDefaults.filterChipColors(
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+            }
+
+            if (selectedIndices.isEmpty()) {
+                Text(
+                    text = languageManager.getString("tap_words_hint"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RuleItem(rule: FastMapRule, isEditing: Boolean, onClick: () -> Unit, onDelete: () -> Unit, languageManager: LanguageManager) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         border = androidx.compose.foundation.BorderStroke(
-            width = if (isEditing) 2.dp else 1.dp, 
+            width = if (isEditing) 2.dp else 1.dp,
             color = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
         ),
         onClick = onClick
@@ -404,12 +467,16 @@ fun RuleItem(rule: FastMapRule, isEditing: Boolean, onClick: () -> Unit, onDelet
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = rule.triggerPattern, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                val triggerText = if (rule.triggerWords.isNotEmpty()) rule.triggerWords.joinToString(" ") else languageManager.getString("no_trigger")
+                Text(text = languageManager.getString("trigger_prefix").format(triggerText), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+
                 val detail = buildString {
-                    append("${rule.category} > ${rule.actionType}")
-                    if (rule.artist != null) append(" | Artist: ${rule.artist}")
-                    if (rule.track != null) append(" | Track: ${rule.track}")
-                    if (rule.destination != null) append(" | Dest: ${rule.destination}")
+                    if (rule.queryWords.isNotEmpty()) append(languageManager.getString("query_prefix").format(rule.queryWords.joinToString(" ")))
+                    if (rule.targetPackage.isNotBlank()) {
+                        if (isNotEmpty()) append(" | ")
+                        append(languageManager.getString("app_prefix").format(rule.targetPackage))
+                    }
+                    if (rule.intentAction.isNotBlank()) append(" | Intent: ${rule.intentAction}")
                 }
                 Text(
                     text = detail,

@@ -93,6 +93,26 @@ class SettingsRepositoryImpl(
 
         // Per-engine model selections (stored as JSON map)
         val ENGINE_MODEL_SELECTIONS_JSON = stringPreferencesKey("engine_model_selections_json")
+
+        // Default apps per domain (stored as JSON map: "audio" -> "com.spotify.music")
+        val DEFAULT_APP_PACKAGES_JSON = stringPreferencesKey("default_app_packages_json")
+
+        // Domain -> list of selected packages (stored as JSON map of lists)
+        val DOMAIN_APP_PACKAGES_JSON = stringPreferencesKey("domain_app_packages_json")
+
+        // Custom domain names (stored as JSON list)
+        val CUSTOM_DOMAINS_JSON = stringPreferencesKey("custom_domains_json")
+
+        // Domain -> filter mode (stored as JSON map: "audio" -> "user")
+        val DOMAIN_APP_FILTERS_JSON = stringPreferencesKey("domain_app_filters_json")
+
+        // Cached app list JSON (for fast startup, avoids PackageManager scan)
+        val APP_CACHE_JSON = stringPreferencesKey("app_cache_json")
+
+        // Media / External services
+        val SPOTIFY_CLIENT_ID = stringPreferencesKey("spotify_client_id")
+        val PIPED_API_URL = stringPreferencesKey("piped_api_url")
+        val PIPED_REGION = stringPreferencesKey("piped_region")
     }
 
     private val TAG = "SettingsRepository"
@@ -256,7 +276,21 @@ class SettingsRepositoryImpl(
             modelsJsonCache = prefs[Keys.MODELS_JSON_CACHE],
 
             downloadedModelIds = prefs[Keys.DOWNLOADED_MODEL_IDS] ?: emptySet(),
-            customModelPaths = parseCustomModelPaths(prefs[Keys.CUSTOM_MODEL_PATHS_JSON])
+            customModelPaths = parseCustomModelPaths(prefs[Keys.CUSTOM_MODEL_PATHS_JSON]),
+
+            defaultAppPackages = parseStringMap(prefs[Keys.DEFAULT_APP_PACKAGES_JSON]),
+
+            domainAppPackages = parseStringListMap(prefs[Keys.DOMAIN_APP_PACKAGES_JSON]),
+
+            customDomains = parseStringList(prefs[Keys.CUSTOM_DOMAINS_JSON]),
+
+            domainAppFilters = parseStringMap(prefs[Keys.DOMAIN_APP_FILTERS_JSON]),
+
+            appCacheJson = prefs[Keys.APP_CACHE_JSON],
+
+            spotifyClientId = prefs[Keys.SPOTIFY_CLIENT_ID],
+            pipedApiUrl = prefs[Keys.PIPED_API_URL],
+            pipedRegion = prefs[Keys.PIPED_REGION]
         )
     }
 
@@ -265,6 +299,9 @@ class SettingsRepositoryImpl(
 
     override fun getApiKeySync(): String? = encryptedPrefs.getString("api_key", null)
     override fun getGeminiApiKeySync(): String? = encryptedPrefs.getString("gemini_api_key", null)
+    override fun getSpotifyClientIdSync(): String? = runBlocking { dataStore.data.first()[Keys.SPOTIFY_CLIENT_ID] }
+    override fun getPipedApiUrlSync(): String? = runBlocking { dataStore.data.first()[Keys.PIPED_API_URL] }
+    override fun getPipedRegionSync(): String? = runBlocking { dataStore.data.first()[Keys.PIPED_REGION] }
 
     // --- SYNCHRONOUS WRITE (crash cookie) ---
     override fun setVulkanRuntimeAttemptSync(active: Boolean) {
@@ -468,6 +505,98 @@ class SettingsRepositoryImpl(
         }
     }
 
+    // --- DEFAULT APPS PER DOMAIN ---
+    override suspend fun setDefaultAppPackage(domain: String, packageName: String?) {
+        dataStore.edit { prefs ->
+            val currentMap = parseStringMap(prefs[Keys.DEFAULT_APP_PACKAGES_JSON]).toMutableMap()
+            if (packageName != null) {
+                currentMap[domain] = packageName
+            } else {
+                currentMap.remove(domain)
+            }
+            prefs[Keys.DEFAULT_APP_PACKAGES_JSON] = gson.toJson(currentMap)
+        }
+    }
+
+    override suspend fun setDomainApps(domain: String, packages: List<String>) {
+        dataStore.edit { prefs ->
+            val currentMap = parseStringListMap(prefs[Keys.DOMAIN_APP_PACKAGES_JSON]).toMutableMap()
+            if (packages.isEmpty()) {
+                currentMap.remove(domain)
+            } else {
+                currentMap[domain] = packages
+            }
+            prefs[Keys.DOMAIN_APP_PACKAGES_JSON] = gson.toJson(currentMap)
+        }
+    }
+
+    override suspend fun setDomainAppFilter(domain: String, filter: String) {
+        dataStore.edit { prefs ->
+            val currentMap = parseStringMap(prefs[Keys.DOMAIN_APP_FILTERS_JSON]).toMutableMap()
+            currentMap[domain] = filter
+            prefs[Keys.DOMAIN_APP_FILTERS_JSON] = gson.toJson(currentMap)
+        }
+    }
+
+    override suspend fun setAppCache(json: String) {
+        dataStore.edit { prefs ->
+            prefs[Keys.APP_CACHE_JSON] = json
+        }
+    }
+
+    override suspend fun clearAppCache() {
+        dataStore.edit { prefs ->
+            prefs.remove(Keys.APP_CACHE_JSON)
+        }
+    }
+
+    override suspend fun addCustomDomain(name: String) {
+        dataStore.edit { prefs ->
+            val currentList = parseStringList(prefs[Keys.CUSTOM_DOMAINS_JSON]).toMutableList()
+            if (name !in currentList) {
+                currentList.add(name)
+                prefs[Keys.CUSTOM_DOMAINS_JSON] = gson.toJson(currentList)
+            }
+        }
+    }
+
+    override suspend fun removeCustomDomain(name: String) {
+        dataStore.edit { prefs ->
+            val currentList = parseStringList(prefs[Keys.CUSTOM_DOMAINS_JSON]).toMutableList()
+            currentList.remove(name)
+            prefs[Keys.CUSTOM_DOMAINS_JSON] = gson.toJson(currentList)
+            // Also clean up app selections for this domain
+            val appMap = parseStringListMap(prefs[Keys.DOMAIN_APP_PACKAGES_JSON]).toMutableMap()
+            appMap.remove(name)
+            prefs[Keys.DOMAIN_APP_PACKAGES_JSON] = gson.toJson(appMap)
+            val defaultMap = parseStringMap(prefs[Keys.DEFAULT_APP_PACKAGES_JSON]).toMutableMap()
+            defaultMap.remove(name)
+            prefs[Keys.DEFAULT_APP_PACKAGES_JSON] = gson.toJson(defaultMap)
+        }
+    }
+
+    // --- MEDIA / EXTERNAL SERVICES ---
+    override suspend fun setSpotifyClientId(clientId: String?) {
+        dataStore.edit { prefs ->
+            if (clientId != null) prefs[Keys.SPOTIFY_CLIENT_ID] = clientId
+            else prefs.remove(Keys.SPOTIFY_CLIENT_ID)
+        }
+    }
+
+    override suspend fun setPipedApiUrl(url: String?) {
+        dataStore.edit { prefs ->
+            if (url != null) prefs[Keys.PIPED_API_URL] = url
+            else prefs.remove(Keys.PIPED_API_URL)
+        }
+    }
+
+    override suspend fun setPipedRegion(region: String?) {
+        dataStore.edit { prefs ->
+            if (region != null) prefs[Keys.PIPED_REGION] = region
+            else prefs.remove(Keys.PIPED_REGION)
+        }
+    }
+
     // --- HELPERS ---
     private fun parseCustomModelPaths(json: String?): Map<String, String> = parseStringMap(json)
 
@@ -481,6 +610,33 @@ class SettingsRepositoryImpl(
         } catch (e: Exception) {
             Logger.log("Failed to parse string map: ${e.message}", TAG)
             emptyMap()
+        }
+    }
+
+    private fun parseStringListMap(json: String?): Map<String, List<String>> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return try {
+            val type = com.google.gson.reflect.TypeToken.getParameterized(
+                Map::class.java, String::class.java,
+                com.google.gson.reflect.TypeToken.getParameterized(List::class.java, String::class.java).type
+            ).type
+            gson.fromJson(json, type) ?: emptyMap()
+        } catch (e: Exception) {
+            Logger.log("Failed to parse string list map: ${e.message}", TAG)
+            emptyMap()
+        }
+    }
+
+    private fun parseStringList(json: String?): List<String> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val type = com.google.gson.reflect.TypeToken.getParameterized(
+                List::class.java, String::class.java
+            ).type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (e: Exception) {
+            Logger.log("Failed to parse string list: ${e.message}", TAG)
+            emptyList()
         }
     }
 }

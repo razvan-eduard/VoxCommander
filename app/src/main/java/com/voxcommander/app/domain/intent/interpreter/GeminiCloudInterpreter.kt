@@ -34,7 +34,7 @@ class GeminiCloudInterpreter(
             apiKey = apiKey
         )
 
-        val systemPrompt = PromptProvider.getNluSystemPrompt()
+        val systemPrompt = PromptProvider.getNluSystemPrompt(settingsRepo.getSettingsSnapshot())
 
         try {
             val response = model.generateContent(

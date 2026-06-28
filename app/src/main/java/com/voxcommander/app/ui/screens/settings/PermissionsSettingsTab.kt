@@ -54,6 +54,15 @@ fun PermissionsSettingsTab(
             languageManager = languageManager,
             onClick = onRequestOverlay
         )
+
+        // 4. Query All Packages (normal permission, granted at install)
+        PermissionItem(
+            title = languageManager.getString("permission_query_packages_title") ?: "Query All Packages",
+            desc = languageManager.getString("permission_query_packages_desc") ?: "Required to list installed apps for the Default Apps picker. Granted automatically at install.",
+            isGranted = true,
+            languageManager = languageManager,
+            onClick = {}
+        )
     }
 }
 

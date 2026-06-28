@@ -4,19 +4,25 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * FastMapRule: L1 Trigger rule stored in database.
- * Extended to support full entity extraction aligned with Triple AI architecture.
+ * FastMapRule: L1 trigger rule that bypasses LLM intent processing.
+ * User selects words from voice input to build trigger + query, then picks a target app + intent action.
+ *
+ * @param allWords      All tokens from the voice input (for re-editing).
+ * @param triggerWords  Subset of words selected for trigger matching (can be empty if query is set).
+ * @param queryWords    Subset of words selected as query argument for the intent (can be empty if trigger is set).
+ * @param targetPackage Target app package name.
+ * @param intentAction  Android intent action to fire (e.g. MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).
+ * @param uriTemplate   URI template for ACTION_VIEW intents (e.g. "waze://?q={destination}&navigate=yes"). null = no deep link.
  */
 @Entity(tableName = "fast_map_rules")
 data class FastMapRule(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val category: String,
-    val actionType: String,
-    val triggerPattern: String,
-    // New fields for hybrid alignment
-    val artist: String? = null,
-    val track: String? = null,
-    val album: String? = null,
-    val destination: String? = null
+    val allWords: List<String> = emptyList(),
+    val triggerWords: List<String> = emptyList(),
+    val queryWords: List<String> = emptyList(),
+    val targetPackage: String = "",
+    val intentAction: String = "",
+    val uriTemplate: String? = null,
+    val lazyQuery: Boolean = false
 )

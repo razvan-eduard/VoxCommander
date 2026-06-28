@@ -59,9 +59,30 @@ data class AppSettings(
     val modelRepoBaseUrl: String = Strings.Preferences.DEFAULT_MODEL_REPO_URL,
     val modelsJsonCache: String? = null,
 
+    // --- DEFAULT APPS PER DOMAIN ---
+    /** Map of domain -> package name. e.g. "audio" -> "com.spotify.music" */
+    val defaultAppPackages: Map<String, String> = emptyMap(),
+
+    /** Map of domain -> list of package names the user selected for that domain. */
+    val domainAppPackages: Map<String, List<String>> = emptyMap(),
+
+    /** User-defined custom domain names (e.g. "notes_apps", "fitness"). */
+    val customDomains: List<String> = emptyList(),
+
+    /** Map of domain -> filter mode ("all", "user", "system"). */
+    val domainAppFilters: Map<String, String> = emptyMap(),
+
+    /** Cached list of installed apps as JSON (for fast startup). Null = not scanned yet. */
+    val appCacheJson: String? = null,
+
     // --- MODEL DOWNLOAD STATE ---
     val downloadedModelIds: Set<String> = emptySet(),
-    val customModelPaths: Map<String, String> = emptyMap()
+    val customModelPaths: Map<String, String> = emptyMap(),
+
+    // --- MEDIA / EXTERNAL SERVICES ---
+    val spotifyClientId: String? = null,
+    val pipedApiUrl: String? = null,
+    val pipedRegion: String? = null
 ) {
     /**
      * Key for custom model path: "engineKey" or "engineKey_langCode"

@@ -16,7 +16,11 @@ data class NluIntent(
     val action: String,
     val targetApp: String? = null,
     val parameters: Map<String, String> = emptyMap(),
-    val confidence: Float = 1.0f
+    val confidence: Float = 1.0f,
+    /** Android intent action to fire (used by FastMap rules). null = handler decides. */
+    val intentAction: String? = null,
+    /** URI template for ACTION_VIEW intents (from FastMap rule or probe). null = handler uses resolvedApp.uriTemplates. */
+    val uriTemplate: String? = null
 ) {
     fun param(key: String): String? = parameters[key]
 

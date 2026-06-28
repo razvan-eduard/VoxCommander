@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxcommander.app.domain.intent.interpreter.AssistantEngine
 import com.voxcommander.app.domain.intent.model.NluIntent
+import com.voxcommander.app.domain.intent.router.IntentRouter
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.voxcommander.app.state.VoiceState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +17,7 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(
     private val assistantEngine: AssistantEngine,
+    private val intentRouter: IntentRouter,
     private val appStateManager: AppStateManager,
     private val languageManager: LanguageManager
 ) : ViewModel() {
@@ -45,6 +49,7 @@ class MainViewModel(
                     appStateManager.setVoiceState(VoiceState.PROCESSING)
                     val result = assistantEngine.processCommand(cleanText)
                     _currentIntent.value = result
+                    result?.let { withContext(Dispatchers.IO) { intentRouter.route(it) } }
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
@@ -67,6 +72,7 @@ class MainViewModel(
             try {
                 val result = assistantEngine.processCommand(text)
                 _currentIntent.value = result
+                result?.let { withContext(Dispatchers.IO) { intentRouter.route(it) } }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

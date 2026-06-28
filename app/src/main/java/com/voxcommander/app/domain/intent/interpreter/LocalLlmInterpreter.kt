@@ -67,7 +67,7 @@ class LocalLlmInterpreter(
         setupLlm()
         val engine = llmInference ?: return@withContext null
 
-        val hydratedPrompt = PromptProvider.getNluPrompt(spokenText)
+        val hydratedPrompt = PromptProvider.getNluPrompt(spokenText, settingsRepo.getSettingsSnapshot())
 
         try {
             val response = engine.generateResponse(hydratedPrompt)

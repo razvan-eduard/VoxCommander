@@ -23,6 +23,7 @@ import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.components.MicrophoneButton
+import com.voxcommander.app.ui.components.AppScanModal
 import com.voxcommander.app.ui.components.ModelNotPresentMessage
 import com.voxcommander.app.ui.components.TopHeaderContainer
 import com.voxcommander.app.ui.components.TopHeaderMode
@@ -183,6 +184,13 @@ fun MainScreen(
             vulkanTestState = appStateManager.vulkanTestState.collectAsStateWithLifecycle().value,
             vulkanTestPassed = appStateManager.vulkanTestPassed.collectAsStateWithLifecycle().value,
             onDismiss = { appStateManager.dismissVulkanTestResult() },
+            languageManager = languageManager
+        )
+
+        // --- APP SCAN MODAL ---
+        AppScanModal(
+            scanState = appStateManager.appScanState.collectAsStateWithLifecycle().value,
+            onDismiss = { appStateManager.dismissAppScanResult() },
             languageManager = languageManager
         )
     }

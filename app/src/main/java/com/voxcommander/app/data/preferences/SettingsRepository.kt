@@ -84,4 +84,21 @@ interface SettingsRepository {
 
     // --- CUSTOM MODEL PATHS ---
     suspend fun setCustomModelPath(engineKey: String, path: String, langCode: String? = null)
+
+    // --- DEFAULT APPS PER DOMAIN ---
+    suspend fun setDefaultAppPackage(domain: String, packageName: String?)
+    suspend fun setDomainApps(domain: String, packages: List<String>)
+    suspend fun setDomainAppFilter(domain: String, filter: String)
+    suspend fun setAppCache(json: String)
+    suspend fun clearAppCache()
+    suspend fun addCustomDomain(name: String)
+    suspend fun removeCustomDomain(name: String)
+
+    // --- MEDIA / EXTERNAL SERVICES ---
+    fun getSpotifyClientIdSync(): String?
+    fun getPipedApiUrlSync(): String?
+    fun getPipedRegionSync(): String?
+    suspend fun setSpotifyClientId(clientId: String?)
+    suspend fun setPipedApiUrl(url: String?)
+    suspend fun setPipedRegion(region: String?)
 }

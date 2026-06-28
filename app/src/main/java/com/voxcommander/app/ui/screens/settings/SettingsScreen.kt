@@ -54,7 +54,7 @@ fun SettingsContent(
     // REALTIME STATE - observe AppStateManager uiState for reactive updates
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
     
-    val pagerState = rememberPagerState(pageCount = { 7 })
+    val pagerState = rememberPagerState(pageCount = { 9 })
 
     val isVoskLoading by modelManagementViewModel.isVoskLoading.collectAsStateWithLifecycle()
     val isVoskOffline by modelManagementViewModel.isVoskOffline.collectAsStateWithLifecycle()
@@ -103,7 +103,7 @@ fun SettingsContent(
                             },
                             modifier = Modifier.padding(bottom = 12.dp)
                         ) {
-                            val tabs = listOf("tab_general", "tab_permissions", "tab_models", "tab_service", "tab_benchmark", "tab_advanced", "tab_verbose_logging")
+                            val tabs = listOf("tab_general", "tab_permissions", "tab_models", "tab_service", "tab_benchmark", "tab_advanced", "tab_verbose_logging", "tab_default_apps", "tab_integrations")
                             
                             tabs.forEachIndexed { index, tabKey ->
                                 val selected = pagerState.currentPage == index
@@ -204,6 +204,15 @@ fun SettingsContent(
                                     refreshTrigger = uiState.refreshTrigger
                                 )
                                 6 -> VerboseLoggingTab(languageManager, uiState.isVerboseLoggingEnabled)
+                                7 -> DefaultAppsTab(
+                                    languageManager = languageManager,
+                                    settingsRepo = settingsRepo,
+                                    appStateManager = appStateManager
+                                )
+                                8 -> IntegrationsTab(
+                                    languageManager = languageManager,
+                                    settingsRepo = settingsRepo
+                                )
                             }
                         }
                     }

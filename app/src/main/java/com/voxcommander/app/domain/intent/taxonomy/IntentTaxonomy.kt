@@ -41,6 +41,19 @@ object IntentTaxonomy {
     }
 
     /**
+     * Returns valid actions for a given domain.
+     * Custom domains get a generic "launch" action.
+     */
+    fun getActionsForDomain(domain: String): List<String> = when (domain) {
+        Domains.AUDIO -> listOf(Actions.PLAY, Actions.PAUSE, Actions.NEXT, Actions.PREV)
+        Domains.SETTINGS -> listOf(Actions.VOLUME_UP, Actions.VOLUME_DOWN, Actions.WIFI_TOGGLE, Actions.BLUETOOTH_TOGGLE)
+        Domains.MAPS -> listOf(Actions.NAVIGATE)
+        Domains.MESSAGING -> listOf(Actions.SEND)
+        Domains.SYSTEM, Domains.HOME -> listOf("toggle", "status")
+        else -> listOf("launch")
+    }
+
+    /**
      * Maps legacy actionType values (from old IntentPayload / FastMapRule) to new domain+action pairs.
      * Used for backward compatibility with existing FastMap rules.
      */
@@ -48,8 +61,8 @@ object IntentTaxonomy {
         data class Mapped(val domain: String, val action: String, val targetApp: String?)
 
         fun fromActionType(actionType: String): Mapped? = when (actionType) {
-            "audio_youtube" -> Mapped(Domains.AUDIO, Actions.PLAY, "youtube")
-            "audio_spotify" -> Mapped(Domains.AUDIO, Actions.PLAY, "spotify")
+            "audio_youtube" -> Mapped(Domains.AUDIO, Actions.PLAY, "com.google.android.youtube")
+            "audio_spotify" -> Mapped(Domains.AUDIO, Actions.PLAY, "com.spotify.music")
             "media_pause" -> Mapped(Domains.AUDIO, Actions.PAUSE, null)
             "media_play" -> Mapped(Domains.AUDIO, Actions.PLAY, null)
             "media_next" -> Mapped(Domains.AUDIO, Actions.NEXT, null)
@@ -58,8 +71,8 @@ object IntentTaxonomy {
             "vol_down" -> Mapped(Domains.SETTINGS, Actions.VOLUME_DOWN, null)
             "wifi_toggle" -> Mapped(Domains.SETTINGS, Actions.WIFI_TOGGLE, null)
             "bluetooth_toggle" -> Mapped(Domains.SETTINGS, Actions.BLUETOOTH_TOGGLE, null)
-            "waze_nav" -> Mapped(Domains.MAPS, Actions.NAVIGATE, "waze")
-            "maps_nav" -> Mapped(Domains.MAPS, Actions.NAVIGATE, "google maps")
+            "waze_nav" -> Mapped(Domains.MAPS, Actions.NAVIGATE, "com.waze")
+            "maps_nav" -> Mapped(Domains.MAPS, Actions.NAVIGATE, "com.google.android.apps.maps")
             else -> null
         }
     }
