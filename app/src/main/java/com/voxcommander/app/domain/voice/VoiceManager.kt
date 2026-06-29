@@ -31,6 +31,7 @@ object VoiceManager {
     private var googleSttEngine: GoogleSttEngine? = null
     private var voskSttEngine: VoskSttEngine? = null
 
+    @android.annotation.SuppressLint("StaticFieldLeak")
     private var context: Context? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var stateObservationJob: Job? = null
@@ -50,6 +51,19 @@ object VoiceManager {
     val partialTranscriptionFlow: StateFlow<String> = _partialTranscriptionFlow.asStateFlow()
 
     private var launchGoogleIntentCallback: ((String) -> Unit)? = null
+
+    fun setCalibrationListening(active: Boolean) {
+        _isListeningFlow.value = active
+        if (active) {
+            appStateManager?.setVoiceState(VoiceState.LISTENING_COMMAND)
+        } else {
+            _volumeFlow.value = 0f
+        }
+    }
+
+    fun setCalibrationVolume(volume: Float) {
+        _volumeFlow.value = volume
+    }
 
     class RecordingQuality(val sampleRate: Int, val description: String) {
         companion object {
@@ -336,7 +350,14 @@ object VoiceManager {
                 }
             } finally {
                 withContext(Dispatchers.Main) { 
-                    updateListeningState(false) 
+                    if (appStateManager?.uiState?.value?.voiceState == VoiceState.PROCESSING) {
+                        // Callback already set PROCESSING — don't override with IDLE
+                        isListening = false
+                        _isListeningFlow.value = false
+                        _volumeFlow.value = 0f
+                    } else {
+                        updateListeningState(false) 
+                    }
                 }
             }
         }

@@ -65,6 +65,7 @@ object Strings {
         const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
         const val KEY_WAKE_WORD = "wake_word"
         const val KEY_WAKE_WORD_MODEL_PATH = "wake_word_model_path"
+        const val KEY_WAKE_WORD_PROFILE = "wake_word_profile"
         const val KEY_VERBOSE_LOGGING = "verbose_logging_enabled"
         const val KEY_OFFLINE_FALLBACK_TIMEOUT = "offline_fallback_timeout"
         const val KEY_CLOUD_INTELLIGENCE_ENABLED = "cloud_intelligence_enabled"

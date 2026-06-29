@@ -111,8 +111,8 @@ class WhisperCppSttEngine(
         try {
             val floatAudio = pcm16ToFloat(audio)
 
-            // Conservative thread count for CPU (NEON)
-            val threads = if (isUsingGpu) 1 else 2
+            // Use 4 threads on CPU for faster inference on modern multi-core devices
+            val threads = if (isUsingGpu) 1 else 4
 
             Logger.log(
                 "Transcribing using ${if (isUsingGpu) "VULKAN" else "CPU"} ($threads threads), Lang: ${langCode ?: "auto"}",

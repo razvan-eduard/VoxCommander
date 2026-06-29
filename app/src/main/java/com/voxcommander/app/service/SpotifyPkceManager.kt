@@ -44,6 +44,9 @@ object SpotifyPkceManager {
     var isAuthorized: Boolean = false
         private set
 
+    var cachedDeviceId: String? = null
+        private set
+
     private var settingsRepo: SettingsRepository? = null
 
     /**
@@ -53,6 +56,10 @@ object SpotifyPkceManager {
     fun init(repo: SettingsRepository) {
         settingsRepo = repo
         loadPersistedTokens()
+        cachedDeviceId = repo.getSpotifyDeviceIdSync()
+        if (cachedDeviceId != null) {
+            Logger.log("PKCE cached device ID loaded: ${cachedDeviceId!!.take(8)}...", TAG)
+        }
     }
 
     private fun loadPersistedTokens() {
@@ -71,7 +78,8 @@ object SpotifyPkceManager {
             // Access token expired but we have refresh token — will refresh on demand
             refreshToken = refresh
             tokenExpiry = 0
-            Logger.log("PKCE refresh token loaded, access token expired", TAG)
+            isAuthorized = true
+            Logger.log("PKCE refresh token loaded, access token expired — will refresh on demand", TAG)
         }
     }
 
@@ -156,7 +164,8 @@ object SpotifyPkceManager {
                 val tokenResponse = exchangeCodeForToken(code)
                 if (tokenResponse != null) {
                     accessToken = tokenResponse.getString("access_token")
-                    refreshToken = tokenResponse.optString("refresh_token", null)
+                    val newRefresh = tokenResponse.optString("refresh_token", "")
+                    if (newRefresh.isNotBlank()) refreshToken = newRefresh
                     val expiresIn = tokenResponse.optLong("expires_in", 3600)
                     tokenExpiry = System.currentTimeMillis() + expiresIn * 1000
                     isAuthorized = true
@@ -241,6 +250,10 @@ object SpotifyPkceManager {
                 accessToken = json.getString("access_token")
                 val expiresIn = json.optLong("expires_in", 3600)
                 tokenExpiry = System.currentTimeMillis() + expiresIn * 1000
+                // Update refresh token if a new one is provided
+                val newRefresh = json.optString("refresh_token", "")
+                if (newRefresh.isNotBlank()) refreshToken = newRefresh
+                persistTokens()
                 Logger.log("Token refreshed successfully", TAG)
                 true
             } else {
@@ -266,15 +279,28 @@ object SpotifyPkceManager {
         return if (refreshed) accessToken else null
     }
 
+    fun setCachedDeviceId(deviceId: String?) {
+        cachedDeviceId = deviceId
+        val repo = settingsRepo
+        if (repo != null && deviceId != null) {
+            kotlinx.coroutines.runBlocking { repo.setSpotifyDeviceId(deviceId) }
+            Logger.log("PKCE device ID cached: ${deviceId.take(8)}...", TAG)
+        }
+    }
+
     fun logout() {
         accessToken = null
         refreshToken = null
         tokenExpiry = 0
         isAuthorized = false
+        cachedDeviceId = null
         codeVerifier = null
         pendingClientId = null
         authCallback = null
         persistTokens()
+        settingsRepo?.let { repo ->
+            kotlinx.coroutines.runBlocking { repo.setSpotifyDeviceId(null) }
+        }
         Logger.log("PKCE logout", TAG)
     }
 

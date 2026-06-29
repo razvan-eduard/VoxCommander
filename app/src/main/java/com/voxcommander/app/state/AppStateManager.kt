@@ -244,6 +244,18 @@ class AppStateManager private constructor(
         scope.launch { repo.setWakeWordEnabled(enabled) }
     }
 
+    fun setCommandQueueEnabled(enabled: Boolean) {
+        scope.launch { repo.setCommandQueueEnabled(enabled) }
+    }
+
+    fun setWakeWordProfile(profileJson: String?) {
+        scope.launch { repo.setWakeWordProfile(profileJson) }
+    }
+
+    fun clearWakeWordProfile() {
+        scope.launch { repo.setWakeWordProfile(null) }
+    }
+
     fun setWakeWordServiceListening(listening: Boolean) {
         updateRuntime { copy(isWakeWordServiceListening = listening) }
     }

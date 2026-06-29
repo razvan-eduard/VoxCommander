@@ -10,6 +10,8 @@ import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * A real implementation of the local offline STT engine using Vosk.
@@ -75,7 +77,8 @@ class VoskSttEngine(
         }
         
         activeRecognizer?.let {
-            it.acceptWaveForm(audio, audio.size)
+            val shorts = byteArrayToShorts(audio)
+            it.acceptWaveForm(shorts, shorts.size)
             val partialJson = it.partialResult
             return@withContext try {
                 JSONObject(partialJson).optString(JSON_KEY_PARTIAL, "")
@@ -91,15 +94,10 @@ class VoskSttEngine(
         val currentModel = model ?: return@withContext "Error: Vosk Model ($langCode) not found."
         
         val result = try {
-            // Vosk expects 16-bit PCM Mono. Convert to ShortArray for cleaner processing if needed,
-            // but the recognizer accepts ByteArray and handles it if the format matches SAMPLE_RATE.
-            // Ensure we are passing correct byte length.
+            // Reuse the active recognizer if available, otherwise create a fresh one
             val recognizer = activeRecognizer ?: Recognizer(currentModel, SAMPLE_RATE)
-            
-            // Critical: If we just created the recognizer, we need to feed it the whole buffer
-            if (activeRecognizer == null) {
-                recognizer.acceptWaveForm(audio, audio.size)
-            }
+            val shorts = byteArrayToShorts(audio)
+            recognizer.acceptWaveForm(shorts, shorts.size)
 
             val resultJson = recognizer.finalResult
             JSONObject(resultJson).optString(JSON_KEY_TEXT, "")
@@ -111,6 +109,12 @@ class VoskSttEngine(
             activeRecognizer = null
         }
         return@withContext result
+    }
+
+    private fun byteArrayToShorts(audio: ByteArray): ShortArray {
+        val shorts = ShortArray(audio.size / 2)
+        ByteBuffer.wrap(audio).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shorts)
+        return shorts
     }
 
     override fun releaseHardware() {

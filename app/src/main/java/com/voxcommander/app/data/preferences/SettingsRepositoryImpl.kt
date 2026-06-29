@@ -58,6 +58,8 @@ class SettingsRepositoryImpl(
         val WAKE_WORD = stringPreferencesKey("wake_word")
         val WAKE_WORD_ENABLED = booleanPreferencesKey("wake_word_enabled")
         val WAKE_WORD_MODEL_PATH = stringPreferencesKey("wake_word_model_path")
+        val COMMAND_QUEUE_ENABLED = booleanPreferencesKey("command_queue_enabled")
+        val WAKE_WORD_PROFILE = stringPreferencesKey("wake_word_profile")
 
         // Offline fallback
         val OFFLINE_FALLBACK_TIMEOUT = intPreferencesKey("offline_fallback_timeout")
@@ -253,6 +255,8 @@ class SettingsRepositoryImpl(
             wakeWord = prefs[Keys.WAKE_WORD] ?: "hi vosk",
             wakeWordEnabled = prefs[Keys.WAKE_WORD_ENABLED] ?: false,
             wakeWordModelPath = prefs[Keys.WAKE_WORD_MODEL_PATH],
+            commandQueueEnabled = prefs[Keys.COMMAND_QUEUE_ENABLED] ?: true,
+            wakeWordProfileJson = prefs[Keys.WAKE_WORD_PROFILE],
 
             offlineFallbackTimeout = prefs[Keys.OFFLINE_FALLBACK_TIMEOUT] ?: 10,
             defaultOfflineModel = prefs[Keys.DEFAULT_OFFLINE_MODEL] ?: "tiny",
@@ -379,6 +383,21 @@ class SettingsRepositoryImpl(
 
     override suspend fun setWakeWordEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.WAKE_WORD_ENABLED] = enabled }
+    }
+
+    override suspend fun setCommandQueueEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.COMMAND_QUEUE_ENABLED] = enabled }
+    }
+
+    override suspend fun setWakeWordProfile(profileJson: String?) {
+        dataStore.edit { prefs ->
+            if (profileJson != null) prefs[Keys.WAKE_WORD_PROFILE] = profileJson
+            else prefs.remove(Keys.WAKE_WORD_PROFILE)
+        }
+    }
+
+    override fun getWakeWordProfileJson(): String? {
+        return runBlocking { dataStore.data.first()[Keys.WAKE_WORD_PROFILE] }
     }
 
     override suspend fun setWakeWordModelPath(path: String?) {
@@ -607,6 +626,15 @@ class SettingsRepositoryImpl(
             if (accessToken != null) putString("spotify_access_token", accessToken) else remove("spotify_access_token")
             if (refreshToken != null) putString("spotify_refresh_token", refreshToken) else remove("spotify_refresh_token")
             putLong("spotify_token_expiry", expiry)
+        }.apply()
+    }
+
+    // --- SPOTIFY DEVICE ID (stored in encrypted prefs) ---
+    override fun getSpotifyDeviceIdSync(): String? = encryptedPrefs.getString("spotify_device_id", null)
+
+    override suspend fun setSpotifyDeviceId(deviceId: String?) {
+        encryptedPrefs.edit().apply {
+            if (deviceId != null) putString("spotify_device_id", deviceId) else remove("spotify_device_id")
         }.apply()
     }
 

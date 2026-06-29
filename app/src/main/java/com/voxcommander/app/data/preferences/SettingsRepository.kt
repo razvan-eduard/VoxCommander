@@ -49,6 +49,9 @@ interface SettingsRepository {
     suspend fun setWakeWord(word: String)
     suspend fun setWakeWordEnabled(enabled: Boolean)
     suspend fun setWakeWordModelPath(path: String?)
+    suspend fun setCommandQueueEnabled(enabled: Boolean)
+    suspend fun setWakeWordProfile(profileJson: String?)
+    fun getWakeWordProfileJson(): String?
 
     // --- OFFLINE FALLBACK ---
     suspend fun setOfflineFallbackTimeout(seconds: Int)
@@ -107,4 +110,8 @@ interface SettingsRepository {
     fun getSpotifyRefreshTokenSync(): String?
     fun getSpotifyTokenExpirySync(): Long
     suspend fun setSpotifyTokens(accessToken: String?, refreshToken: String?, expiry: Long)
+
+    // --- SPOTIFY DEVICE ID ---
+    fun getSpotifyDeviceIdSync(): String?
+    suspend fun setSpotifyDeviceId(deviceId: String?)
 }

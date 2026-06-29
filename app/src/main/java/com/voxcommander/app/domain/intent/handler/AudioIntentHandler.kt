@@ -66,9 +66,18 @@ class AudioIntentHandler : IntentHandler {
         // 0. For Spotify, try Web API first (uses PKCE token for direct playback)
         if (pkg == "com.spotify.music" && SpotifyPkceManager.isAuthorized) {
             val clientId = SpotifyRemoteManager.getClientId()
-            if (clientId != null && SpotifyWebApi.playSearch(clientId, query)) {
-                Logger.log("playSearch via Spotify Web API succeeded", TAG)
-                return true
+            if (clientId != null) {
+                // Launch Spotify app first so the phone registers as an available device
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
+                if (launchIntent != null) {
+                    launchIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    try { context.startActivity(launchIntent) } catch (_: Exception) {}
+                    Thread.sleep(3000) // Wait for Spotify to connect and register as a device
+                }
+                if (SpotifyWebApi.playSearch(clientId, query)) {
+                    Logger.log("playSearch via Spotify Web API succeeded", TAG)
+                    return true
+                }
             }
             Logger.log("Spotify Web API failed, falling back to intent", TAG)
         }

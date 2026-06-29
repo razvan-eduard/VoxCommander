@@ -32,6 +32,8 @@ data class AppSettings(
     val wakeWord: String = "hi vosk",
     val wakeWordEnabled: Boolean = false,
     val wakeWordModelPath: String? = null,
+    val commandQueueEnabled: Boolean = true,
+    val wakeWordProfileJson: String? = null,
 
     // --- OFFLINE FALLBACK ---
     val offlineFallbackTimeout: Int = 10,

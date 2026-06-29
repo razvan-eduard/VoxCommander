@@ -53,10 +53,25 @@ object SpotifyWebApi {
 
         Logger.log("SpotifyWebApi: found track $trackUri, starting playback", TAG)
 
-        // 2. Find the best device (prefer this phone)
+        // 2. Try cached device ID first
+        val cachedDeviceId = SpotifyPkceManager.cachedDeviceId
+        if (cachedDeviceId != null) {
+            Logger.log("SpotifyWebApi: trying cached device ${cachedDeviceId.take(8)}...", TAG)
+            transferPlayback(token, cachedDeviceId)
+            Thread.sleep(500)
+            if (startPlaybackOnDevice(token, trackUri, cachedDeviceId)) {
+                Logger.log("SpotifyWebApi: playback started on cached device", TAG)
+                return true
+            }
+            Logger.log("SpotifyWebApi: cached device failed, discovering fresh...", TAG)
+        }
+
+        // 3. Discover available devices
         val deviceId = findAvailableDevice(token)
         if (deviceId != null) {
-            // Transfer playback to the selected device, then play
+            // Cache the device ID for future use
+            SpotifyPkceManager.setCachedDeviceId(deviceId)
+
             Logger.log("SpotifyWebApi: transferring playback to device $deviceId", TAG)
             transferPlayback(token, deviceId)
             Thread.sleep(500)
@@ -73,7 +88,7 @@ object SpotifyWebApi {
             }
         }
 
-        // 3. Fallback: try playing on active device
+        // 4. Fallback: try playing on active device
         val played = startPlayback(token, trackUri)
         if (played) {
             Logger.log("SpotifyWebApi: playback started on active device", TAG)

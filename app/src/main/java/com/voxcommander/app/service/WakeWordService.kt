@@ -82,10 +82,22 @@ class WakeWordService : Service() {
                     val uiState = appStateManager.uiState.value
                     
                     val container = (application as com.voxcommander.app.VoxApplication).container
-                    container.mainViewModel.processVoiceCommand(
-                        uiState.voiceLanguage,
-                        uiState.voiceProcessor
-                    )
+                    if (uiState.voiceState == VoiceState.PROCESSING && uiState.commandQueueEnabled) {
+                        // AI is busy and queue is enabled — queue the new command
+                        Logger.log("AI busy (PROCESSING) — enqueuing voice command", TAG)
+                        container.mainViewModel.enqueueVoiceCommand(
+                            uiState.voiceLanguage,
+                            uiState.voiceProcessor
+                        )
+                    } else if (uiState.voiceState == VoiceState.PROCESSING) {
+                        // Queue disabled — ignore second trigger while busy
+                        Logger.log("AI busy but queue disabled — ignoring wake word", TAG)
+                    } else {
+                        container.mainViewModel.processVoiceCommand(
+                            uiState.voiceLanguage,
+                            uiState.voiceProcessor
+                        )
+                    }
                     
                     delay(500)
                     appStateManager.resetWakeWordDetection()
@@ -202,6 +214,9 @@ class WakeWordService : Service() {
 
     private fun onWakeWordDetected() {
         Logger.log("Wake word detected!", TAG)
+        // Stop AudioRecord and release audio focus IMMEDIATELY before anything else
+        // so other apps (Spotify etc.) can reclaim audio and VoiceManager can grab the mic
+        wakeWordEngine?.stopListening()
         appStateManager.onWakeWordDetected()
         playHapticFeedback()
     }
@@ -213,8 +228,14 @@ class WakeWordService : Service() {
         when (state) {
             VoiceState.IDLE -> {
                 if (isServiceActive && currentUiState.isWakeWordServiceListening) {
-                    wakeWordEngine?.startListening()
-                    updateNotification()
+                    serviceScope.launch {
+                        delay(1500) // Cooldown: let Vosk buffer flush before restarting
+                        if (appStateManager.uiState.value.voiceState == VoiceState.IDLE &&
+                            appStateManager.uiState.value.isWakeWordServiceListening) {
+                            wakeWordEngine?.startListening()
+                            updateNotification()
+                        }
+                    }
                 }
             }
             VoiceState.LISTENING_WAKEWORD -> {
@@ -222,11 +243,16 @@ class WakeWordService : Service() {
             }
             VoiceState.LISTENING_COMMAND -> {
                 wakeWordEngine?.stopListening()
-                updateNotification(languageManager.getString("ww_paused_app_listening"))
+                updateNotification(languageManager.getString("vox_listening"))
             }
             VoiceState.PROCESSING -> {
-                wakeWordEngine?.stopListening()
-                updateNotification(languageManager.getString("ww_paused_ai_thinking"))
+                if (currentUiState.commandQueueEnabled) {
+                    // Keep WW running during PROCESSING so user can queue next command
+                    Logger.log("WW staying active during PROCESSING (queue mode)", TAG)
+                } else {
+                    wakeWordEngine?.stopListening()
+                    updateNotification(languageManager.getString("ww_paused_ai_thinking"))
+                }
             }
             VoiceState.BENCHMARKING -> {
                 wakeWordEngine?.stopListening()
@@ -266,10 +292,14 @@ class WakeWordService : Service() {
         val uiState = appStateManager.uiState.value
         val isListening = uiState.isWakeWordServiceListening
 
-        val finalContentText = contentText ?: if (isListening) {
-            languageManager.getString("ww_listening_for").format(settingsRepo.getSettingsSnapshot().wakeWord)
-        } else {
-            languageManager.getString("ww_paused")
+        val voiceState = uiState.voiceState
+        val hasVoiceProfile = settingsRepo.getWakeWordProfileJson() != null
+        val finalContentText = contentText ?: when {
+            voiceState == VoiceState.LISTENING_COMMAND -> languageManager.getString("vox_listening")
+            voiceState == VoiceState.PROCESSING -> languageManager.getString("ww_paused_ai_thinking")
+            isListening && hasVoiceProfile -> languageManager.getString("vox_listening")
+            isListening -> languageManager.getString("ww_listening_for").format(settingsRepo.getSettingsSnapshot().wakeWord)
+            else -> languageManager.getString("ww_paused")
         }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)

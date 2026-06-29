@@ -3,20 +3,27 @@ package com.voxcommander.app.ui.screens.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
+import com.voxcommander.app.domain.voice.VoiceManager
+import com.voxcommander.app.domain.voice.WakeWordCalibrator
+import com.voxcommander.app.domain.voice.WakeWordProfile
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.components.DropdownGroup
 import com.voxcommander.app.ui.components.GroupedDropdownContent
 import com.voxcommander.app.ui.components.GroupedDropdownMenu
 import com.voxcommander.app.ui.components.VoiceInputTextField
+import com.voxcommander.app.ui.screens.main.ListeningScreen
 import com.voxcommander.app.utils.Strings
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +95,21 @@ fun ServiceSettingsTab(
     }
 
     if (uiState.wakeWordEnabled) {
+        // Command Queue Toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(languageManager.getString("command_queue_enabled"))
+            Switch(
+                checked = uiState.commandQueueEnabled,
+                onCheckedChange = { enabled ->
+                    appStateManager.setCommandQueueEnabled(enabled)
+                }
+            )
+        }
+
         // Voice Language Selection (only for non-multilingual Vosk)
         if (!isVoskMultilingual && availableVoskLanguages.isNotEmpty()) {
             val languages = availableVoskLanguages.map { lang ->
@@ -130,21 +152,155 @@ fun ServiceSettingsTab(
             HorizontalDivider()
         }
 
+        // Voice Calibration Card
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Text(
+            text = languageManager.getString("ww_calibrate_title"),
+            style = MaterialTheme.typography.labelLarge
+        )
+        Text(
+            text = languageManager.getString("ww_calibrate_desc"),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        val context = LocalContext.current
+        val calibrator = remember { WakeWordCalibrator(context) { } }
+        val calibrationState by calibrator.state.collectAsStateWithLifecycle()
+        val hasProfile = uiState.wakeWordProfileJson != null
+        var showCalibrationDialog by remember { mutableStateOf(false) }
+
+        // Show current profile status
+        if (hasProfile) {
+            Text(
+                text = languageManager.getString("ww_calibrate_profile"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Text(
+                text = languageManager.getString("ww_calibrate_default"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Auto-save profile on completion
+        LaunchedEffect(calibrationState) {
+            if (calibrationState is WakeWordCalibrator.CalibrationState.Complete) {
+                VoiceManager.setCalibrationListening(false)
+                val profile = (calibrationState as WakeWordCalibrator.CalibrationState.Complete).profile
+                appStateManager.setWakeWordProfile(WakeWordProfile.toJson(profile))
+                delay(1500)
+                showCalibrationDialog = false
+                calibrator.stop()
+            } else if (calibrationState is WakeWordCalibrator.CalibrationState.Failed) {
+                VoiceManager.setCalibrationListening(false)
+                delay(3000)
+                calibrator.stop()
+            } else if (calibrationState is WakeWordCalibrator.CalibrationState.Listening) {
+                VoiceManager.setCalibrationListening(true)
+            } else if (calibrationState is WakeWordCalibrator.CalibrationState.Analyzing) {
+                VoiceManager.setCalibrationListening(false)
+            } else if (calibrationState is WakeWordCalibrator.CalibrationState.Waiting) {
+                VoiceManager.setCalibrationListening(false)
+            }
+        }
+
+        // Pipe calibrator volume to VoiceManager so ListeningScreen shows live audio
+        LaunchedEffect(calibrator) {
+            calibrator.volumeFlow.collect { vol ->
+                VoiceManager.setCalibrationVolume(vol)
+            }
+        }
+
+        // Calibration buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val isCalibrating = calibrationState is WakeWordCalibrator.CalibrationState.Waiting ||
+                calibrationState is WakeWordCalibrator.CalibrationState.Listening ||
+                calibrationState is WakeWordCalibrator.CalibrationState.Analyzing
+
+            Button(
+                onClick = {
+                    showCalibrationDialog = true
+                    calibrator.startCalibration()
+                },
+                enabled = !isCalibrating && !hasProfile,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(languageManager.getString("ww_calibrate_start"))
+            }
+
+            if (hasProfile) {
+                OutlinedButton(
+                    onClick = { appStateManager.clearWakeWordProfile() },
+                    enabled = !isCalibrating,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(languageManager.getString("ww_calibrate_delete"))
+                }
+            }
+        }
+
+        // Calibration Dialog
+        if (showCalibrationDialog) {
+            CalibrationDialog(
+                state = calibrationState,
+                languageManager = languageManager,
+                appStateManager = appStateManager,
+                onReady = { round -> calibrator.signalReady(round) },
+                onDismiss = {
+                    VoiceManager.setCalibrationListening(false)
+                    calibrator.stop()
+                    showCalibrationDialog = false
+                }
+            )
+        }
+
         // Wake Word Text Field
         val isWakeWordModelOnDevice = remember(selectedWakeWordModel, refreshTrigger) {
             selectedWakeWordModel != null && uiState.isModelDownloaded(selectedWakeWordModel.id)
         }
 
+        // Local state for immediate text field updates (avoids async DataStore round-trip lag)
+        var localWakeWord by remember { mutableStateOf(uiState.wakeWord) }
+        LaunchedEffect(uiState.wakeWord) {
+            if (uiState.wakeWord != localWakeWord) {
+                localWakeWord = uiState.wakeWord
+            }
+        }
+
+        Logger.log("WW_TextField: hasProfile=$hasProfile, wakeWord='${uiState.wakeWord}', local='$localWakeWord', profileJson=${uiState.wakeWordProfileJson != null}", "WW_UI")
+
         VoiceInputTextField(
-            value = uiState.wakeWord,
-            onValueChange = { appStateManager.setWakeWord(it) },
+            value = if (hasProfile) "" else localWakeWord,
+            onValueChange = {
+                if (!hasProfile) {
+                    localWakeWord = it
+                    appStateManager.setWakeWord(it)
+                }
+            },
             label = { Text(languageManager.getString("wake_word_label")) },
-            placeholder = { Text(languageManager.getString("wake_word_hint")) },
+            placeholder = { Text(if (hasProfile) languageManager.getString("ww_profile_used") else languageManager.getString("wake_word_hint")) },
             languageManager = languageManager,
             voiceLanguage = uiState.voiceLanguage,
             voiceProcessor = uiState.voiceProcessor,
-            isModelOnDevice = isWakeWordModelOnDevice
+            isModelOnDevice = isWakeWordModelOnDevice,
+            readOnly = hasProfile
         )
+
+        // Calibration status indicator (shown below text field)
+        if (hasProfile) {
+            Text(
+                text = languageManager.getString("ww_calibrate_profile"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+            )
+        }
 
         // Wake Word Model Selection
         Text(text = languageManager.getString("wake_word_model"), style = MaterialTheme.typography.labelLarge)
@@ -234,4 +390,143 @@ fun ServiceSettingsTab(
             )
         }
     }
+}
+
+@Composable
+private fun CalibrationDialog(
+    state: WakeWordCalibrator.CalibrationState,
+    languageManager: LanguageManager,
+    appStateManager: AppStateManager,
+    onReady: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(languageManager.getString("ww_calibrate_title"))
+        },
+        text = {
+            when (state) {
+                is WakeWordCalibrator.CalibrationState.Waiting -> {
+                    val roundText = languageManager.getString("ww_calibrate_round")
+                        .replace("{0}", state.round.toString())
+                        .replace("{1}", state.total.toString())
+                    Column {
+                        // Progress bar
+                        LinearProgressIndicator(
+                            progress = state.round.toFloat() / state.total,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        )
+                        Text(
+                            text = roundText,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = state.instruction,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = languageManager.getString("ww_calibrate_tap_ready"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                is WakeWordCalibrator.CalibrationState.Listening -> {
+                    val roundText = languageManager.getString("ww_calibrate_round")
+                        .replace("{0}", state.round.toString())
+                        .replace("{1}", state.total.toString())
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        LinearProgressIndicator(
+                            progress = state.round.toFloat() / state.total,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        )
+                        Text(
+                            text = roundText,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = languageManager.getString("ww_calibrate_listening"),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        ListeningScreen(
+                            languageManager = languageManager,
+                            appStateManager = appStateManager,
+                            onStop = onDismiss
+                        )
+                    }
+                }
+                is WakeWordCalibrator.CalibrationState.Analyzing -> {
+                    val roundText = languageManager.getString("ww_calibrate_round")
+                        .replace("{0}", state.round.toString())
+                        .replace("{1}", "5")
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        LinearProgressIndicator(
+                            progress = state.round.toFloat() / 5,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        )
+                        Text(
+                            text = "$roundText - ${languageManager.getString("ww_calibrate_analyzing")}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        ListeningScreen(
+                            languageManager = languageManager,
+                            appStateManager = appStateManager,
+                            onStop = onDismiss
+                        )
+                    }
+                }
+                is WakeWordCalibrator.CalibrationState.Complete -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        LinearProgressIndicator(
+                            progress = 1f,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        )
+                        Text(
+                            text = languageManager.getString("ww_calibrate_complete"),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                is WakeWordCalibrator.CalibrationState.Failed -> {
+                    Text(
+                        text = languageManager.getString("ww_calibrate_failed") + ": ${state.message}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                else -> {}
+            }
+        },
+        confirmButton = {
+            when (state) {
+                is WakeWordCalibrator.CalibrationState.Waiting -> {
+                    Button(onClick = { onReady(state.round) }) {
+                        Text(languageManager.getString("ww_calibrate_ready"))
+                    }
+                }
+                else -> {}
+            }
+        },
+        dismissButton = {
+            when (state) {
+                is WakeWordCalibrator.CalibrationState.Complete -> {}
+                else -> {
+                    TextButton(onClick = onDismiss) {
+                        Text(languageManager.getString("cancel_button"))
+                    }
+                }
+            }
+        }
+    )
 }

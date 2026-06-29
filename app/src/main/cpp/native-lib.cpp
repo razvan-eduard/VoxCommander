@@ -197,10 +197,13 @@ Java_com_whispercpp_whisper_WhisperLib_00024Companion_fullTranscribe(
     params.n_threads = numThreads;
     params.language = lang;
     params.temperature = 0.0f;
-    params.max_len = 224;
+    params.temperature_inc = 0.0f;          // single-pass deterministic, no retry with higher temp
+    params.max_len = 64;                     // voice commands are short — 64 tokens is plenty
     params.token_timestamps = false;
     params.single_segment = true;
     params.no_timestamps = true;
+    params.suppress_blank = true;            // suppress blank outputs at start/end
+    params.suppress_nst = true;              // suppress non-speech tokens
 
     int result = whisper_full(ctx, params, audio, length);
 

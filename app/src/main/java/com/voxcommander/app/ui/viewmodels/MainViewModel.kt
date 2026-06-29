@@ -11,6 +11,7 @@ import com.voxcommander.app.state.AppStateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.voxcommander.app.state.VoiceState
+import com.voxcommander.app.utils.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -22,6 +23,7 @@ class MainViewModel(
     private val languageManager: LanguageManager
 ) : ViewModel() {
 
+    private val TAG = "MainViewModel"
     private val _currentIntent = MutableStateFlow<NluIntent?>(null)
     val currentIntent = _currentIntent.asStateFlow()
 
@@ -30,6 +32,9 @@ class MainViewModel(
 
     private val _transcription = MutableStateFlow("")
     val transcription = _transcription.asStateFlow()
+
+    private val commandQueue = mutableListOf<Pair<String, String>>()
+    private val queueLock = Any()
 
     fun processVoiceCommand(voiceLanguage: String, userPreference: String) {
         _isProcessing.value = true
@@ -53,10 +58,50 @@ class MainViewModel(
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
-                    _isProcessing.value = false
-                    appStateManager.setVoiceState(VoiceState.IDLE)
+                    drainQueueOrIdle(voiceLanguage)
                 }
             }
+        }
+    }
+
+    fun enqueueVoiceCommand(voiceLanguage: String, userPreference: String) {
+        Logger.log("Queuing voice command — recording while processing", TAG)
+        VoiceManager.startListening(voiceLanguage, userPreference) { text ->
+            val cleanText = text.trim()
+            val errorPrefix = languageManager.getString("error_prefix")
+            if (cleanText.isNotBlank() && !cleanText.startsWith(errorPrefix)) {
+                synchronized(queueLock) {
+                    commandQueue.add(Pair(cleanText, voiceLanguage))
+                    Logger.log("Command queued: '$cleanText' (queue size: ${commandQueue.size})", TAG)
+                }
+            }
+        }
+    }
+
+    private fun drainQueueOrIdle(voiceLanguage: String) {
+        val next = synchronized(queueLock) {
+            if (commandQueue.isEmpty()) null else commandQueue.removeAt(0)
+        }
+
+        if (next != null) {
+            val (queuedText, queuedLang) = next
+            Logger.log("Processing queued command: '$queuedText'", TAG)
+            _transcription.value = queuedText
+            viewModelScope.launch {
+                try {
+                    appStateManager.setVoiceState(VoiceState.PROCESSING)
+                    val result = assistantEngine.processCommand(queuedText, queuedLang)
+                    _currentIntent.value = result
+                    result?.let { withContext(Dispatchers.IO) { intentRouter.route(it) } }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    drainQueueOrIdle(queuedLang)
+                }
+            }
+        } else {
+            _isProcessing.value = false
+            appStateManager.setVoiceState(VoiceState.IDLE)
         }
     }
 

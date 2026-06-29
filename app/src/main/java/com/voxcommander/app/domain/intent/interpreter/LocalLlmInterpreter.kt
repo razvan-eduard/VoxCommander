@@ -3,6 +3,7 @@ package com.voxcommander.app.domain.intent.interpreter
 import android.content.Context
 import com.voxcommander.app.utils.Logger
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.ModelDownloader
@@ -11,6 +12,7 @@ import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * L2/L3 Engine: Local LLM interpretation using MediaPipe GenAI.
@@ -24,12 +26,29 @@ class LocalLlmInterpreter(
 
     private val TAG = Strings.Tags.LOCAL_LLM_INTERPRETER
     private var llmInference: LlmInference? = null
-    private fun setupLlm() {
-        if (llmInference != null) return
+    private var baseSession: LlmInferenceSession? = null
+    private var cachedSystemPromptHash: String? = null
+    private var loadedModelId: String? = null
+    private var loadedEngineKey: String? = null
 
+    private fun setupLlm() {
         val snapshot = settingsRepo.getSettingsSnapshot()
         val modelId = snapshot.activeIntentModelId ?: return
         val engineKey = snapshot.aiProcessor
+
+        // If model or engine changed, tear down everything and reload
+        if (llmInference != null && (loadedModelId != modelId || loadedEngineKey != engineKey)) {
+            Logger.log("LLM model changed ($loadedModelId -> $modelId), reloading", TAG)
+            try { baseSession?.close() } catch (_: Exception) {}
+            try { llmInference?.close() } catch (_: Exception) {}
+            llmInference = null
+            baseSession = null
+            cachedSystemPromptHash = null
+            loadedModelId = null
+            loadedEngineKey = null
+        }
+
+        if (llmInference != null) return
 
         val modelFile = modelDownloader.resolveLocalFile(modelId, engineKey)
         if (modelFile == null || !modelFile.exists()) {
@@ -58,27 +77,91 @@ class LocalLlmInterpreter(
             return
         }
         llmInference = instance
+        loadedModelId = modelId
+        loadedEngineKey = engineKey
     }
 
     override suspend fun processCommand(spokenText: String, voiceLanguage: String?): NluIntent? = withContext(Dispatchers.IO) {
         setupLlm()
         val engine = llmInference ?: return@withContext null
 
-        val hydratedPrompt = PromptProvider.getNluPrompt(spokenText, settingsRepo.getSettingsSnapshot(), voiceLanguage)
+        val settings = settingsRepo.getSettingsSnapshot()
+        val systemPrompt = PromptProvider.getNluSystemPrompt(settings, voiceLanguage)
+        val userInput = PromptProvider.formatUserInput(spokenText)
+        val promptHash = sha256(systemPrompt)
 
-        try {
-            val response = engine.generateResponse(hydratedPrompt)
-            Logger.log("LLM response: $response", TAG)
-
-            val jsonStart = response.indexOf("{")
-            val jsonEnd = response.lastIndexOf("}") + 1
-            if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                val cleanJson = response.substring(jsonStart, jsonEnd)
-                return@withContext NluIntentParser.parse(cleanJson)
+        // Invalidate cached session if system prompt changed (apps, language, defaults, etc.)
+        if (cachedSystemPromptHash != promptHash) {
+            if (baseSession != null) {
+                Logger.log("System prompt changed — rebuilding cached session", TAG)
+                try { baseSession?.close() } catch (_: Exception) {}
+                baseSession = null
             }
+            cachedSystemPromptHash = promptHash
+        }
+
+        // Create base session with system prompt pre-loaded (cached across calls)
+        if (baseSession == null) {
+            try {
+                val sessionOptions = LlmInferenceSession.LlmInferenceSessionOptions.builder()
+                    .setTopK(40)
+                    .setTemperature(0.1f)
+                    .build()
+                val session = LlmInferenceSession.createFromOptions(engine, sessionOptions)
+                session.addQueryChunk(systemPrompt)
+                baseSession = session
+                Logger.log("Base session created with cached system prompt (${systemPrompt.length} chars)", TAG)
+            } catch (e: Exception) {
+                Logger.log("Failed to create base session: ${e.message}", TAG)
+            }
+        }
+
+        val session = baseSession
+        if (session == null) {
+            // Fallback: no session, use direct generateResponse
+            try {
+                val fullPrompt = "$systemPrompt\n$userInput"
+                val response = engine.generateResponse(fullPrompt)
+                return@withContext parseResponse(response)
+            } catch (e: Exception) {
+                Logger.log("LLM generation failed (fallback): ${e.message}", TAG)
+                return@withContext null
+            }
+        }
+
+        // Clone the base session (reuses KV cache for system prompt), add user input, generate
+        var querySession: LlmInferenceSession? = null
+        try {
+            querySession = session.cloneSession()
+            querySession.addQueryChunk(userInput)
+            val response = querySession.generateResponse()
+            Logger.log("LLM response: $response", TAG)
+            return@withContext parseResponse(response)
         } catch (e: Exception) {
             Logger.log("LLM generation failed: ${e.message}", TAG)
+            // If clone failed, the base session might be corrupted — invalidate it
+            try { baseSession?.close() } catch (_: Exception) {}
+            baseSession = null
+            cachedSystemPromptHash = null
+            null
+        } finally {
+            try { querySession?.close() } catch (_: Exception) {}
         }
-        null
+    }
+
+    private fun parseResponse(response: String): NluIntent? {
+        val jsonStart = response.indexOf("{")
+        val jsonEnd = response.lastIndexOf("}") + 1
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+            val cleanJson = response.substring(jsonStart, jsonEnd)
+            return NluIntentParser.parse(cleanJson)
+        }
+        return null
+    }
+
+    private fun sha256(text: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(text.toByteArray())
+        return hash.joinToString("") { "%02x".format(it) }
     }
 }

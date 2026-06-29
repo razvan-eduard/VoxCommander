@@ -30,6 +30,19 @@ class FastMapEngine(
             }
 
             if (triggerMatched) {
+                // If this is a pure transport control (no query, no lazyQuery, no uriTemplate)
+                // but the spoken text has extra words beyond the trigger, skip it —
+                // the user likely wants to search/play something specific, not just press play.
+                if (hasTrigger && !rule.lazyQuery && rule.queryWords.isEmpty() && rule.uriTemplate == null &&
+                    rule.mediaControlType == "audio_button" && rule.action == "play") {
+                    val triggerRegex = Regex(triggerRegexStr, RegexOption.IGNORE_CASE)
+                    val remaining = spokenText.replace(triggerRegex, "").trim()
+                    if (remaining.isNotEmpty()) {
+                        // Extra words beyond trigger — skip this rule, let L2 handle it
+                        continue
+                    }
+                }
+
                 // Build query
                 val query = if (rule.lazyQuery) {
                     // Lazy: extract everything from spokenText except trigger words + app name

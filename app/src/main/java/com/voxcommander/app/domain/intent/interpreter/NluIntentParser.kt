@@ -35,9 +35,20 @@ object NluIntentParser {
         }
     }
 
-    private fun parseNewSchema(obj: JsonObject): NluIntent {
-        val domain = obj.get("domain")?.asString ?: ""
-        val action = obj.get("action")?.asString ?: ""
+    private fun JsonObject.getSafeString(key: String): String {
+        val el = get(key) ?: return ""
+        if (el.isJsonNull) return ""
+        return try { el.asString } catch (e: Exception) { "" }
+    }
+
+    private fun parseNewSchema(obj: JsonObject): NluIntent? {
+        val domain = obj.getSafeString("domain")
+        val action = obj.getSafeString("action")
+
+        if (domain.isBlank() && action.isBlank()) {
+            Logger.log("LLM returned null domain and action — treating as no intent", TAG)
+            return null
+        }
         val targetApp = if (obj.has("targetApp") && !obj.get("targetApp").isJsonNull) {
             obj.get("targetApp")?.asString
         } else null
@@ -53,7 +64,42 @@ object NluIntentParser {
             obj.get("confidence").asFloat
         } else 1.0f
 
-        return NluIntent(domain, action, targetApp, parameters, confidence)
+        val normalizedDomain = normalizeDomain(domain)
+        val normalizedAction = normalizeAction(action)
+        return NluIntent(normalizedDomain, normalizedAction, targetApp, parameters, confidence)
+    }
+
+    private val domainSynonyms = mapOf(
+        "music" to IntentTaxonomy.Domains.AUDIO,
+        "media" to IntentTaxonomy.Domains.AUDIO,
+        "navigation" to IntentTaxonomy.Domains.MAPS,
+        "map" to IntentTaxonomy.Domains.MAPS,
+        "message" to IntentTaxonomy.Domains.MESSAGING,
+        "chat" to IntentTaxonomy.Domains.MESSAGING,
+        "volume" to IntentTaxonomy.Domains.SETTINGS,
+        "device" to IntentTaxonomy.Domains.SETTINGS
+    )
+
+    private val actionSynonyms = mapOf(
+        "search" to IntentTaxonomy.Actions.PLAY,
+        "start" to IntentTaxonomy.Actions.PLAY,
+        "skip" to IntentTaxonomy.Actions.NEXT,
+        "previous" to IntentTaxonomy.Actions.PREV,
+        "back" to IntentTaxonomy.Actions.PREV,
+        "vol_up" to IntentTaxonomy.Actions.VOLUME_UP,
+        "vol_down" to IntentTaxonomy.Actions.VOLUME_DOWN,
+        "louder" to IntentTaxonomy.Actions.VOLUME_UP,
+        "quieter" to IntentTaxonomy.Actions.VOLUME_DOWN
+    )
+
+    private fun normalizeDomain(domain: String): String {
+        val lower = domain.lowercase().trim()
+        return domainSynonyms[lower] ?: lower
+    }
+
+    private fun normalizeAction(action: String): String {
+        val lower = action.lowercase().trim()
+        return actionSynonyms[lower] ?: lower
     }
 
     /**

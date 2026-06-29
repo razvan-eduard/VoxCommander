@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.ui.screens.main.ListeningScreen
+import com.voxcommander.app.utils.Logger
 
 @Composable
 fun VoiceInputTextField(
@@ -29,6 +30,7 @@ fun VoiceInputTextField(
     voiceProcessor: String,
     isModelOnDevice: Boolean = true,
     modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
     onVoiceResult: ((String) -> Unit)? = null // Add this callback
 ) {
     // Collect the global listening state to keep UI in sync
@@ -47,11 +49,18 @@ fun VoiceInputTextField(
     val isRecording = isGloballyListening && startedRecordingHere
     var isFocused by remember { mutableStateOf(false) }
 
+    Logger.log("VoiceInputTextField: value='$value', readOnly=$readOnly, isRecording=$isRecording", "WW_UI")
+
     OutlinedTextField(
         value = if (isRecording) languageManager.getString("recording_status") else value,
-        onValueChange = onValueChange,
+        onValueChange = {
+            Logger.log("VoiceInputTextField onValueChange: '$it', readOnly=$readOnly", "WW_UI")
+            onValueChange(it)
+        },
         label = label,
         placeholder = placeholder,
+        readOnly = readOnly,
+        enabled = true,
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { isFocused = it.isFocused },
@@ -82,7 +91,7 @@ fun VoiceInputTextField(
                         }
                     }
                 },
-                enabled = isModelOnDevice
+                enabled = isModelOnDevice && !readOnly
             ) {
                 Icon(
                     Icons.Default.Mic,

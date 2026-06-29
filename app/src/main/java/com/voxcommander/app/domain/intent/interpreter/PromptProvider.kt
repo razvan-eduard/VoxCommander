@@ -67,6 +67,7 @@ object PromptProvider {
             7. RETURN: Return EXCLUSIVELY a JSON object with these 5 keys: domain, action, targetApp, parameters, confidence.
             8. "play X on spotify" → domain="audio", action="play". Never domain="settings" for music.
             9. The user's input may be in any language. Always output domain/action/targetApp in English.${langHint}
+            10. INFERENCE: If the user mentions any app listed above (especially [USER DEFAULT] apps) or a known artist/song, infer the most likely intent even if the sentence is imperfect. Never return null domain/action when a configured app or media entity is present. For example "scorpions are spotify" → domain="audio", action="play", targetApp="spotify", parameters={"artist":"Scorpions"}.
 
             Examples:
             Input: "play scorpions on spotify"
