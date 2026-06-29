@@ -29,6 +29,7 @@ object IntentTaxonomy {
         const val VOLUME_DOWN = "volume_down"
         const val WIFI_TOGGLE = "wifi_toggle"
         const val BLUETOOTH_TOGGLE = "bluetooth_toggle"
+        const val GPS_TOGGLE = "gps_toggle"
 
         // Maps
         const val NAVIGATE = "navigate"
@@ -37,7 +38,7 @@ object IntentTaxonomy {
         const val SEND = "send"
 
         val ALL = listOf(PLAY, PAUSE, NEXT, PREV, VOLUME_UP, VOLUME_DOWN,
-            WIFI_TOGGLE, BLUETOOTH_TOGGLE, NAVIGATE, SEND)
+            WIFI_TOGGLE, BLUETOOTH_TOGGLE, GPS_TOGGLE, NAVIGATE, SEND)
     }
 
     /**
@@ -46,7 +47,7 @@ object IntentTaxonomy {
      */
     fun getActionsForDomain(domain: String): List<String> = when (domain) {
         Domains.AUDIO -> listOf(Actions.PLAY, Actions.PAUSE, Actions.NEXT, Actions.PREV)
-        Domains.SETTINGS -> listOf(Actions.VOLUME_UP, Actions.VOLUME_DOWN, Actions.WIFI_TOGGLE, Actions.BLUETOOTH_TOGGLE)
+        Domains.SETTINGS -> listOf(Actions.VOLUME_UP, Actions.VOLUME_DOWN, Actions.WIFI_TOGGLE, Actions.BLUETOOTH_TOGGLE, Actions.GPS_TOGGLE)
         Domains.MAPS -> listOf(Actions.NAVIGATE)
         Domains.MESSAGING -> listOf(Actions.SEND)
         Domains.SYSTEM, Domains.HOME -> listOf("toggle", "status")

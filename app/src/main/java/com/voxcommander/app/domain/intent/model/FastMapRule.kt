@@ -13,6 +13,9 @@ import androidx.room.PrimaryKey
  * @param targetPackage Target app package name.
  * @param intentAction  Android intent action to fire (e.g. MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).
  * @param uriTemplate   URI template for ACTION_VIEW intents (e.g. "waze://?q={destination}&navigate=yes"). null = no deep link.
+ * @param domain        Intent domain: "custom" (app launch), "settings", "audio", "maps", "messaging", etc.
+ * @param action        Intent action: "launch", "volume_up", "volume_down", "wifi_toggle", "play", "navigate", etc.
+ * @param mediaControlType  For audio transport controls: "active_session" (default), "default_app", "audio_button".
  */
 @Entity(tableName = "fast_map_rules")
 data class FastMapRule(
@@ -24,5 +27,10 @@ data class FastMapRule(
     val targetPackage: String = "",
     val intentAction: String = "",
     val uriTemplate: String? = null,
-    val lazyQuery: Boolean = false
+    val lazyQuery: Boolean = false,
+    val sortOrder: Int = 0,
+    val isActive: Boolean = true,
+    val domain: String = "custom",
+    val action: String = "launch",
+    val mediaControlType: String = "active_session"
 )

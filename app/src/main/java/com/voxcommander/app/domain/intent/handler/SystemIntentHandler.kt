@@ -2,6 +2,7 @@ package com.voxcommander.app.domain.intent.handler
 
 import android.content.Context
 import android.content.Intent
+import android.location.LocationManager
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.Settings
@@ -11,7 +12,7 @@ import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
 import com.voxcommander.app.utils.Logger
 
 /**
- * Handles system/settings domain intents: volume up/down, wifi toggle, bluetooth toggle.
+ * Handles system/settings domain intents: volume up/down, wifi toggle, bluetooth toggle, gps toggle.
  * These are device-level controls that don't require launching a specific app.
  */
 class SystemIntentHandler : IntentHandler {
@@ -26,6 +27,7 @@ class SystemIntentHandler : IntentHandler {
             IntentTaxonomy.Actions.VOLUME_DOWN -> adjustVolume(context, AudioManager.ADJUST_LOWER)
             IntentTaxonomy.Actions.WIFI_TOGGLE -> toggleWifi(context)
             IntentTaxonomy.Actions.BLUETOOTH_TOGGLE -> toggleBluetooth(context)
+            IntentTaxonomy.Actions.GPS_TOGGLE -> toggleGps(context)
             else -> {
                 Logger.log("Unsupported system action: ${intent.action}", TAG)
                 false
@@ -79,7 +81,52 @@ class SystemIntentHandler : IntentHandler {
         }
     }
 
+    private fun toggleGps(context: Context): Boolean {
+        return try {
+            val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+            Logger.log("Opened GPS/Location settings", TAG)
+            true
+        } catch (e: Exception) {
+            Logger.log("Failed to open GPS settings: ${e.message}", TAG)
+            false
+        }
+    }
+
     companion object {
         private const val TAG = "SystemIntentHandler"
+
+        /**
+         * Checks if GPS (location) is currently enabled.
+         */
+        fun isGpsEnabled(context: Context): Boolean {
+            val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            return lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                   lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        }
+
+        /**
+         * Ensures GPS is enabled before proceeding.
+         * If GPS is off, opens location settings so the user can enable it.
+         * @return true if GPS is already on, false if it was off (settings opened for user to enable).
+         */
+        fun ensureGpsEnabled(context: Context): Boolean {
+            if (isGpsEnabled(context)) {
+                Logger.log("GPS already enabled", TAG)
+                return true
+            }
+            Logger.log("GPS is off, opening location settings", TAG)
+            try {
+                val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Logger.log("Failed to open GPS settings: ${e.message}", TAG)
+            }
+            return false
+        }
     }
 }

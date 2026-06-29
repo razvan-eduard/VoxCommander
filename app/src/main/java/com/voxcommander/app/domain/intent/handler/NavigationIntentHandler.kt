@@ -20,6 +20,12 @@ class NavigationIntentHandler : IntentHandler {
     }
 
     override fun execute(context: Context, intent: NluIntent, resolvedApp: AppRegistry.AppEntry?): Boolean {
+        // Check GPS before attempting navigation
+        if (!SystemIntentHandler.ensureGpsEnabled(context)) {
+            Logger.log("GPS is off — opened location settings for user to enable", TAG)
+            return false
+        }
+
         val destination = intent.param(NluIntent.PARAM_DESTINATION)
         if (destination.isNullOrBlank()) {
             Logger.log("Navigation intent missing destination parameter", TAG)

@@ -88,6 +88,7 @@ dependencies {
     implementation(libs.mediapipe.genai)
     implementation(libs.androidx.media)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.reorderable)
     // Chrome Custom Tabs for Spotify dashboard setup
     implementation("androidx.browser:browser:1.8.0")
     // Spotify App Remote SDK (local AAR)

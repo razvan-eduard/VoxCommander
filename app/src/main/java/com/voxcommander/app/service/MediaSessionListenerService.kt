@@ -56,6 +56,29 @@ class MediaSessionListenerService : NotificationListenerService() {
          * Requires notification listener permission to be granted.
          */
         fun getMediaController(context: Context, packageName: String): MediaController? {
+            return getActiveSessions(context)?.firstOrNull { it.packageName == packageName }
+        }
+
+        /**
+         * Returns the most recent (top) active media session, regardless of package.
+         * This is the session that was last playing — e.g. if user paused LibreTube,
+         * this returns LibreTube's session so "play" resumes it.
+         */
+        fun getActiveMediaController(context: Context): MediaController? {
+            val sessions = getActiveSessions(context) ?: return null
+            val session = sessions.firstOrNull()
+            if (session == null) {
+                Logger.log("No active media sessions found", TAG)
+            } else {
+                Logger.log("Active media session: ${session.packageName}", TAG)
+            }
+            return session
+        }
+
+        /**
+         * Returns all active media sessions, or null if permission not granted.
+         */
+        fun getActiveSessions(context: Context): List<MediaController>? {
             if (!isPermissionGranted(context)) {
                 Logger.log("Notification listener permission not granted — cannot access media sessions", TAG)
                 return null
@@ -64,20 +87,12 @@ class MediaSessionListenerService : NotificationListenerService() {
             val sessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
             val component = ComponentName(context, MediaSessionListenerService::class.java)
 
-            val sessions = try {
+            return try {
                 sessionManager.getActiveSessions(component)
             } catch (e: SecurityException) {
                 Logger.log("Cannot access media sessions: ${e.message}", TAG)
-                return null
+                null
             }
-
-            val session = sessions.firstOrNull { it.packageName == packageName }
-            if (session == null) {
-                Logger.log("No active media session found for $packageName (sessions: ${sessions.map { it.packageName }})", TAG)
-                return null
-            }
-
-            return session
         }
     }
 }

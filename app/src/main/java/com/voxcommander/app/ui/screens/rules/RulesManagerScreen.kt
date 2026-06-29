@@ -1,17 +1,30 @@
 package com.voxcommander.app.ui.screens.rules
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +39,9 @@ import com.voxcommander.app.ui.components.AppSelectorDropdown
 import com.voxcommander.app.ui.components.VoiceInputTextField
 import com.voxcommander.app.utils.RegexGenerator
 import com.voxcommander.app.utils.Strings
+import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -41,8 +57,27 @@ fun RulesManagerContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     val rules by fastMapDao.getAllRules().collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // Local mutable copy for drag-to-reorder (updated optimistically, persisted on drag end)
+    var localRules by remember { mutableStateOf<List<FastMapRule>>(emptyList()) }
+    androidx.compose.runtime.LaunchedEffect(rules) { localRules = rules }
+
+    val lazyListState = rememberLazyListState()
+    val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        // Use key-based lookup instead of index, because LazyColumn has header items
+        // (form card, search bar) before the rules list, making from.index/to.index offset.
+        localRules = localRules.toMutableList().apply {
+            val fromIndex = indexOfFirst { it.id == from.key }
+            val toIndex = indexOfFirst { it.id == to.key }
+            if (fromIndex >= 0 && toIndex >= 0) {
+                add(toIndex, removeAt(fromIndex))
+            }
+        }
+        hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.SegmentFrequentTick)
+    }
 
     // Voice input text (shared between trigger and query)
     var voiceInputText by remember { mutableStateOf("") }
@@ -60,6 +95,25 @@ fun RulesManagerContent(
 
     // Edit state
     var editingRuleId by remember { mutableStateOf<Long?>(null) }
+
+    // Rule type state: false = App Launch, true = System Command
+    var isSystemCommand by remember { mutableStateOf(false) }
+    var selectedDomain by remember { mutableStateOf(IntentTaxonomy.Domains.SETTINGS) }
+    var selectedAction by remember { mutableStateOf(IntentTaxonomy.Actions.VOLUME_UP) }
+
+    // Media control type for audio transport: "active_session", "default_app", "audio_button"
+    var mediaControlType by remember { mutableStateOf("active_session") }
+
+    // Form collapse state — collapsed by default
+    var isFormExpanded by remember { mutableStateOf(false) }
+
+    // Confirmation dialog state
+    var ruleToDelete by remember { mutableStateOf<FastMapRule?>(null) }
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
+
+    // Filter state
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf<String?>(null) } // null = All
 
     // Voice input handler — splits into tokens
     val onVoiceResult: (String) -> Unit = { spokenText ->
@@ -121,6 +175,11 @@ fun RulesManagerContent(
         availableIntents = emptyList()
         lazyQuery = false
         editingRuleId = null
+        isSystemCommand = false
+        selectedDomain = IntentTaxonomy.Domains.SETTINGS
+        selectedAction = IntentTaxonomy.Actions.VOLUME_UP
+        mediaControlType = "active_session"
+        isFormExpanded = false
     }
 
     Column(
@@ -146,21 +205,26 @@ fun RulesManagerContent(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 16.dp),
+            state = lazyListState,
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
-            // --- ADD/EDIT RULE FORM ---
+            // --- ADD/EDIT RULE FORM (Collapsible) ---
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    // Bordered title header — acts as toggle button
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isFormExpanded = !isFormExpanded },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -169,12 +233,28 @@ fun RulesManagerContent(
                                 style = MaterialTheme.typography.titleSmall,
                                 color = if (editingRuleId == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
                             )
-                            if (editingRuleId != null) {
-                                TextButton(onClick = { resetForm() }) {
-                                    Text(languageManager.getString("cancel_edit"), style = MaterialTheme.typography.labelSmall)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (editingRuleId != null) {
+                                    TextButton(onClick = { resetForm() }) {
+                                        Text(languageManager.getString("cancel_edit"), style = MaterialTheme.typography.labelSmall)
+                                    }
                                 }
+                                Icon(
+                                    imageVector = if (isFormExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = if (isFormExpanded) "Collapse" else "Expand",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
+                    }
+
+                    // Form content — only visible when expanded
+                    if (isFormExpanded) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
 
                         // Voice input
                         VoiceInputTextField(
@@ -255,6 +335,119 @@ fun RulesManagerContent(
                             )
                         }
 
+                        // --- RULE TYPE SELECTOR ---
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = !isSystemCommand,
+                                onClick = { isSystemCommand = false },
+                                label = { Text("App Launch", style = MaterialTheme.typography.labelSmall) }
+                            )
+                            FilterChip(
+                                selected = isSystemCommand,
+                                onClick = { isSystemCommand = true },
+                                label = { Text("System Command", style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+
+                        if (isSystemCommand) {
+                            // --- SYSTEM COMMAND SELECTORS ---
+                            val systemDomains = IntentTaxonomy.Domains.ALL.filter { it != "custom" }
+                            val domainActions = IntentTaxonomy.getActionsForDomain(selectedDomain)
+
+                            var domainExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = domainExpanded,
+                                onExpandedChange = { domainExpanded = !domainExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedDomain.replaceFirstChar { it.uppercase() },
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Domain") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = domainExpanded) },
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                                )
+                                ExposedDropdownMenu(expanded = domainExpanded, onDismissRequest = { domainExpanded = false }) {
+                                    systemDomains.forEach { domain ->
+                                        DropdownMenuItem(
+                                            text = { Text(domain.replaceFirstChar { it.uppercase() }) },
+                                            onClick = {
+                                                selectedDomain = domain
+                                                selectedAction = IntentTaxonomy.getActionsForDomain(domain).firstOrNull() ?: ""
+                                                domainExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            var actionExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = actionExpanded,
+                                onExpandedChange = { actionExpanded = !actionExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedAction.replaceFirstChar { it.uppercase() }.replace("_", " "),
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Action") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = actionExpanded) },
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                                )
+                                ExposedDropdownMenu(expanded = actionExpanded, onDismissRequest = { actionExpanded = false }) {
+                                    domainActions.forEach { act ->
+                                        DropdownMenuItem(
+                                            text = { Text(act.replaceFirstChar { it.uppercase() }.replace("_", " ")) },
+                                            onClick = {
+                                                selectedAction = act
+                                                actionExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // --- MEDIA CONTROL TYPE SELECTOR ---
+                            // Show only for audio domain transport controls (play/pause/next/prev)
+                            val isTransportAction = selectedAction in listOf(
+                                IntentTaxonomy.Actions.PLAY,
+                                IntentTaxonomy.Actions.PAUSE,
+                                IntentTaxonomy.Actions.NEXT,
+                                IntentTaxonomy.Actions.PREV
+                            )
+                            if (selectedDomain == IntentTaxonomy.Domains.AUDIO && isTransportAction) {
+                                Text(
+                                    text = "Media Control Type",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    FilterChip(
+                                        selected = mediaControlType == "active_session",
+                                        onClick = { mediaControlType = "active_session" },
+                                        label = { Text("Active Session", style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                    FilterChip(
+                                        selected = mediaControlType == "default_app",
+                                        onClick = { mediaControlType = "default_app" },
+                                        label = { Text("Default App", style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                    FilterChip(
+                                        selected = mediaControlType == "audio_button",
+                                        onClick = { mediaControlType = "audio_button" },
+                                        label = { Text("Audio Button", style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
+                        } else {
                         // --- APP SELECTOR ---
                         AppSelectorDropdown(
                             selectedPackage = selectedTargetPackage,
@@ -300,10 +493,11 @@ fun RulesManagerContent(
                                 }
                             }
                         }
+                        }
 
                         // --- SAVE BUTTON ---
                         val canSave = (triggerSelectedIndices.isNotEmpty() || querySelectedIndices.isNotEmpty() || lazyQuery) &&
-                                      selectedTargetPackage != null
+                                      (isSystemCommand || selectedTargetPackage != null)
 
                         Button(
                             onClick = {
@@ -311,15 +505,22 @@ fun RulesManagerContent(
                                     val triggerWords = triggerSelectedIndices.sorted().map { allTokens[it] }
                                     val queryWords = querySelectedIndices.sorted().map { allTokens[it] }
                                     val selectedOption = availableIntents.getOrNull(selectedIntentIndex)
+                                    val existingRule = rules.find { it.id == editingRuleId }
+                                    val existingSortOrder = existingRule?.sortOrder
                                     val rule = FastMapRule(
                                         id = editingRuleId ?: 0,
                                         allWords = allTokens,
                                         triggerWords = triggerWords,
                                         queryWords = queryWords,
-                                        targetPackage = selectedTargetPackage ?: "",
-                                        intentAction = selectedOption?.action ?: "",
-                                        uriTemplate = selectedOption?.variant?.uriTemplate,
-                                        lazyQuery = lazyQuery
+                                        targetPackage = if (isSystemCommand) "" else (selectedTargetPackage ?: ""),
+                                        intentAction = if (isSystemCommand) "" else (selectedOption?.action ?: ""),
+                                        uriTemplate = if (isSystemCommand) null else selectedOption?.variant?.uriTemplate,
+                                        lazyQuery = lazyQuery,
+                                        sortOrder = existingSortOrder ?: rules.size,
+                                        isActive = existingRule?.isActive ?: true,
+                                        domain = if (isSystemCommand) selectedDomain else "custom",
+                                        action = if (isSystemCommand) selectedAction else "launch",
+                                        mediaControlType = mediaControlType
                                     )
                                     fastMapDao.insertRule(rule)
                                     resetForm()
@@ -331,19 +532,171 @@ fun RulesManagerContent(
                             Text(if (editingRuleId == null) languageManager.getString("add_rule_button") else languageManager.getString("update_rule"))
                         }
                     }
+                    } // end if (isFormExpanded)
                 }
             }
 
             // --- LIST OF EXISTING RULES ---
-            if (rules.isNotEmpty()) {
-                item {
-                    Text(text = languageManager.getString("active_fast_triggers"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+            if (localRules.isNotEmpty()) {
+                val isReorderable = searchQuery.isBlank() && selectedCategory == null
+                // Build categories from rules: app names + system domains
+                val appCategories = localRules.filter { it.domain == "custom" }
+                    .map { it.targetPackage }
+                    .distinct()
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { pkg ->
+                        AppRegistry.resolveByPackage(pkg)?.let { it.displayName to pkg }
+                    }
+                val systemCategories = localRules.filter { it.domain != "custom" }
+                    .map { it.domain }
+                    .distinct()
+                    .map { it.replaceFirstChar { c -> c.uppercase() } to "__domain__:$it" }
+                val categories = (appCategories + systemCategories).sortedBy { it.first }
+
+                // Fuzzy filter
+                val filteredRules = localRules.filter { rule ->
+                    val matchesCategory = selectedCategory == null || run {
+                        val cat = selectedCategory ?: ""
+                        if (cat.startsWith("__domain__:")) {
+                            val dom = cat.removePrefix("__domain__:")
+                            rule.domain == dom
+                        } else {
+                            rule.targetPackage == cat
+                        }
+                    }
+                    val matchesSearch = searchQuery.isBlank() || run {
+                        val q = searchQuery.lowercase()
+                        rule.triggerWords.any { it.lowercase().contains(q) } ||
+                        rule.queryWords.any { it.lowercase().contains(q) } ||
+                        rule.allWords.any { it.lowercase().contains(q) } ||
+                        rule.targetPackage.lowercase().contains(q) ||
+                        rule.intentAction.lowercase().contains(q) ||
+                        rule.domain.lowercase().contains(q) ||
+                        rule.action.lowercase().contains(q) ||
+                        (rule.uriTemplate?.lowercase()?.contains(q) == true) ||
+                        (AppRegistry.resolveByPackage(rule.targetPackage)?.displayName?.lowercase()?.contains(q) == true)
+                    }
+                    matchesCategory && matchesSearch
                 }
 
-                items(rules) { rule ->
+                item {
+                    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                        // Search bar
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Search rules...", style = MaterialTheme.typography.bodySmall) },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                        Icon(Icons.Filled.Clear, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            textStyle = MaterialTheme.typography.bodySmall
+                        )
+
+                        // Category filter chips
+                        if (categories.isNotEmpty()) {
+                            LazyRow(
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = selectedCategory == null,
+                                        onClick = { selectedCategory = null },
+                                        label = { Text("All", style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                                items(categories) { (displayName, pkg) ->
+                                    FilterChip(
+                                        selected = selectedCategory == pkg,
+                                        onClick = { selectedCategory = if (selectedCategory == pkg) null else pkg },
+                                        label = { Text(displayName, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Header row with bulk actions
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (filteredRules.size < localRules.size) "${filteredRules.size}/${localRules.size}" else languageManager.getString("active_fast_triggers"),
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Row {
+                                val anyActive = localRules.any { it.isActive }
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        if (anyActive) fastMapDao.deactivateAllRules() else fastMapDao.activateAllRules()
+                                    }
+                                }) {
+                                    Icon(
+                                        if (anyActive) Icons.Filled.PauseCircle else Icons.Filled.PlayCircle,
+                                        contentDescription = if (anyActive) "Deactivate all" else "Activate all",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    showDeleteAllDialog = true
+                                }) {
+                                    Icon(
+                                        Icons.Filled.DeleteSweep,
+                                        contentDescription = "Delete all",
+                                        tint = Color.Red.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (filteredRules.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No rules match your search.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
+                    }
+                } else {
+                itemsIndexed(filteredRules, key = { _, rule -> rule.id }) { index, rule ->
+                    ReorderableItem(reorderableLazyListState, key = rule.id) { isDragging ->
+                        val elevation by androidx.compose.animation.core.animateDpAsState(
+                            if (isDragging) 8.dp else 0.dp,
+                            label = "dragElevation"
+                        )
+                    val originalIndex = localRules.indexOf(rule)
                     RuleItem(
                         rule = rule,
+                        index = originalIndex,
+                        totalRules = localRules.size,
                         isEditing = editingRuleId == rule.id,
+                        modifier = Modifier
+                            .longPressDraggableHandle(
+                                onDragStarted = {
+                                    hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureThresholdActivate)
+                                },
+                                onDragStopped = {
+                                    hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureEnd)
+                                    scope.launch {
+                                        fastMapDao.reorderRules(localRules.map { it.id })
+                                    }
+                                }
+                            ),
+                        shadowElevation = elevation,
                         onClick = {
                             editingRuleId = rule.id
                             allTokens = rule.allWords
@@ -358,10 +711,19 @@ fun RulesManagerContent(
                                 val idx = allTokens.indexOf(word)
                                 if (idx >= 0) querySelectedIndices.add(idx)
                             }
-                            selectedTargetPackage = rule.targetPackage.ifBlank { null }
+                            isSystemCommand = rule.domain != "custom"
+                            if (isSystemCommand) {
+                                selectedDomain = rule.domain
+                                selectedAction = rule.action
+                                selectedTargetPackage = null
+                            } else {
+                                selectedTargetPackage = rule.targetPackage.ifBlank { null }
+                            }
+                            mediaControlType = rule.mediaControlType.ifBlank { "active_session" }
+                            isFormExpanded = true
                             lazyQuery = rule.lazyQuery
                             // Re-probe to get available intents, then find matching index
-                            if (!rule.targetPackage.isNullOrBlank()) {
+                            if (!isSystemCommand && !rule.targetPackage.isNullOrBlank()) {
                                 availableIntents = AppRegistry.KnownIntents.probeSupported(context, rule.targetPackage)
                                 selectedIntentIndex = availableIntents.indexOfFirst {
                                     it.action == rule.intentAction && it.variant.uriTemplate == rule.uriTemplate
@@ -373,15 +735,36 @@ fun RulesManagerContent(
                             voiceInputText = rule.allWords.joinToString(" ")
                         },
                         onDelete = {
+                            ruleToDelete = rule
+                        },
+                        onMoveUp = {
                             scope.launch {
-                                fastMapDao.deleteRule(rule)
-                                if (editingRuleId == rule.id) {
-                                    resetForm()
+                                val orderedIds = localRules.map { it.id }.toMutableList()
+                                val currentPos = orderedIds.indexOf(rule.id)
+                                if (currentPos > 0) {
+                                    orderedIds.removeAt(currentPos)
+                                    orderedIds.add(currentPos - 1, rule.id)
+                                    fastMapDao.reorderRules(orderedIds)
                                 }
+                            }
+                        },
+                        onMoveToTop = {
+                            scope.launch {
+                                val orderedIds = localRules.map { it.id }.toMutableList()
+                                orderedIds.remove(rule.id)
+                                orderedIds.add(0, rule.id)
+                                fastMapDao.reorderRules(orderedIds)
+                            }
+                        },
+                        onToggleActive = {
+                            scope.launch {
+                                fastMapDao.setRuleActive(rule.id, !rule.isActive)
                             }
                         },
                         languageManager = languageManager
                     )
+                    }
+                }
                 }
             }
         }
@@ -393,6 +776,47 @@ fun RulesManagerContent(
         ) {
             Text(languageManager.getString("ok_button"))
         }
+    }
+
+    // --- CONFIRMATION DIALOGS ---
+    ruleToDelete?.let { rule ->
+        AlertDialog(
+            onDismissRequest = { ruleToDelete = null },
+            title = { Text("Delete Rule") },
+            text = { Text("Are you sure you want to delete this rule?\n\nTrigger: ${rule.triggerWords.joinToString(" ")}") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        fastMapDao.deleteRule(rule)
+                        if (editingRuleId == rule.id) resetForm()
+                    }
+                    ruleToDelete = null
+                }) { Text("Delete", color = Color.Red) }
+            },
+            dismissButton = {
+                TextButton(onClick = { ruleToDelete = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showDeleteAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            title = { Text("Delete All Rules") },
+            text = { Text("Are you sure you want to delete ALL ${rules.size} rules? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        fastMapDao.deleteAllRules()
+                        resetForm()
+                    }
+                    showDeleteAllDialog = false
+                }) { Text("Delete All", color = Color.Red) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -453,37 +877,106 @@ fun TokenSelectorSection(
 }
 
 @Composable
-fun RuleItem(rule: FastMapRule, isEditing: Boolean, onClick: () -> Unit, onDelete: () -> Unit, languageManager: LanguageManager) {
+fun RuleItem(
+    rule: FastMapRule,
+    index: Int,
+    totalRules: Int,
+    isEditing: Boolean,
+    modifier: Modifier = Modifier,
+    shadowElevation: androidx.compose.ui.unit.Dp = 0.dp,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveToTop: () -> Unit,
+    onToggleActive: () -> Unit,
+    languageManager: LanguageManager
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         border = androidx.compose.foundation.BorderStroke(
             width = if (isEditing) 2.dp else 1.dp,
             color = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
         ),
-        onClick = onClick
+        elevation = CardDefaults.cardElevation(defaultElevation = shadowElevation)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Index badge
+            Text(
+                text = "${index + 1}",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (rule.isActive) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+
             Column(modifier = Modifier.weight(1f)) {
                 val triggerText = if (rule.triggerWords.isNotEmpty()) rule.triggerWords.joinToString(" ") else languageManager.getString("no_trigger")
-                Text(text = languageManager.getString("trigger_prefix").format(triggerText), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    text = languageManager.getString("trigger_prefix").format(triggerText),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (rule.isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
 
                 val detail = buildString {
-                    if (rule.queryWords.isNotEmpty()) append(languageManager.getString("query_prefix").format(rule.queryWords.joinToString(" ")))
-                    if (rule.targetPackage.isNotBlank()) {
-                        if (isNotEmpty()) append(" | ")
-                        append(languageManager.getString("app_prefix").format(rule.targetPackage))
+                    if (rule.domain != "custom") {
+                        append("${rule.domain.replaceFirstChar { it.uppercase() }} > ${rule.action.replace("_", " ").replaceFirstChar { it.uppercase() }}")
+                    } else {
+                        if (rule.queryWords.isNotEmpty()) append(languageManager.getString("query_prefix").format(rule.queryWords.joinToString(" ")))
+                        if (rule.targetPackage.isNotBlank()) {
+                            if (isNotEmpty()) append(" | ")
+                            append(languageManager.getString("app_prefix").format(rule.targetPackage))
+                        }
+                        if (rule.intentAction.isNotBlank()) append(" | Intent: ${rule.intentAction}")
                     }
-                    if (rule.intentAction.isNotBlank()) append(" | Intent: ${rule.intentAction}")
                 }
                 Text(
                     text = detail,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
+                    color = if (rule.isActive) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                 )
             }
+
+            // Reorder controls
+            Column {
+                IconButton(
+                    onClick = onMoveToTop,
+                    enabled = index > 0,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.VerticalAlignTop,
+                        contentDescription = "Move to top",
+                        modifier = Modifier.size(18.dp),
+                        tint = if (index > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    )
+                }
+                IconButton(
+                    onClick = onMoveUp,
+                    enabled = index > 0,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp,
+                        contentDescription = "Move up",
+                        modifier = Modifier.size(18.dp),
+                        tint = if (index > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    )
+                }
+            }
+
+            // Active toggle
+            Switch(
+                checked = rule.isActive,
+                onCheckedChange = { onToggleActive() },
+                modifier = Modifier.scale(0.8f)
+            )
+
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f))
             }

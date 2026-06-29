@@ -24,6 +24,7 @@ whisperCpp = "0.2.1"
 mediapipeGenai = "0.10.35"
 androidxMedia = "1.7.0"
 datastorePreferences = "1.1.7"
+reorderable = "3.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -70,6 +71,7 @@ whisper-android = { group = "com.github.PavelDoichev", name = "whisper-android",
 mediapipe-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeGenai" }
 androidx-media = { group = "androidx.media", name = "media", version.ref = "androidxMedia" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
+reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
