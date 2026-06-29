@@ -1,7 +1,5 @@
 package com.voxcommander.app.domain.intent.interpreter
 
-import android.util.Log
-import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.utils.Logger
@@ -25,12 +23,11 @@ class OpenAiInterpreter(
 
     private val TAG = Strings.Tags.OPENAI_INTERPRETER
     private val client = OkHttpClient()
-    private val gson = Gson()
 
     override suspend fun processCommand(spokenText: String, voiceLanguage: String?): NluIntent? = withContext(Dispatchers.IO) {
         val apiKey = settingsRepo.getApiKeySync()
         if (apiKey.isNullOrBlank()) {
-            Log.e(TAG, "OpenAI API Key is missing")
+            Logger.log("OpenAI API Key is missing", TAG)
             return@withContext null
         }
 

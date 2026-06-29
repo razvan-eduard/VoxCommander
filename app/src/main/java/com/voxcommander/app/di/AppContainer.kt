@@ -17,6 +17,7 @@ import com.voxcommander.app.domain.intent.router.IntentRouter
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.ui.viewmodels.MainViewModel
 import com.voxcommander.app.ui.viewmodels.ModelManagementViewModel
 import com.whispercpp.whisper.WhisperLib
@@ -80,7 +81,7 @@ class AppContainer(context: Context) {
             com.voxcommander.app.domain.intent.handler.PipedSearchHelper.setPipedApiUrl(snapshot.pipedApiUrl)
             com.voxcommander.app.domain.intent.handler.PipedSearchHelper.setPipedRegion(snapshot.pipedRegion)
         }
-        android.util.Log.d("AppContainer", "AppContainer init - starting compatibility checks")
+        Logger.log("AppContainer init - starting compatibility checks", "AppContainer")
         checkVulkanCrashCookie()
         detectGeminiSupport()
     }
@@ -92,13 +93,13 @@ class AppContainer(context: Context) {
         try {
             val pm = appContext.packageManager
             pm.getPackageInfo("com.google.android.aicore", 0)
-            android.util.Log.d("GeminiProbe", "AICore detected - Gemini Nano supported")
+            Logger.log("AICore detected - Gemini Nano supported", "GeminiProbe")
             kotlinx.coroutines.runBlocking { settingsRepository.setGeminiIncompatible(false) }
         } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
-            android.util.Log.w("GeminiProbe", "AICore not found - marking Gemini Nano incompatible")
+            Logger.log("AICore not found - marking Gemini Nano incompatible", "GeminiProbe")
             kotlinx.coroutines.runBlocking { settingsRepository.setGeminiIncompatible(true) }
         } catch (e: Exception) {
-            android.util.Log.e("GeminiProbe", "Error probing Gemini support", e)
+            Logger.log("Error probing Gemini support: ${e.message}", "GeminiProbe")
         }
     }
 
@@ -110,13 +111,13 @@ class AppContainer(context: Context) {
      */
     private fun checkVulkanCrashCookie() {
         val snapshot = settingsRepository.getSettingsSnapshot()
-        android.util.Log.d("VulkanProbe", "checkVulkanCrashCookie: pending=${snapshot.vulkanRuntimeAttempt}")
+        Logger.log("checkVulkanCrashCookie: pending=${snapshot.vulkanRuntimeAttempt}", "VulkanProbe")
         if (snapshot.vulkanRuntimeAttempt) {
             kotlinx.coroutines.runBlocking { settingsRepository.setVulkanIncompatible(true) }
             kotlinx.coroutines.runBlocking { settingsRepository.setVulkanRuntimeAttemptSync(false) }
-            android.util.Log.w(
-                "VulkanProbe",
-                "Detected native crash during previous Vulkan GPU use -> marking incompatible"
+            Logger.log(
+                "Detected native crash during previous Vulkan GPU use -> marking incompatible",
+                "VulkanProbe"
             )
         }
     }

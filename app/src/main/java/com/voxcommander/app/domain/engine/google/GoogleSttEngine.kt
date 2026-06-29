@@ -2,7 +2,7 @@ package com.voxcommander.app.domain.engine.google
 
 import android.content.Context
 import android.speech.SpeechRecognizer
-import android.util.Log
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.domain.engine.SttEngine
 import com.voxcommander.app.utils.Strings
 
@@ -17,14 +17,14 @@ class GoogleSttEngine(private val context: Context) : SttEngine {
 
     init {
         isAvailable = checkAvailability()
-        Log.d(TAG, "GoogleSttEngine initialized, isAvailable: $isAvailable")
+        Logger.log("GoogleSttEngine initialized, isAvailable: $isAvailable", TAG)
     }
 
     private fun checkAvailability(): Boolean {
         return try {
             SpeechRecognizer.isRecognitionAvailable(context)
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking availability", e)
+            Logger.log("Error checking availability: ${e.message}", TAG)
             false
         }
     }
@@ -39,21 +39,5 @@ class GoogleSttEngine(private val context: Context) : SttEngine {
 
     override fun releaseResources() {
         // No local resources to clear
-    }
-
-    /**
-     * This method is no longer used directly.
-     * Intent-based speech is handled by MainActivity's speechLauncher.
-     */
-    fun startListening(langCode: String, onResult: (String) -> Unit) {
-        Log.d(TAG, "startListening called - should use Intent-based approach via MainActivity")
-    }
-
-    fun stopListening() {
-        // No-op for Intent-based approach
-    }
-
-    fun destroy() {
-        // No-op for Intent-based approach
     }
 }

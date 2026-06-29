@@ -2,7 +2,6 @@ package com.voxcommander.app.domain.intent.interpreter
 
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
-import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.utils.Logger
@@ -20,8 +19,6 @@ class GeminiCloudInterpreter(
 ) : AssistantEngine {
 
     private val TAG = Strings.Tags.GEMINI_NANO_INTERPRETER
-    private val gson = Gson()
-
     override suspend fun processCommand(spokenText: String, voiceLanguage: String?): NluIntent? = withContext(Dispatchers.IO) {
         val apiKey = settingsRepo.getSettingsSnapshot().geminiApiKey
         if (apiKey.isNullOrBlank()) {

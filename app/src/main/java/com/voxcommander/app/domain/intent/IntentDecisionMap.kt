@@ -4,7 +4,7 @@ import com.voxcommander.app.domain.intent.interpreter.AssistantEngine
 import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.utils.Strings
-import android.util.Log
+import com.voxcommander.app.utils.Logger
 
 /**
  * Master orchestrator for command interpretation.
@@ -27,12 +27,12 @@ class IntentDecisionMap(
     override suspend fun processCommand(spokenText: String, voiceLanguage: String?): NluIntent? {
         if (spokenText.isBlank()) return null
         
-        Log.d(TAG, "🧠 Triple AI Brain: Processing '$spokenText'")
+        Logger.log("🧠 Triple AI Brain: Processing '$spokenText'", TAG)
 
         // --- LEVEL 1: Fast Trigger Map (Local Regex) ---
         val l1Result = l1Engine.processCommand(spokenText, voiceLanguage)
         if (l1Result != null) {
-            Log.d(TAG, "✅ L1 MATCH: $l1Result")
+            Logger.log("✅ L1 MATCH: $l1Result", TAG)
             return l1Result
         }
 
@@ -41,7 +41,7 @@ class IntentDecisionMap(
         val isCloudIntelligenceEnabled = snapshot.cloudIntelligenceEnabled
         val primaryProcessor = snapshot.aiProcessor
         
-        Log.d(TAG, "🔍 L1 Miss. Trying Primary L2 AI ($primaryProcessor)...")
+        Logger.log("🔍 L1 Miss. Trying Primary L2 AI ($primaryProcessor)...", TAG)
         
         val l2Result = try {
             when (primaryProcessor) {
@@ -62,12 +62,12 @@ class IntentDecisionMap(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "L2 Processing failed: ${e.message}")
+            Logger.log("L2 Processing failed: ${e.message}", TAG)
             null
         }
 
         if (l2Result != null) {
-            Log.d(TAG, "✅ L2 MATCH ($primaryProcessor): $l2Result")
+            Logger.log("✅ L2 MATCH ($primaryProcessor): $l2Result", TAG)
             return l2Result
         }
 
@@ -79,9 +79,9 @@ class IntentDecisionMap(
         if (fallbackModel != null && fallbackProcessor != null) {
             // Avoid re-running the same model if it was already tried in L2
             if (fallbackProcessor == primaryProcessor) {
-                Log.d(TAG, "ℹ️ Fallback is same as Primary ($fallbackProcessor). Skipping redundant check.")
+                Logger.log("ℹ️ Fallback is same as Primary ($fallbackProcessor). Skipping redundant check.", TAG)
             } else {
-                Log.d(TAG, "🏠 L2 Miss/Failure. Triggering L3 Offline Fallback ($fallbackProcessor)...")
+                Logger.log("🏠 L2 Miss/Failure. Triggering L3 Offline Fallback ($fallbackProcessor)...", TAG)
                 val l3Result = when (fallbackProcessor) {
                     Strings.AiProcessors.OPENAI -> l2CloudEngine.processCommand(spokenText, voiceLanguage)
                     Strings.AiProcessors.GEMINI_CLOUD -> geminiCloudEngine.processCommand(spokenText, voiceLanguage)
@@ -94,13 +94,13 @@ class IntentDecisionMap(
                 }
                 
                 if (l3Result != null) {
-                    Log.d(TAG, "✅ L3 FALLBACK MATCH: $l3Result")
+                    Logger.log("✅ L3 FALLBACK MATCH: $l3Result", TAG)
                     return l3Result
                 }
             }
         }
 
-        Log.d(TAG, "🚫 NO INTENT DETECTED at any level.")
+        Logger.log("🚫 NO INTENT DETECTED at any level.", TAG)
         return null
     }
 }

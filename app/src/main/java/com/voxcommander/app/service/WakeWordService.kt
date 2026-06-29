@@ -4,7 +4,6 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.os.*
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat as MediaNotificationCompat
 import com.voxcommander.app.MainActivity
@@ -131,7 +130,7 @@ class WakeWordService : Service() {
         Logger.log("Starting wake word detection", TAG)
 
         if (appStateManager.uiState.value.voiceState != VoiceState.IDLE) {
-            Log.w(TAG, "Service was in state \${appStateManager.uiState.value.voiceState}. Forcing IDLE...")
+            Logger.log("Service was in state ${appStateManager.uiState.value.voiceState}. Forcing IDLE...", TAG)
             appStateManager.setVoiceState(VoiceState.IDLE)
         }
 

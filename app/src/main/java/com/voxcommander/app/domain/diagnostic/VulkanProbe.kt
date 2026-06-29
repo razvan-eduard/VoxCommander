@@ -9,7 +9,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
-import android.util.Log
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.utils.Strings
 
 /**
@@ -52,7 +52,7 @@ class VulkanProbe(
                 Messenger(service).send(m)
             } catch (e: Exception) {
                 // Couldn't even start the test; don't penalize the device.
-                Log.e(TAG, "Failed to start self-test: ${e.message}")
+                Logger.log("Failed to start self-test: ${e.message}", TAG)
                 finish(Outcome.UNDECIDED, "send-failed")
             }
         }
@@ -69,13 +69,13 @@ class VulkanProbe(
             intent.putExtra(VulkanProbeService.EXTRA_MODEL_PATH, modelPath)
             val bound = context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
             if (!bound) {
-                Log.w(TAG, "Could not bind VulkanProbeService")
+                Logger.log("Could not bind VulkanProbeService", TAG)
                 finish(Outcome.UNDECIDED, "bind-failed")
                 return
             }
             handler.postDelayed({ if (!finished) finish(Outcome.UNDECIDED, "timeout") }, TIMEOUT_MS)
         } catch (e: Exception) {
-            Log.e(TAG, "start() failed: ${e.message}")
+            Logger.log("start() failed: ${e.message}", TAG)
             finish(Outcome.UNDECIDED, "start-exception")
         }
     }
@@ -83,7 +83,7 @@ class VulkanProbe(
     private fun finish(outcome: Outcome, reason: String) {
         if (finished) return
         finished = true
-        Log.d(TAG, "Vulkan self-test done: outcome=$outcome reason=$reason")
+        Logger.log("Vulkan self-test done: outcome=$outcome reason=$reason", TAG)
         unbind()
         onResult(outcome)
     }

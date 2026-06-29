@@ -8,7 +8,7 @@ import android.os.Looper
 import android.os.Message
 import android.os.Messenger
 import android.os.RemoteException
-import android.util.Log
+import com.voxcommander.app.utils.Logger
 import com.whispercpp.whisper.WhisperContext
 import com.whispercpp.whisper.WhisperLib
 import java.io.File
@@ -52,18 +52,18 @@ class VulkanProbeService : Service() {
     private fun runFullInferenceTest(): Boolean {
         val path = modelPath
         if (path == null || !File(path).exists()) {
-            Log.e(TAG, "Model path invalid or not found: $path")
+            Logger.log("Model path invalid or not found: $path", TAG)
             return false
         }
 
         try {
-            Log.d(TAG, "Loading native libraries...")
+            Logger.log("Loading native libraries...", TAG)
             WhisperLib.load()
 
-            Log.d(TAG, "Loading Whisper model with GPU for inference test...")
+            Logger.log("Loading Whisper model with GPU for inference test...", TAG)
             val ctx = WhisperContext.createContextFromFile(path, useGpu = true)
             if (ctx == null) {
-                Log.e(TAG, "Failed to create Whisper context with GPU")
+                Logger.log("Failed to create Whisper context with GPU", TAG)
                 return false
             }
 
@@ -72,16 +72,16 @@ class VulkanProbeService : Service() {
             val durationSec = 1
             val audioData = FloatArray(sampleRate * durationSec) { 0f }
 
-            Log.d(TAG, "Running inference on dummy audio...")
+            Logger.log("Running inference on dummy audio...", TAG)
             val result = runBlocking {
                 ctx.transcribeData(audioData, threads = 1, language = null, printTimestamp = false)
             }
 
             ctx.release()
-            Log.d(TAG, "Inference test completed successfully. Result: $result")
+            Logger.log("Inference test completed successfully. Result: $result", TAG)
             return true
         } catch (e: Throwable) {
-            Log.e(TAG, "Inference test failed", e)
+            Logger.log("Inference test failed: ${e.message}", TAG)
             return false
         }
     }
@@ -91,9 +91,9 @@ class VulkanProbeService : Service() {
             val m = Message.obtain(null, MSG_RESULT)
             m.arg1 = if (ok) 1 else 0
             reply?.send(m)
-            Log.d(TAG, "Self-test finished in isolated process: ok=$ok")
+            Logger.log("Self-test finished in isolated process: ok=$ok", TAG)
         } catch (e: RemoteException) {
-            Log.e(TAG, "Failed to send self-test result: ${e.message}")
+            Logger.log("Failed to send self-test result: ${e.message}", TAG)
         }
         handler.post { stopSelf() }
     }

@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
-import android.util.Log
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.VoiceState
@@ -44,7 +43,7 @@ class WakeWordEngine(
 
     suspend fun initialize(modelPath: String, wakeWord: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Init model: $modelPath")
+            Logger.log("Init model: $modelPath", TAG)
 
             appStateManager.executeSecureVoiceAction {
                 recognizer?.close()
@@ -74,7 +73,7 @@ class WakeWordEngine(
             }
             return@withContext true
         } catch (e: Exception) {
-            Log.e(TAG, "Init failed", e)
+            Logger.log("Init failed: ${e.message}", TAG)
             return@withContext false
         }
     }
@@ -91,7 +90,7 @@ class WakeWordEngine(
                 .setAcceptsDelayedFocusGain(true)
                 .setOnAudioFocusChangeListener { focusChange ->
                     if (focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                        Log.d(TAG, "Audio focus lost. Pausing listening.")
+                        Logger.log("Audio focus lost. Pausing listening.", TAG)
                         stopListening()
                     }
                 }.build()
@@ -122,7 +121,7 @@ class WakeWordEngine(
             }
 
             if (!requestAudioFocus()) {
-                Log.w(TAG, "Could not gain audio focus. Cannot start listening.")
+                Logger.log("Could not gain audio focus. Cannot start listening.", TAG)
                 return false
             }
 
@@ -142,7 +141,7 @@ class WakeWordEngine(
             CoroutineScope(Dispatchers.IO).launch { listenLoop() }
             return true
         } catch (e: Exception) {
-            Log.e(TAG, "Exception starting AudioRecord", e)
+            Logger.log("Exception starting AudioRecord: ${e.message}", TAG)
             isListening = false
             abandonAudioFocus()
             return false
@@ -181,15 +180,15 @@ class WakeWordEngine(
                                 handlePartial(recognizer?.partialResult)
                             }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Vosk recognizer error", e)
+                            Logger.log("Vosk recognizer error: ${e.message}", TAG)
                         }
                     }
                 }
             } else if (read < 0) {
                 consecutiveErrors++
-                Log.e(TAG, "Audio read error count: $consecutiveErrors")
+                Logger.log("Audio read error count: $consecutiveErrors", TAG)
                 if (consecutiveErrors > 5) {
-                    Log.e(TAG, "Too many audio read errors. Aborting loop to prevent CPU burn.")
+                    Logger.log("Too many audio read errors. Aborting loop to prevent CPU burn.", TAG)
                     stopListening()
                     break
                 }
@@ -198,7 +197,7 @@ class WakeWordEngine(
                 break
             }
         }
-        Log.d(TAG, "WakeWord loop exited cleanly")
+        Logger.log("WakeWord loop exited cleanly", TAG)
     }
 
     private fun handleResult(json: String?) {
@@ -233,7 +232,7 @@ class WakeWordEngine(
 
     fun stopListening() {
         if (!isListening) return
-        Log.d(TAG, "Pausing WakeWordEngine listening")
+        Logger.log("Pausing WakeWordEngine listening", TAG)
 
         isListening = false
 
@@ -245,7 +244,7 @@ class WakeWordEngine(
                 it.release()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping AudioRecord", e)
+            Logger.log("Error stopping AudioRecord: ${e.message}", TAG)
         } finally {
             audioRecord = null
             abandonAudioFocus()
@@ -263,7 +262,7 @@ class WakeWordEngine(
 
         CoroutineScope(Dispatchers.IO).launch {
             appStateManager.executeSecureVoiceAction {
-                Log.d(TAG, "Releasing native resources...")
+                Logger.log("Releasing native resources...", TAG)
                 recognizer?.close()
                 model?.close()
                 recognizer = null

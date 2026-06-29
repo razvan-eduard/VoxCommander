@@ -1,6 +1,5 @@
 package com.voxcommander.app.data.remote
 
-import android.util.Log
 import com.google.gson.Gson
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager

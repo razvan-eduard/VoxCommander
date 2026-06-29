@@ -2,7 +2,6 @@ package com.voxcommander.app.domain.voice
 
 import android.content.Context
 import android.media.*
-import android.util.Log
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.engine.SttEngine
 import com.voxcommander.app.domain.engine.whisper.WhisperCppSttEngine
@@ -34,7 +33,6 @@ object VoiceManager {
 
     private var context: Context? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var recordingJob: Job? = null
     private var stateObservationJob: Job? = null
 
     @Volatile
@@ -87,7 +85,7 @@ object VoiceManager {
         this.settingsRepo = settingsRepo
         this.appStateManager = appStateManager
         
-        Log.d(TAG, "VoiceManager initialized")
+        Logger.log("VoiceManager initialized", TAG)
         
         // Start reactive observation of processor changes
         startProcessorObservation()
@@ -110,7 +108,7 @@ object VoiceManager {
                 .distinctUntilChanged()
                 .collectLatest {
                     val uiState = hub.uiState.value
-                    Log.d(TAG, "Engine-related change detected: ${uiState.voiceProcessor}. Updating engines...")
+                    Logger.log("Engine-related change detected: ${uiState.voiceProcessor}. Updating engines...", TAG)
                     reinitializeEngines(uiState.voiceProcessor)
                 }
         }
@@ -144,7 +142,7 @@ object VoiceManager {
         
         // 4. Return to IDLE state
         hub.setVoiceState(VoiceState.IDLE)
-        Log.d(TAG, "Engines updated successfully for $processor")
+        Logger.log("Engines updated successfully for $processor", TAG)
     }
 
     fun handleIntentResult(text: String) {
@@ -176,7 +174,7 @@ object VoiceManager {
     }
 
     private fun selectEngine(userPreference: String): SttEngine? {
-        Log.d(TAG, "Selecting engine for preference: $userPreference")
+        Logger.log("Selecting engine for preference: $userPreference", TAG)
         
         val selectedEngine = when (userPreference) {
             Strings.Processors.WHISPER_API -> {
@@ -216,13 +214,13 @@ object VoiceManager {
 
         val engine = selectEngine(processor)
         if (engine == null) {
-            Log.e(TAG, "No STT engine available")
+            Logger.log("No STT engine available", TAG)
             onResult("Error: No STT engine")
             return
         }
 
         if (context?.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, "RECORD_AUDIO permission not granted")
+            Logger.log("RECORD_AUDIO permission not granted", TAG)
             onResult("Permission Error")
             return
         }
@@ -232,7 +230,7 @@ object VoiceManager {
         _partialTranscriptionFlow.value = ""
         appStateManager?.setVoiceState(VoiceState.LISTENING_COMMAND)
 
-        recordingJob = scope.launch(Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             try {
                 val bufferSize = AudioRecord.getMinBufferSize(currentQuality.sampleRate, CHANNEL_CONFIG, AUDIO_FORMAT) * 2
                 
@@ -246,7 +244,7 @@ object VoiceManager {
                 )
 
                 if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
-                    Log.e(TAG, "AudioRecord failed to initialize")
+                    Logger.log("AudioRecord failed to initialize", TAG)
                     withContext(Dispatchers.Main) {
                         onResult("Mic Error")
                         updateListeningState(false)
@@ -276,11 +274,11 @@ object VoiceManager {
                         if (rms > SILENCE_THRESHOLD) {
                             lastVoiceTime = System.currentTimeMillis()
                         } else if (System.currentTimeMillis() - lastVoiceTime > SILENCE_TIMEOUT_MS) {
-                            Log.d(TAG, "Silence detected, stopping recording")
+                            Logger.log("Silence detected, stopping recording", TAG)
                             isListening = false 
                         }
                     } else if (read < 0) {
-                        Log.e(TAG, "AudioRecord error: $read")
+                        Logger.log("AudioRecord error: $read", TAG)
                         break
                     }
                 }
@@ -332,7 +330,7 @@ object VoiceManager {
                 }
 
             } catch (e: Exception) {
-                Log.e(TAG, "Error during recording", e)
+                Logger.log("Error during recording: ${e.message}", TAG)
                 if (e !is CancellationException) {
                     withContext(Dispatchers.Main) { onResult("Error: ${e.message}") }
                 }
@@ -354,7 +352,7 @@ object VoiceManager {
     }
 
     fun stopListening() {
-        Log.d(TAG, "Manual stop requested")
+        Logger.log("Manual stop requested", TAG)
         // Setting isListening to false will break the loop gracefully 
         isListening = false
     }

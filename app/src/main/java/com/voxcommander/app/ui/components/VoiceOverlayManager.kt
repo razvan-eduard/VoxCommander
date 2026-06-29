@@ -21,6 +21,7 @@ import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.screens.main.ListeningScreen
 import com.voxcommander.app.ui.theme.VoxCommanderTheme
+import com.voxcommander.app.utils.Logger
 
 /**
  * Manages a system-level overlay for the listening UI.
@@ -110,7 +111,7 @@ class VoiceOverlayManager(
             windowManager.addView(view, params)
             composeView = view
         } catch (e: Exception) {
-            android.util.Log.e("VoiceOverlayManager", "Failed to add overlay view", e)
+            Logger.log("Failed to add overlay view: ${e.message}", "VoiceOverlayManager")
         }
     }
 

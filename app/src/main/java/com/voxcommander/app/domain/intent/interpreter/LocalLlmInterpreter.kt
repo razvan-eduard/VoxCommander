@@ -7,7 +7,6 @@ import com.voxcommander.app.domain.intent.model.NluIntent
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.ModelDownloader
 import com.voxcommander.app.data.remote.RemoteModelRegistry
-import com.google.gson.Gson
 import com.voxcommander.app.utils.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,8 +24,6 @@ class LocalLlmInterpreter(
 
     private val TAG = Strings.Tags.LOCAL_LLM_INTERPRETER
     private var llmInference: LlmInference? = null
-    private val gson = Gson()
-
     private fun setupLlm() {
         if (llmInference != null) return
 

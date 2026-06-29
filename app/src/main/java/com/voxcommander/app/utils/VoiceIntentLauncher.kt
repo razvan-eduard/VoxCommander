@@ -22,7 +22,7 @@ class VoiceIntentLauncher(
         if (result.resultCode == Activity.RESULT_OK) {
             val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             val recognizedText = matches?.firstOrNull() ?: ""
-            android.util.Log.d(Strings.Tags.VOX_COMMANDER, "Heard via Intent: $recognizedText")
+            Logger.log("Heard via Intent: $recognizedText", Strings.Tags.VOX_COMMANDER)
             onResult(recognizedText)
         } else {
             // Handle cancellation or error to stop the infinite recording state

@@ -1,7 +1,7 @@
 package com.voxcommander.app.domain.engine.whisper
 
 import android.content.Context
-import android.util.Log
+import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.engine.SttEngine
 import com.voxcommander.app.utils.Strings
@@ -52,7 +52,7 @@ class WhisperCppSttEngine(
             val whisperKey = com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".bin")
             val customPath = whisperKey?.let { snapshot.getCustomModelPath(it) }
             var modelPath = if (!customPath.isNullOrBlank()) {
-                Log.d(TAG, "Using custom model path: $customPath")
+                Logger.log("Using custom model path: $customPath", TAG)
                 customPath
             } else {
                 val selectedModelId = snapshot.activeVoiceModelId
@@ -63,38 +63,38 @@ class WhisperCppSttEngine(
             }
 
             if (!File(modelPath).exists()) {
-                Log.e(TAG, "Model file not found at: $modelPath")
+                Logger.log("Model file not found at: $modelPath", TAG)
                 return@withContext
             }
 
             // TIER 1: Try Vulkan (GPU)
             val attemptVulkan = forceGpu && !snapshot.vulkanIncompatible
             if (attemptVulkan) {
-                Log.d(TAG, "Attempting to initialize with VULKAN...")
+                Logger.log("Attempting to initialize with VULKAN...", TAG)
                 try {
                     whisperContext = WhisperContext.createContextFromFile(modelPath, useGpu = true)
                     if (whisperContext != null) {
                         isUsingGpu = true
-                        Log.d(TAG, "SUCCESS: Whisper context initialized with VULKAN")
+                        Logger.log("SUCCESS: Whisper context initialized with VULKAN", TAG)
                         return@withContext
                     }
                 } catch (e: Throwable) {
-                    Log.e(TAG, "VULKAN init failed. Marking as incompatible.", e)
+                    Logger.log("VULKAN init failed. Marking as incompatible. ${e.message}", TAG)
                     kotlinx.coroutines.runBlocking { settingsRepo.setVulkanIncompatible(true) }
                     withContext(Dispatchers.Main) { onVulkanIncompatible() }
                 }
             }
 
             // TIER 2: Fallback to NEON (CPU)
-            Log.d(TAG, "Initializing with NEON/CPU...")
+            Logger.log("Initializing with NEON/CPU...", TAG)
             try {
                 whisperContext = WhisperContext.createContextFromFile(modelPath, useGpu = false)
                 if (whisperContext != null) {
                     isUsingGpu = false
-                    Log.d(TAG, "SUCCESS: Whisper context initialized Hex NEON/CPU")
+                    Logger.log("SUCCESS: Whisper context initialized Hex NEON/CPU", TAG)
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "CRITICAL: NEON/CPU initialization failed", e)
+                Logger.log("CRITICAL: NEON/CPU initialization failed: ${e.message}", TAG)
             }
         }
     }
@@ -114,9 +114,9 @@ class WhisperCppSttEngine(
             // Conservative thread count for CPU (NEON)
             val threads = if (isUsingGpu) 1 else 2
 
-            Log.d(
-                TAG,
-                "Transcribing using ${if (isUsingGpu) "VULKAN" else "CPU"} ($threads threads), Lang: ${langCode ?: "auto"}"
+            Logger.log(
+                "Transcribing using ${if (isUsingGpu) "VULKAN" else "CPU"} ($threads threads), Lang: ${langCode ?: "auto"}",
+                TAG
             )
             
             // Crash-cookie: a native GPU crash during inference cannot be caught by
@@ -137,7 +137,7 @@ class WhisperCppSttEngine(
 
             return@withContext result.trim()
         } catch (e: Exception) {
-            Log.e(TAG, "Transcription failed", e)
+            Logger.log("Transcription failed: ${e.message}", TAG)
             if (isUsingGpu) settingsRepo.setVulkanRuntimeAttemptSync(false)
             "Error: ${e.message}"
         }
@@ -154,7 +154,7 @@ class WhisperCppSttEngine(
     }
 
     override fun releaseHardware() {
-        Log.d(TAG, "Releasing native context")
+        Logger.log("Releasing native context", TAG)
         whisperContext?.release()
     }
 

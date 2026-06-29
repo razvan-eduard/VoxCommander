@@ -1,7 +1,7 @@
 package com.whispercpp.whisper
 
 import android.content.res.AssetManager
-import android.util.Log
+import com.voxcommander.app.utils.Logger
 import kotlinx.coroutines.*
 import java.util.concurrent.Executors
 
@@ -19,7 +19,7 @@ class WhisperContext private constructor(private var ptr: Long) {
     suspend fun transcribeData(data: FloatArray, threads: Int, language: String? = null, printTimestamp: Boolean = true): String = withContext(scope.coroutineContext) {
         if (ptr == 0L) return@withContext "Error: Context released"
         
-        Log.d(LOG_TAG, "Transcribing with $threads threads, lang: ${language ?: "auto"}")
+        Logger.log("Transcribing with $threads threads, lang: ${language ?: "auto"}", LOG_TAG)
         WhisperLib.fullTranscribe(ptr, threads, data, language)
         
         val textCount = WhisperLib.getTextSegmentCount(ptr)
@@ -70,7 +70,7 @@ class WhisperLib {
         fun load(): Boolean {
             if (isLoaded) return true
             return try {
-                Log.d(LOG_TAG, "Loading native libraries (libwhisper.so containing JNI)...")
+                Logger.log("Loading native libraries (libwhisper.so containing JNI)...", LOG_TAG)
                 
                 // Load dependencies first
                 System.loadLibrary("omp")
@@ -83,10 +83,10 @@ class WhisperLib {
                 System.loadLibrary("whisper")
                 
                 isLoaded = true
-                Log.d(LOG_TAG, "Libraries loaded successfully")
+                Logger.log("Libraries loaded successfully", LOG_TAG)
                 true
             } catch (e: UnsatisfiedLinkError) {
-                Log.e(LOG_TAG, "Native load failed: ${e.message}")
+                Logger.log("Native load failed: ${e.message}", LOG_TAG)
                 false
             }
         }
@@ -103,7 +103,7 @@ class WhisperLib {
             return try {
                 isVulkanAvailable()
             } catch (e: Throwable) {
-                Log.e(LOG_TAG, "Vulkan probe threw: ${e.message}")
+                Logger.log("Vulkan probe threw: ${e.message}", LOG_TAG)
                 false
             }
         }
@@ -119,7 +119,7 @@ class WhisperLib {
             return try {
                 runVulkanSelfTest()
             } catch (e: Throwable) {
-                Log.e(LOG_TAG, "Vulkan self-test threw: ${e.message}")
+                Logger.log("Vulkan self-test threw: ${e.message}", LOG_TAG)
                 false
             }
         }
