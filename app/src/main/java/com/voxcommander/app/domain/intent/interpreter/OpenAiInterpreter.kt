@@ -27,14 +27,14 @@ class OpenAiInterpreter(
     private val client = OkHttpClient()
     private val gson = Gson()
 
-    override suspend fun processCommand(spokenText: String): NluIntent? = withContext(Dispatchers.IO) {
+    override suspend fun processCommand(spokenText: String, voiceLanguage: String?): NluIntent? = withContext(Dispatchers.IO) {
         val apiKey = settingsRepo.getApiKeySync()
         if (apiKey.isNullOrBlank()) {
             Log.e(TAG, "OpenAI API Key is missing")
             return@withContext null
         }
 
-        val systemPrompt = PromptProvider.getNluSystemPrompt(settingsRepo.getSettingsSnapshot())
+        val systemPrompt = PromptProvider.getNluSystemPrompt(settingsRepo.getSettingsSnapshot(), voiceLanguage)
         val userPrompt = PromptProvider.formatUserInput(spokenText)
 
         val jsonBody = JSONObject().apply {

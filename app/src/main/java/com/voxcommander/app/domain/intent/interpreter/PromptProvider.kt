@@ -20,8 +20,8 @@ object PromptProvider {
      * @param spokenText The user's voice/text command.
      * @param settings Current app settings (for injecting installed apps + defaults into prompt).
      */
-    fun getNluPrompt(spokenText: String, settings: AppSettings? = null): String {
-        val template = RemoteModelRegistry.getPrompt(ID_STANDARD_NLU) ?: getDefaultNluTemplate(settings)
+    fun getNluPrompt(spokenText: String, settings: AppSettings? = null, voiceLanguage: String? = null): String {
+        val template = RemoteModelRegistry.getPrompt(ID_STANDARD_NLU) ?: getDefaultNluTemplate(settings, voiceLanguage)
         return template.replace(PLACEHOLDER_TEXT, spokenText)
     }
 
@@ -30,8 +30,8 @@ object PromptProvider {
      * Used by cloud engines (OpenAI, Gemini Cloud) that separate system/user messages.
      * @param settings Current app settings (for injecting installed apps + defaults into prompt).
      */
-    fun getNluSystemPrompt(settings: AppSettings? = null): String {
-        val template = RemoteModelRegistry.getPrompt(ID_STANDARD_NLU) ?: getDefaultNluTemplate(settings)
+    fun getNluSystemPrompt(settings: AppSettings? = null, voiceLanguage: String? = null): String {
+        val template = RemoteModelRegistry.getPrompt(ID_STANDARD_NLU) ?: getDefaultNluTemplate(settings, voiceLanguage)
         // Strip the Input/JSON suffix — cloud engines add their own user message
         val inputIndex = template.indexOf("Input:")
         return if (inputIndex > 0) {
@@ -53,8 +53,9 @@ object PromptProvider {
      * Uses the new flexible NluIntent schema (domain, action, targetApp, parameters, confidence).
      * Dynamically injects installed apps and user default app preferences.
      */
-    private fun getDefaultNluTemplate(settings: AppSettings? = null): String {
+    private fun getDefaultNluTemplate(settings: AppSettings? = null, voiceLanguage: String? = null): String {
         val appsSection = buildAppsSection(settings)
+        val langHint = voiceLanguage?.let { "\n            Input language: ${it}." } ?: ""
         return """
             System intent mapping for Vox Commander. Rules:
             1. domain: Choose STRICTLY from ["audio", "settings", "maps", "messaging", "system", "home"].
@@ -65,6 +66,7 @@ object PromptProvider {
             6. DEFAULT: If music platform is not specified, use the user's default audio app if set, otherwise use targetApp="youtube".
             7. RETURN: Return EXCLUSIVELY a JSON object with these 5 keys: domain, action, targetApp, parameters, confidence.
             8. "play X on spotify" → domain="audio", action="play". Never domain="settings" for music.
+            9. The user's input may be in any language. Always output domain/action/targetApp in English.${langHint}
 
             Examples:
             Input: "play scorpions on spotify"

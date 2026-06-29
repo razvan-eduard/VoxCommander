@@ -29,7 +29,7 @@ class GeminiNanoInterpreter(
     private val TAG = Strings.Tags.GEMINI_NANO_INTERPRETER
     private val gson = Gson()
 
-    override suspend fun processCommand(spokenText: String): NluIntent? = withContext(Dispatchers.IO) {
+    override suspend fun processCommand(spokenText: String, voiceLanguage: String?): NluIntent? = withContext(Dispatchers.IO) {
         val snapshot = settingsRepo.getSettingsSnapshot()
         if (snapshot.geminiIncompatible) {
             Logger.log("Gemini Nano not available on this device (AICore incompatible)", TAG)

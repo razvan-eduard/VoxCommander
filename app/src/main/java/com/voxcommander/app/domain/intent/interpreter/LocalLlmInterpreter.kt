@@ -63,11 +63,11 @@ class LocalLlmInterpreter(
         llmInference = instance
     }
 
-    override suspend fun processCommand(spokenText: String): NluIntent? = withContext(Dispatchers.IO) {
+    override suspend fun processCommand(spokenText: String, voiceLanguage: String?): NluIntent? = withContext(Dispatchers.IO) {
         setupLlm()
         val engine = llmInference ?: return@withContext null
 
-        val hydratedPrompt = PromptProvider.getNluPrompt(spokenText, settingsRepo.getSettingsSnapshot())
+        val hydratedPrompt = PromptProvider.getNluPrompt(spokenText, settingsRepo.getSettingsSnapshot(), voiceLanguage)
 
         try {
             val response = engine.generateResponse(hydratedPrompt)

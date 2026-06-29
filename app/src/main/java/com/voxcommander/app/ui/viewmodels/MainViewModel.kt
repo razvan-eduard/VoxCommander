@@ -47,7 +47,7 @@ class MainViewModel(
             viewModelScope.launch {
                 try {
                     appStateManager.setVoiceState(VoiceState.PROCESSING)
-                    val result = assistantEngine.processCommand(cleanText)
+                    val result = assistantEngine.processCommand(cleanText, voiceLanguage)
                     _currentIntent.value = result
                     result?.let { withContext(Dispatchers.IO) { intentRouter.route(it) } }
                 } catch (e: Exception) {
