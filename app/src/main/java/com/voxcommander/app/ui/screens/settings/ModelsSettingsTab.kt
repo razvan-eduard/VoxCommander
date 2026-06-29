@@ -1,11 +1,20 @@
 package com.voxcommander.app.ui.screens.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
@@ -33,9 +42,139 @@ fun ModelsSettingsTab(
     onFallbackChanged: () -> Unit = {},
     refreshTrigger: Int = 0
 ) {
+    val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
+    val nluModels = remember(uiState.availableModels) { uiState.availableModels["nlu_llm"] ?: emptyList() }
+
+    var apiKey by remember(uiState.apiKey) { mutableStateOf(uiState.apiKey ?: "") }
+    var geminiApiKey by remember(uiState.geminiApiKey) { mutableStateOf(uiState.geminiApiKey ?: "") }
+    var offlineFallbackTimeout by remember(uiState.refreshTrigger) { mutableIntStateOf(settingsRepo.getSettingsSnapshot().offlineFallbackTimeout) }
+
     var selectedSubTab by remember { mutableIntStateOf(0) }
-    
-    Column(modifier = Modifier.fillMaxSize()) {
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(selectedSubTab) {
+        focusManager.clearFocus()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(onClick = { focusManager.clearFocus() })
+    ) {
+        // --- API KEYS SECTION ---
+        Text(text = languageManager.getString("api_keys_section"), style = MaterialTheme.typography.titleMedium)
+
+        var isApiFocused by remember { mutableStateOf(false) }
+        TextField(
+            value = apiKey,
+            onValueChange = {
+                apiKey = it
+                appStateManager.setApiKey(it)
+            },
+            label = { Text(languageManager.getString("api_key")) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { isApiFocused = it.isFocused },
+            visualTransformation = if (isApiFocused) VisualTransformation.None else PasswordVisualTransformation(),
+            singleLine = !isApiFocused,
+            maxLines = if (isApiFocused) 5 else 1,
+            colors = if (!isApiFocused) TextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                unfocusedIndicatorColor = Color.Transparent
+            ) else TextFieldDefaults.colors()
+        )
+
+        var isGeminiKeyFocused by remember { mutableStateOf(false) }
+        TextField(
+            value = geminiApiKey,
+            onValueChange = {
+                geminiApiKey = it
+                appStateManager.setGeminiApiKey(it)
+            },
+            label = { Text(languageManager.getString("gemini_api_key")) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { isGeminiKeyFocused = it.isFocused },
+            visualTransformation = if (isGeminiKeyFocused) VisualTransformation.None else PasswordVisualTransformation(),
+            singleLine = !isGeminiKeyFocused,
+            maxLines = if (isGeminiKeyFocused) 5 else 1,
+            colors = if (!isGeminiKeyFocused) TextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                unfocusedIndicatorColor = Color.Transparent
+            ) else TextFieldDefaults.colors()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // --- OFFLINE FALLBACK SECTION ---
+        Text(text = languageManager.getString("offline_fallback_section"), style = MaterialTheme.typography.titleMedium)
+
+        val timeoutOptions = listOf(
+            5 to "5 s", 10 to "10 s", 20 to "20 s", 35 to "35 s", 50 to "50 s",
+            60 to "1 min", 300 to "5 min", 600 to "10 min"
+        )
+        var timeoutExpanded by remember { mutableStateOf(false) }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = languageManager.getString("timeout_label"), style = MaterialTheme.typography.labelLarge)
+
+            Box {
+                OutlinedButton(
+                    onClick = { timeoutExpanded = true },
+                    modifier = Modifier.widthIn(min = 120.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    val currentLabel = timeoutOptions.find { it.first == offlineFallbackTimeout }?.second ?: "$offlineFallbackTimeout s"
+                    Text(currentLabel)
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                }
+                DropdownMenu(
+                    expanded = timeoutExpanded,
+                    onDismissRequest = { timeoutExpanded = false }
+                ) {
+                    timeoutOptions.forEach { (seconds, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                offlineFallbackTimeout = seconds
+                                appStateManager.setOfflineFallbackTimeout(seconds)
+                                timeoutExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        if (uiState.defaultVoiceFallbackProcessor != null && uiState.defaultVoiceFallbackModel != null) {
+            val allVoiceModels = (uiState.availableModels["stt_whisper"] ?: emptyList()) +
+                                (uiState.availableModels["wake_vosk"] ?: emptyList()) +
+                                (uiState.availableModels["stt_google"] ?: emptyList())
+
+            val voiceModelLabel = allVoiceModels.find { it.id == uiState.defaultVoiceFallbackModel }?.label ?: uiState.defaultVoiceFallbackModel
+            Text(
+                text = "Voice: ${uiState.defaultVoiceFallbackProcessor} ($voiceModelLabel)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+
+        if (uiState.defaultIntentFallbackProcessor != null && uiState.defaultIntentFallbackModel != null) {
+            val intentModelLabel = nluModels.find { it.id == uiState.defaultIntentFallbackModel }?.label ?: uiState.defaultIntentFallbackModel
+            Text(
+                text = "Intent: ${uiState.defaultIntentFallbackProcessor} ($intentModelLabel)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        // --- ENGINE SUB-TABS ---
         TabRow(
             selectedTabIndex = selectedSubTab,
             containerColor = Color.Transparent,

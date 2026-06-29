@@ -54,7 +54,7 @@ fun SettingsContent(
     // REALTIME STATE - observe AppStateManager uiState for reactive updates
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
     
-    val pagerState = rememberPagerState(pageCount = { 9 })
+    val pagerState = rememberPagerState(pageCount = { 6 })
 
     val isVoskLoading by modelManagementViewModel.isVoskLoading.collectAsStateWithLifecycle()
     val isVoskOffline by modelManagementViewModel.isVoskOffline.collectAsStateWithLifecycle()
@@ -103,7 +103,7 @@ fun SettingsContent(
                             },
                             modifier = Modifier.padding(bottom = 12.dp)
                         ) {
-                            val tabs = listOf("tab_general", "tab_permissions", "tab_models", "tab_service", "tab_benchmark", "tab_advanced", "tab_verbose_logging", "tab_default_apps", "tab_integrations")
+                            val tabs = listOf("tab_general", "tab_ai_models", "tab_service", "tab_integrations", "tab_permissions", "tab_advanced")
                             
                             tabs.forEachIndexed { index, tabKey ->
                                 val selected = pagerState.currentPage == index
@@ -125,8 +125,20 @@ fun SettingsContent(
                     modifier = Modifier.fillMaxSize(), 
                     beyondViewportPageCount = 1
                 ) { page ->
-                    if (page == 4) { // Benchmark
-                        BenchmarkSettingsTab(languageManager = languageManager, appStateManager = appStateManager, refreshTrigger = uiState.refreshTrigger)
+                    if (page == 5) { // Advanced (uses LazyColumn, no scroll wrapper)
+                        AdvancedSettingsTab(
+                            languageManager = languageManager,
+                            settingsRepo = settingsRepo,
+                            appStateManager = appStateManager,
+                            onCleanupRequest = { showCleanupDialog = true },
+                            onClearDefaultFallback = { 
+                                modelManagementViewModel.clearDefaultOfflineFallback()
+                            },
+                            onVerboseLoggingChange = { 
+                                appStateManager.setVerboseLoggingEnabled(it)
+                            },
+                            refreshTrigger = uiState.refreshTrigger
+                        )
                     } else {
                         Column(modifier = Modifier.fillMaxSize().padding(top = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             when (page) {
@@ -135,14 +147,7 @@ fun SettingsContent(
                                     settingsRepo = settingsRepo,
                                     appStateManager = appStateManager
                                 )
-                                1 -> PermissionsSettingsTab(
-                                    languageManager = languageManager,
-                                    appStateManager = appStateManager,
-                                    onRequestMicrophone = onRequestMicrophonePermission,
-                                    onRequestNotification = onRequestNotificationPermission,
-                                    onRequestOverlay = onRequestOverlayPermission
-                                )
-                                2 -> ModelsSettingsTab(
+                                1 -> ModelsSettingsTab(
                                     languageManager = languageManager,
                                     settingsRepo = settingsRepo,
                                     appStateManager = appStateManager,
@@ -157,7 +162,6 @@ fun SettingsContent(
                                         updateVoiceEngine(); onRefreshMain()
                                     },
                                     onModelSelected = { model: AppModel, isDownloaded: Boolean, langCode: String ->
-                                        // Dynamic selection via ViewModel
                                         modelManagementViewModel.selectVoiceModel(model.id, model.engineType, langCode)
                                         updateVoiceEngine(); onRefreshMain()
                                     },
@@ -176,42 +180,45 @@ fun SettingsContent(
                                     onFallbackChanged = { appStateManager.refreshAll() },
                                     refreshTrigger = uiState.refreshTrigger
                                 )
-                                3 -> ServiceSettingsTab(
+                                2 -> {
+                                    ServiceSettingsTab(
+                                        languageManager = languageManager,
+                                        settingsRepo = settingsRepo,
+                                        appStateManager = appStateManager,
+                                        onStartService = { WakeWordService.startService(context) },
+                                        onStopService = { WakeWordService.stopService(context) },
+                                        downloadedColor = downloadedColor,
+                                        onDownloadRequest = { model -> onDownloadModel(model.id, model.engineType, "en") },
+                                        onDeleteRequest = { model -> modelToDelete = model as? AppModel; showDeleteConfirmDialog = true },
+                                        onCancelDownload = onCancelDownload,
+                                        downloadProgress = downloadProgress,
+                                        downloadingItem = vmDownloadingItem,
+                                        refreshTrigger = uiState.refreshTrigger
+                                    )
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                    DefaultAppsTab(
+                                        languageManager = languageManager,
+                                        settingsRepo = settingsRepo,
+                                        appStateManager = appStateManager
+                                    )
+                                }
+                                3 -> {
+                                    IntegrationsTab(
+                                        languageManager = languageManager,
+                                        settingsRepo = settingsRepo
+                                    )
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                    PipedSettingsSection(
+                                        languageManager = languageManager,
+                                        settingsRepo = settingsRepo
+                                    )
+                                }
+                                4 -> PermissionsSettingsTab(
                                     languageManager = languageManager,
-                                    settingsRepo = settingsRepo,
                                     appStateManager = appStateManager,
-                                    onStartService = { WakeWordService.startService(context) },
-                                    onStopService = { WakeWordService.stopService(context) },
-                                    downloadedColor = downloadedColor,
-                                    onDownloadRequest = { model -> onDownloadModel(model.id, model.engineType, "en") },
-                                    onDeleteRequest = { model -> modelToDelete = model as? AppModel; showDeleteConfirmDialog = true },
-                                    onCancelDownload = onCancelDownload,
-                                    downloadProgress = downloadProgress,
-                                    downloadingItem = vmDownloadingItem,
-                                    refreshTrigger = uiState.refreshTrigger
-                                )
-                                5 -> AdvancedSettingsTab(
-                                    languageManager = languageManager,
-                                    settingsRepo = settingsRepo,
-                                    appStateManager = appStateManager,
-                                    onCleanupRequest = { showCleanupDialog = true },
-                                    onClearDefaultFallback = { 
-                                        modelManagementViewModel.clearDefaultOfflineFallback()
-                                    },
-                                    onVerboseLoggingChange = { 
-                                        appStateManager.setVerboseLoggingEnabled(it)
-                                    },
-                                    refreshTrigger = uiState.refreshTrigger
-                                )
-                                6 -> VerboseLoggingTab(languageManager, uiState.isVerboseLoggingEnabled)
-                                7 -> DefaultAppsTab(
-                                    languageManager = languageManager,
-                                    settingsRepo = settingsRepo,
-                                    appStateManager = appStateManager
-                                )
-                                8 -> IntegrationsTab(
-                                    languageManager = languageManager,
-                                    settingsRepo = settingsRepo
+                                    onRequestMicrophone = onRequestMicrophonePermission,
+                                    onRequestNotification = onRequestNotificationPermission,
+                                    onRequestOverlay = onRequestOverlayPermission
                                 )
                             }
                         }
