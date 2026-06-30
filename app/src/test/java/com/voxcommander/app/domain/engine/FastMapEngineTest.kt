@@ -3,6 +3,8 @@ package com.voxcommander.app.domain.engine
 import android.util.Log
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
+import com.voxcommander.app.domain.intent.model.NluIntent
+import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
 import com.voxcommander.app.testutil.TestDataFactory
 import io.mockk.every
 import io.mockk.mockk
@@ -24,96 +26,269 @@ class FastMapEngineTest {
     @Before
     fun setup() {
         mockkStatic(Log::class)
-        every { Log.d(any(), any()) } returns 0
+        every { Log.d(any<String>(), any<String>()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
+        every { Log.e(any<String>(), any<String>()) } returns 0
 
         fastMapDao = mockk()
         engine = FastMapEngine(fastMapDao)
     }
 
     @Test
-    fun `processCommand returns IntentPayload when pattern matches`() = runTest {
-        // Arrange
-        val rule = TestDataFactory.createFastMapRule(
-            category = "SMART_HOME",
-            actionType = "TOGGLE",
-            triggerPattern = "turn on the (.*)"
+    fun `processCommand returns NluIntent when trigger words match`() = runTest {
+        val rule = TestDataFactory.createAudioPlayRule(
+            triggerWords = listOf("turn", "on", "the"),
+            lazyQuery = true
         )
         every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
-        // Act
-        val result = engine.processCommand("turn on the kitchen lights")
+        val result = engine.processCommand("turn on the kitchen lights", null)
 
-        // Assert
         assertNotNull(result)
-        assertEquals("SMART_HOME", result?.category)
-        assertEquals("TOGGLE", result?.actionType)
+        assertEquals(IntentTaxonomy.Domains.AUDIO, result?.domain)
+        assertEquals(IntentTaxonomy.Actions.PLAY, result?.action)
+        assertEquals("com.spotify.music", result?.targetApp)
     }
 
     @Test
-    fun `processCommand is case insensitive`() = runTest {
-        // Arrange
+    fun `processCommand is case insensitive for trigger matching`() = runTest {
         val rule = TestDataFactory.createFastMapRule(
-            triggerPattern = "TURN ON THE (.*)"
+            triggerWords = listOf("PUNE", "MUZICA"),
+            lazyQuery = true,
+            domain = IntentTaxonomy.Domains.AUDIO,
+            action = IntentTaxonomy.Actions.PLAY
         )
         every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
-        // Act
-        val result = engine.processCommand("turn on the kitchen lights")
+        val result = engine.processCommand("pune muzica de la smiley", null)
 
-        // Assert
         assertNotNull(result)
     }
 
     @Test
-    fun `processCommand returns null when no pattern matches`() = runTest {
-        // Arrange
-        val rule = TestDataFactory.createFastMapRule(
-            triggerPattern = "turn on the (.*)"
+    fun `processCommand returns null when no trigger matches`() = runTest {
+        val rule = TestDataFactory.createAudioPlayRule(
+            triggerWords = listOf("pune", "muzica")
         )
         every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
-        // Act
-        val result = engine.processCommand("play some music")
+        val result = engine.processCommand("play some music", null)
 
-        // Assert
         assertNull(result)
     }
 
     @Test
-    fun `processCommand returns null when query field is empty for capture group rule`() = runTest {
-        // Arrange: Rule expects a capture group, but command doesn't provide enough text
-        val rule = TestDataFactory.createFastMapRule(
-            triggerPattern = "pune melodia (.*)"
+    fun `processCommand extracts lazy query from spoken text`() = runTest {
+        val rule = TestDataFactory.createAudioPlayRule(
+            triggerWords = listOf("pune", "muzica", "de", "la"),
+            lazyQuery = true
         )
         every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
-        // Act: Command only matches the prefix, capture group is empty or doesn't match
-        // Note: Regex "pune melodia (.*)" might still match "pune melodia " with empty string
-        val result = engine.processCommand("pune melodia")
+        val result = engine.processCommand("pune muzica de la smiley", null)
 
-        // Assert: result might be not-null with empty track, OR null if regex doesn't match
-        // Let's verify our engine's actual behavior (it should return null or a payload with null/empty track)
-        if (result != null) {
-            assertTrue(result.track.isNullOrEmpty())
-        }
+        assertNotNull(result)
+        val query = result?.parameters?.get(NluIntent.PARAM_QUERY)
+        assertNotNull(query)
+        assertTrue(query!!.contains("smiley"))
     }
 
     @Test
-    fun `processCommand handles complex entity mapping from TestDataFactory`() = runTest {
-        // Arrange
-        val rule = TestDataFactory.createFastMapRule(
-            category = "MAPS",
-            actionType = "NAVIGATE",
-            triggerPattern = "du-ma la (.*)",
-            destination = "custom_dest" // Static destination override
+    fun `processCommand maps query to destination for maps domain`() = runTest {
+        val rule = TestDataFactory.createNavigationRule(
+            triggerWords = listOf("du-ma", "la")
         )
         every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
-        // Act
-        val result = engine.processCommand("du-ma la magazin")
+        val result = engine.processCommand("du-ma la magazin", null)
 
-        // Assert
-        assertEquals("MAPS", result?.category)
-        assertEquals("custom_dest", result?.destination)
+        assertNotNull(result)
+        assertEquals(IntentTaxonomy.Domains.MAPS, result?.domain)
+        assertEquals(IntentTaxonomy.Actions.NAVIGATE, result?.action)
+        val destination = result?.parameters?.get(NluIntent.PARAM_DESTINATION)
+        assertNotNull(destination)
+        assertTrue(destination!!.contains("magazin"))
+    }
+
+    @Test
+    fun `processCommand returns null for empty rules list`() = runTest {
+        every { fastMapDao.getAllRules() } returns flowOf(emptyList())
+
+        val result = engine.processCommand("anything", null)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `processCommand skips inactive rules`() = runTest {
+        val rule = TestDataFactory.createFastMapRule(
+            triggerWords = listOf("pune", "muzica"),
+            isActive = false
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("pune muzica", null)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `processCommand returns null for blank input`() = runTest {
+        val rule = TestDataFactory.createAudioPlayRule()
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("", null)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `pure transport control with extra words skips to L2`() = runTest {
+        val rule = TestDataFactory.createTransportControlRule(
+            triggerWords = listOf("pune", "play")
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("pune play smiley", null)
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `pure transport control with only trigger words matches`() = runTest {
+        val rule = TestDataFactory.createTransportControlRule(
+            triggerWords = listOf("pune", "play")
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("pune play", null)
+
+        assertNotNull(result)
+        assertEquals(IntentTaxonomy.Domains.AUDIO, result?.domain)
+    }
+
+    @Test
+    fun `query-only rule matches without trigger words`() = runTest {
+        val rule = TestDataFactory.createQueryOnlyRule(
+            queryWords = listOf("ceasul")
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("cat este ceasul", null)
+
+        assertNotNull(result)
+        assertEquals(IntentTaxonomy.Domains.SYSTEM, result?.domain)
+        val query = result?.parameters?.get(NluIntent.PARAM_QUERY)
+        assertNotNull(query)
+        assertTrue(query!!.contains("ceasul"))
+    }
+
+    @Test
+    fun `messaging domain maps query to contact parameter`() = runTest {
+        val rule = TestDataFactory.createMessagingRule(
+            triggerWords = listOf("trimite", "mesaj", "la")
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("trimite mesaj la maria", null)
+
+        assertNotNull(result)
+        assertEquals(IntentTaxonomy.Domains.MESSAGING, result?.domain)
+        assertEquals(IntentTaxonomy.Actions.SEND, result?.action)
+        val contact = result?.parameters?.get(NluIntent.PARAM_CONTACT)
+        assertNotNull(contact)
+        assertTrue(contact!!.contains("maria"))
+    }
+
+    @Test
+    fun `settings domain rule matches volume up`() = runTest {
+        val rule = TestDataFactory.createSettingsRule(
+            triggerWords = listOf("volum", "up"),
+            action = IntentTaxonomy.Actions.VOLUME_UP
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("volum up", null)
+
+        assertNotNull(result)
+        assertEquals(IntentTaxonomy.Domains.SETTINGS, result?.domain)
+        assertEquals(IntentTaxonomy.Actions.VOLUME_UP, result?.action)
+    }
+
+    @Test
+    fun `mediaControlType is included in parameters when not blank`() = runTest {
+        val rule = TestDataFactory.createTransportControlRule(
+            triggerWords = listOf("next"),
+            action = IntentTaxonomy.Actions.NEXT,
+            mediaControlType = "audio_button"
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("next", null)
+
+        assertNotNull(result)
+        assertEquals("audio_button", result?.parameters?.get("mediaControlType"))
+    }
+
+    @Test
+    fun `rule with uriTemplate passes it through to NluIntent`() = runTest {
+        val rule = TestDataFactory.createNavigationRule(
+            triggerWords = listOf("du-ma", "la"),
+            uriTemplate = "geo:0,0?q={destination}"
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("du-ma la magazin", null)
+
+        assertNotNull(result)
+        assertEquals("geo:0,0?q={destination}", result?.uriTemplate)
+    }
+
+    @Test
+    fun `rule with intentAction passes it through to NluIntent`() = runTest {
+        val rule = TestDataFactory.createFastMapRule(
+            triggerWords = listOf("deschide"),
+            intentAction = "android.intent.action.VIEW",
+            domain = "custom",
+            action = "launch"
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("deschide", null)
+
+        assertNotNull(result)
+        assertEquals("android.intent.action.VIEW", result?.intentAction)
+    }
+
+    @Test
+    fun `rule with blank targetPackage sets targetApp to null`() = runTest {
+        val rule = TestDataFactory.createFastMapRule(
+            triggerWords = listOf("test"),
+            targetPackage = "",
+            domain = "custom",
+            action = "launch"
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("test", null)
+
+        assertNotNull(result)
+        assertNull(result?.targetApp)
+    }
+
+    @Test
+    fun `rule with non-blank targetPackage sets targetApp`() = runTest {
+        val rule = TestDataFactory.createFastMapRule(
+            triggerWords = listOf("test"),
+            targetPackage = "com.example.app",
+            domain = "custom",
+            action = "launch"
+        )
+        every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
+
+        val result = engine.processCommand("test", null)
+
+        assertNotNull(result)
+        assertEquals("com.example.app", result?.targetApp)
     }
 }

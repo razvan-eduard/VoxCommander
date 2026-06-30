@@ -2,10 +2,13 @@ package com.voxcommander.app.domain
 
 import android.util.Log
 import com.voxcommander.app.data.local.dao.FastMapDao
-import com.voxcommander.app.data.preferences.SettingsManager
+import com.voxcommander.app.data.preferences.AppSettings
+import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.intent.IntentDecisionMap
 import com.voxcommander.app.domain.intent.interpreter.AssistantEngine
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
+import com.voxcommander.app.domain.intent.model.NluIntent
+import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
 import com.voxcommander.app.testutil.TestDataFactory
 import com.voxcommander.app.utils.Strings
 import io.mockk.*
@@ -19,19 +22,20 @@ import org.junit.Test
 
 /**
  * TRUE Integration Test: Verifies the interaction between REAL components.
- * Chain: Spoken Text -> Real FastMapEngine (Regex) -> IntentDecisionMap -> IntentPayload
+ * Chain: Spoken Text -> Real FastMapEngine (Regex) -> IntentDecisionMap -> NluIntent
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class IntegrationChainTest {
 
-    private lateinit var settingsManager: SettingsManager
+    private lateinit var settingsRepo: SettingsRepository
     private lateinit var fastMapDao: FastMapDao
-    
+
     private lateinit var realL1Engine: FastMapEngine
     private lateinit var l2CloudEngine: AssistantEngine
     private lateinit var l3LocalEngine: AssistantEngine
-    private lateinit var geminiEngine: AssistantEngine
-    
+    private lateinit var geminiNanoEngine: AssistantEngine
+    private lateinit var geminiCloudEngine: AssistantEngine
+
     private lateinit var decisionMap: IntentDecisionMap
 
     @Before
@@ -40,67 +44,74 @@ class IntegrationChainTest {
         every { Log.d(any<String>(), any<String>()) } returns 0
         every { Log.e(any<String>(), any<String>()) } returns 0
 
-        settingsManager = mockk(relaxed = true)
+        settingsRepo = mockk(relaxed = true)
         fastMapDao = mockk()
-        
+
         // Use the REAL regex engine
         realL1Engine = FastMapEngine(fastMapDao)
-        
+
         // Keep external AI as mocks
         l2CloudEngine = mockk()
         l3LocalEngine = mockk()
-        geminiEngine = mockk()
+        geminiNanoEngine = mockk()
+        geminiCloudEngine = mockk()
 
         decisionMap = IntentDecisionMap(
             realL1Engine,
             l2CloudEngine,
             l3LocalEngine,
-            geminiEngine,
-            settingsManager
+            geminiNanoEngine,
+            geminiCloudEngine,
+            settingsRepo
         )
+
+        val defaultSettings = AppSettings(
+            cloudIntelligenceEnabled = true,
+            aiProcessor = Strings.AiProcessors.OPENAI
+        )
+        every { settingsRepo.getSettingsSnapshot() } returns defaultSettings
     }
 
     @Test
     fun `full chain flow through REAL Regex engine`() = runTest {
-        // 1. Arrange: Rule that uses a capture group
-        val rule = TestDataFactory.createFastMapRule(
-            category = "maps",
-            actionType = "NAVIGATE",
-            triggerPattern = "du-ma la (.*)"
+        val rule = TestDataFactory.createNavigationRule(
+            triggerWords = listOf("du-ma", "la")
         )
-        // Ensure the flow emits the list
         every { fastMapDao.getAllRules() } returns flowOf(listOf(rule))
 
-        // 2. Act: This simulates a real voice command result
         val spokenText = "du-ma la bucuresti"
-        val finalPayload = decisionMap.processCommand(spokenText)
+        val finalIntent = decisionMap.processCommand(spokenText, null)
 
-        // 3. Assert: Verify the components worked together
-        assertNotNull("Payload should not be null for a match", finalPayload)
-        assertEquals("maps", finalPayload?.category)
-        assertEquals("bucuresti", finalPayload?.destination)
+        assertNotNull("Intent should not be null for a match", finalIntent)
+        assertEquals(IntentTaxonomy.Domains.MAPS, finalIntent?.domain)
+        assertEquals(IntentTaxonomy.Actions.NAVIGATE, finalIntent?.action)
+        val destination = finalIntent?.parameters?.get(NluIntent.PARAM_DESTINATION)
+        assertNotNull(destination)
+        assertEquals("bucuresti", destination)
     }
 
     @Test
     fun `full chain fallback when REAL Regex misses`() = runTest {
-        // 1. Arrange: L1 Regex returns empty list (no matches possible)
         every { fastMapDao.getAllRules() } returns flowOf(emptyList())
-        
+
         val spokenText = "cine a castigat meciul?"
-        val expectedCloudResult = TestDataFactory.createIntentPayload(category = "knowledge", actionType = "query")
-        
-        every { settingsManager.getAiProcessor() } returns Strings.AiProcessors.OPENAI
-        every { settingsManager.isCloudIntelligenceEnabled() } returns true
-        coEvery { l2CloudEngine.processCommand(spokenText) } returns expectedCloudResult
+        val expectedIntent = TestDataFactory.createNluIntent(
+            domain = IntentTaxonomy.Domains.SYSTEM,
+            action = "query"
+        )
 
-        // 2. Act
-        val finalPayload = decisionMap.processCommand(spokenText)
+        every { settingsRepo.getSettingsSnapshot() } returns AppSettings(
+            cloudIntelligenceEnabled = true,
+            aiProcessor = Strings.AiProcessors.OPENAI
+        )
+        coEvery { l2CloudEngine.processCommand(spokenText, any()) } returns expectedIntent
 
-        // 3. Assert
-        assertNotNull(finalPayload)
-        assertEquals("knowledge", finalPayload?.category)
-        
+        val finalIntent = decisionMap.processCommand(spokenText, null)
+
+        assertNotNull(finalIntent)
+        assertEquals(IntentTaxonomy.Domains.SYSTEM, finalIntent?.domain)
+
         // Verify the flow: L1 was called (but missed), L2 handled it
-        coVerify(exactly = 1) { l2CloudEngine.processCommand(spokenText) }
+        coVerify(exactly = 1) { l2CloudEngine.processCommand(spokenText, any()) }
     }
 }
