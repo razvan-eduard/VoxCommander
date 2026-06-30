@@ -60,6 +60,8 @@ class SettingsRepositoryImpl(
         val WAKE_WORD_MODEL_PATH = stringPreferencesKey("wake_word_model_path")
         val COMMAND_QUEUE_ENABLED = booleanPreferencesKey("command_queue_enabled")
         val WAKE_WORD_PROFILE = stringPreferencesKey("wake_word_profile")
+        val WAKE_WORD_ENGINE_TYPE = stringPreferencesKey("wake_word_engine_type")
+        val PICOVOICE_ACCESS_KEY = stringPreferencesKey("picovoice_access_key")
 
         // Offline fallback
         val OFFLINE_FALLBACK_TIMEOUT = intPreferencesKey("offline_fallback_timeout")
@@ -257,6 +259,8 @@ class SettingsRepositoryImpl(
             wakeWordModelPath = prefs[Keys.WAKE_WORD_MODEL_PATH],
             commandQueueEnabled = prefs[Keys.COMMAND_QUEUE_ENABLED] ?: true,
             wakeWordProfileJson = prefs[Keys.WAKE_WORD_PROFILE],
+            wakeWordEngineType = prefs[Keys.WAKE_WORD_ENGINE_TYPE] ?: "vosk",
+            picovoiceAccessKey = prefs[Keys.PICOVOICE_ACCESS_KEY],
 
             offlineFallbackTimeout = prefs[Keys.OFFLINE_FALLBACK_TIMEOUT] ?: 10,
             defaultOfflineModel = prefs[Keys.DEFAULT_OFFLINE_MODEL] ?: "tiny",
@@ -404,6 +408,21 @@ class SettingsRepositoryImpl(
         dataStore.edit { prefs ->
             if (path != null) prefs[Keys.WAKE_WORD_MODEL_PATH] = path
             else prefs.remove(Keys.WAKE_WORD_MODEL_PATH)
+        }
+    }
+
+    override suspend fun setWakeWordEngineType(engineType: String) {
+        dataStore.edit { it[Keys.WAKE_WORD_ENGINE_TYPE] = engineType }
+    }
+
+    override fun getPicovoiceAccessKeySync(): String? {
+        return runBlocking { dataStore.data.first()[Keys.PICOVOICE_ACCESS_KEY] }
+    }
+
+    override suspend fun setPicovoiceAccessKey(key: String?) {
+        dataStore.edit { prefs ->
+            if (key != null) prefs[Keys.PICOVOICE_ACCESS_KEY] = key
+            else prefs.remove(Keys.PICOVOICE_ACCESS_KEY)
         }
     }
 

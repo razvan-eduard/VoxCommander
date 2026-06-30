@@ -52,6 +52,9 @@ interface SettingsRepository {
     suspend fun setCommandQueueEnabled(enabled: Boolean)
     suspend fun setWakeWordProfile(profileJson: String?)
     fun getWakeWordProfileJson(): String?
+    suspend fun setWakeWordEngineType(engineType: String)
+    fun getPicovoiceAccessKeySync(): String?
+    suspend fun setPicovoiceAccessKey(key: String?)
 
     // --- OFFLINE FALLBACK ---
     suspend fun setOfflineFallbackTimeout(seconds: Int)

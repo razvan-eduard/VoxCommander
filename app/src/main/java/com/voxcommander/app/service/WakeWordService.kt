@@ -35,7 +35,7 @@ class WakeWordService : Service() {
     private lateinit var appStateManager: AppStateManager
     private lateinit var languageManager: com.voxcommander.app.domain.localization.LanguageManager
     private lateinit var voiceOverlayManager: com.voxcommander.app.ui.components.VoiceOverlayManager
-    private var wakeWordEngine: WakeWordEngine? = null
+    private var wakeWordEngine: IWakeWordEngine? = null
     private var notificationManager: NotificationManager? = null
 
     private val CHANNEL_ID = "wake_word_service_channel"
@@ -159,45 +159,65 @@ class WakeWordService : Service() {
         serviceScope.launch {
             val snapshot = settingsRepo.getSettingsSnapshot()
             val wakeWord = snapshot.wakeWord
-            val wakeWordModelName = snapshot.wakeWordModelPath
-            val voiceLanguage = snapshot.voiceLanguage
-
-            val rootDir = getExternalFilesDir(null)
-            val modelPath = if (!wakeWordModelName.isNullOrBlank()) {
-                val directFile = File(rootDir, wakeWordModelName)
-                if (directFile.exists()) {
-                    directFile.absolutePath
-                } else {
-                    rootDir?.listFiles()?.find {
-                        it.isDirectory && it.name.contains(wakeWordModelName, ignoreCase = true)
-                    }?.absolutePath
-                }
-            } else {
-                rootDir?.listFiles()?.find {
-                    it.isDirectory && it.name.startsWith("vosk-model-") && it.name.contains(voiceLanguage, ignoreCase = true)
-                }?.absolutePath
-            }
-
-            if (modelPath == null) {
-                Logger.log("No Vosk model available")
-                stopSelf()
-                return@launch
-            }
+            val engineType = snapshot.wakeWordEngineType
 
             wakeWordEngine?.release()
-            wakeWordEngine = WakeWordEngine(this@WakeWordService, settingsRepo, appStateManager) {
-                onWakeWordDetected()
-            }
+            wakeWordEngine = null
 
-            val initialized = wakeWordEngine?.initialize(modelPath, wakeWord) ?: false
-            if (initialized) {
-                wakeWordEngine?.startListening()
- // Delayed update: let StateFlow propagate isWakeWordServiceListening + voiceState
-                delay(100)
-                updateNotification()
+            if (engineType == "porcupine") {
+                Logger.log("Using Porcupine wake word engine", TAG)
+                wakeWordEngine = PorcupineWakeWordEngine(this@WakeWordService, settingsRepo, appStateManager) {
+                    onWakeWordDetected()
+                }
+                val initialized = wakeWordEngine?.initialize("", wakeWord) ?: false
+                if (initialized) {
+                    wakeWordEngine?.startListening()
+                    delay(100)
+                    updateNotification()
+                } else {
+                    Logger.log("Failed to initialize Porcupine engine", TAG)
+                    stopSelf()
+                }
             } else {
-                Logger.log("Failed to initialize engine")
-                stopSelf()
+                Logger.log("Using Vosk wake word engine", TAG)
+                val wakeWordModelName = snapshot.wakeWordModelPath
+                val voiceLanguage = snapshot.voiceLanguage
+
+                val rootDir = getExternalFilesDir(null)
+                val modelPath = if (!wakeWordModelName.isNullOrBlank()) {
+                    val directFile = File(rootDir, wakeWordModelName)
+                    if (directFile.exists()) {
+                        directFile.absolutePath
+                    } else {
+                        rootDir?.listFiles()?.find {
+                            it.isDirectory && it.name.contains(wakeWordModelName, ignoreCase = true)
+                        }?.absolutePath
+                    }
+                } else {
+                    rootDir?.listFiles()?.find {
+                        it.isDirectory && it.name.startsWith("vosk-model-") && it.name.contains(voiceLanguage, ignoreCase = true)
+                    }?.absolutePath
+                }
+
+                if (modelPath == null) {
+                    Logger.log("No Vosk model available", TAG)
+                    stopSelf()
+                    return@launch
+                }
+
+                wakeWordEngine = WakeWordEngine(this@WakeWordService, settingsRepo, appStateManager) {
+                    onWakeWordDetected()
+                }
+
+                val initialized = wakeWordEngine?.initialize(modelPath, wakeWord) ?: false
+                if (initialized) {
+                    wakeWordEngine?.startListening()
+                    delay(100)
+                    updateNotification()
+                } else {
+                    Logger.log("Failed to initialize Vosk engine", TAG)
+                    stopSelf()
+                }
             }
         }
     }

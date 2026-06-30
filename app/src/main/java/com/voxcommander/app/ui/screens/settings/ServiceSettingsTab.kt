@@ -1,6 +1,7 @@
 package com.voxcommander.app.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.delay
@@ -9,6 +10,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withAnnotation
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.data.preferences.SettingsRepository
@@ -45,7 +53,7 @@ fun ServiceSettingsTab(
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
     val voskKey = RemoteModelRegistry.getEngineKeyByExtension(".zip") ?: ""
     val voskModels = uiState.availableModels[voskKey] ?: emptyList()
-    
+
     val isVoskMultilingual = RemoteModelRegistry.isMultilingual(voskKey)
     val availableVoskLanguages = RemoteModelRegistry.getLanguages(voskKey)
 
@@ -95,6 +103,95 @@ fun ServiceSettingsTab(
     }
 
     if (uiState.wakeWordEnabled) {
+        // Wake Word Engine Selection
+        Text(
+            text = languageManager.getString("ww_engine_title"),
+            style = MaterialTheme.typography.labelLarge
+        )
+        Text(
+            text = languageManager.getString("ww_engine_desc"),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = uiState.wakeWordEngineType == "vosk",
+                onClick = { appStateManager.setWakeWordEngineType("vosk") },
+                label = { Text("Vosk") },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = uiState.wakeWordEngineType == "porcupine",
+                onClick = { appStateManager.setWakeWordEngineType("porcupine") },
+                label = { Text("Porcupine") },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        val isPorcupine = uiState.wakeWordEngineType == "porcupine"
+
+        // Picovoice AccessKey input (only for Porcupine)
+        if (isPorcupine) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = languageManager.getString("ww_porcupine_accesskey"),
+                style = MaterialTheme.typography.labelLarge
+            )
+            val uriHandler = LocalUriHandler.current
+            val descText = languageManager.getString("ww_porcupine_accesskey_desc")
+            val linkUrl = "https://console.picovoice.ai"
+            val annotatedDesc = remember(descText) {
+                buildAnnotatedString {
+                    val linkStart = descText.indexOf("console.picovoice.ai")
+                    if (linkStart >= 0) {
+                        append(descText.substring(0, linkStart))
+                        withStyle(
+                            SpanStyle(
+                                color = Color.Unspecified,
+                                textDecoration = TextDecoration.Underline
+                            )
+                        ) {
+                            withAnnotation(tag = "URL", annotation = linkUrl) {
+                                append("console.picovoice.ai")
+                            }
+                        }
+                        append(descText.substring(linkStart + "console.picovoice.ai".length))
+                    } else {
+                        append(descText)
+                    }
+                }
+            }
+            ClickableText(
+                text = annotatedDesc,
+                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                onClick = { offset ->
+                    annotatedDesc.getStringAnnotations("URL", offset, offset)
+                        .firstOrNull()?.let { uriHandler.openUri(it.item) }
+                }
+            )
+            var localAccessKey by remember { mutableStateOf(uiState.picovoiceAccessKey ?: "") }
+            LaunchedEffect(uiState.picovoiceAccessKey) {
+                if ((uiState.picovoiceAccessKey ?: "") != localAccessKey) {
+                    localAccessKey = uiState.picovoiceAccessKey ?: ""
+                }
+            }
+            OutlinedTextField(
+                value = localAccessKey,
+                onValueChange = {
+                    localAccessKey = it
+                    appStateManager.setPicovoiceAccessKey(it.ifBlank { null })
+                },
+                label = { Text("AccessKey") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         // Command Queue Toggle
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -110,8 +207,8 @@ fun ServiceSettingsTab(
             )
         }
 
-        // Voice Language Selection (only for non-multilingual Vosk)
-        if (!isVoskMultilingual && availableVoskLanguages.isNotEmpty()) {
+        // Voice Language Selection (only for non-multilingual Vosk, and not for Porcupine)
+        if (!isPorcupine && !isVoskMultilingual && availableVoskLanguages.isNotEmpty()) {
             val languages = availableVoskLanguages.map { lang ->
                 lang to lang.uppercase()
             }
@@ -152,8 +249,11 @@ fun ServiceSettingsTab(
             HorizontalDivider()
         }
 
-        // Voice Calibration Card
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        val hasProfile = uiState.wakeWordProfileJson != null
+
+        // Voice Calibration Card (Vosk only — Porcupine has its own model-based detection)
+        if (!isPorcupine) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         Text(
             text = languageManager.getString("ww_calibrate_title"),
             style = MaterialTheme.typography.labelLarge
@@ -167,7 +267,6 @@ fun ServiceSettingsTab(
         val context = LocalContext.current
         val calibrator = remember { WakeWordCalibrator(context) { } }
         val calibrationState by calibrator.state.collectAsStateWithLifecycle()
-        val hasProfile = uiState.wakeWordProfileJson != null
         var showCalibrationDialog by remember { mutableStateOf(false) }
 
         // Show current profile status
@@ -316,7 +415,9 @@ fun ServiceSettingsTab(
             )
         }
 
-        // Wake Word Text Field
+        } // end if (!isPorcupine) — calibration section
+
+        // Wake Word Text Field (both engines)
         val isWakeWordModelOnDevice = remember(selectedWakeWordModel, refreshTrigger) {
             selectedWakeWordModel != null && uiState.isModelDownloaded(selectedWakeWordModel.id)
         }
@@ -344,12 +445,12 @@ fun ServiceSettingsTab(
             languageManager = languageManager,
             voiceLanguage = uiState.voiceLanguage,
             voiceProcessor = uiState.voiceProcessor,
-            isModelOnDevice = isWakeWordModelOnDevice,
+            isModelOnDevice = if (isPorcupine) true else isWakeWordModelOnDevice,
             readOnly = hasProfile
         )
 
-        // Calibration status indicator (shown below text field)
-        if (hasProfile) {
+        // Calibration status indicator (shown below text field, Vosk only)
+        if (!isPorcupine && hasProfile) {
             Text(
                 text = languageManager.getString("ww_calibrate_profile"),
                 style = MaterialTheme.typography.bodySmall,
@@ -358,57 +459,69 @@ fun ServiceSettingsTab(
             )
         }
 
-        // Wake Word Model Selection
-        Text(text = languageManager.getString("wake_word_model"), style = MaterialTheme.typography.labelLarge)
-
-        val groupedModels = remember(filteredVoskModels, uiState) {
-            if (filteredVoskModels.isNotEmpty()) {
-                listOf(DropdownGroup("AVAILABLE MODELS", filteredVoskModels))
-            } else emptyList()
+        // Porcupine built-in keywords hint
+        if (isPorcupine) {
+            Text(
+                text = languageManager.getString("ww_porcupine_keywords_hint"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+            )
         }
 
-        GroupedDropdownMenu(
-            selectedItem = selectedWakeWordModel,
-            groups = groupedModels,
-            itemLabel = { it.label + " (" + it.sizeDescription + ")" },
-            isDownloaded = { model -> uiState.isModelDownloaded(model.id) },
-            onDeviceLabel = languageManager.getString("on_device_label"),
-            onItemSelected = { model, isDownloaded ->
-                appStateManager.setWakeWordModelPath(model.id)
-            },
-            onExpandedChange = { showModelSheet = it },
-            onDownloadRequest = onDownloadRequest,
-            onDeleteRequest = onDeleteRequest,
-            onCancelDownload = onCancelDownload,
-            downloadProgress = downloadProgress,
-            downloadingItem = downloadingItem as? AppModel,
-            languageManager = languageManager
-        )
+        // Wake Word Model Selection (Vosk only)
+        if (!isPorcupine) {
+            Text(text = languageManager.getString("wake_word_model"), style = MaterialTheme.typography.labelLarge)
 
-        // ModalBottomSheet for model selection
-        if (showModelSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showModelSheet = false },
-                sheetState = sheetState,
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                GroupedDropdownContent(
-                    title = languageManager.getString("wake_word_model"),
-                    groups = groupedModels,
-                    itemLabel = { it.label + " (" + it.sizeDescription + ")" },
-                    isDownloaded = { model -> uiState.isModelDownloaded(model.id) },
-                    onDeviceLabel = languageManager.getString("on_device_label"),
-                    onItemSelected = { model, isDownloaded ->
-                        appStateManager.setWakeWordModelPath(model.id)
-                        showModelSheet = false
-                    },
-                    onDownloadRequest = onDownloadRequest,
-                    onDeleteRequest = onDeleteRequest,
-                    onCancelDownload = onCancelDownload,
-                    downloadProgress = downloadProgress,
-                    downloadingItem = downloadingItem as? AppModel,
-                    languageManager = languageManager
-                )
+            val groupedModels = remember(filteredVoskModels, uiState) {
+                if (filteredVoskModels.isNotEmpty()) {
+                    listOf(DropdownGroup("AVAILABLE MODELS", filteredVoskModels))
+                } else emptyList()
+            }
+
+            GroupedDropdownMenu(
+                selectedItem = selectedWakeWordModel,
+                groups = groupedModels,
+                itemLabel = { it.label + " (" + it.sizeDescription + ")" },
+                isDownloaded = { model -> uiState.isModelDownloaded(model.id) },
+                onDeviceLabel = languageManager.getString("on_device_label"),
+                onItemSelected = { model, isDownloaded ->
+                    appStateManager.setWakeWordModelPath(model.id)
+                },
+                onExpandedChange = { showModelSheet = it },
+                onDownloadRequest = onDownloadRequest,
+                onDeleteRequest = onDeleteRequest,
+                onCancelDownload = onCancelDownload,
+                downloadProgress = downloadProgress,
+                downloadingItem = downloadingItem as? AppModel,
+                languageManager = languageManager
+            )
+
+            // ModalBottomSheet for model selection
+            if (showModelSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showModelSheet = false },
+                    sheetState = sheetState,
+                    containerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    GroupedDropdownContent(
+                        title = languageManager.getString("wake_word_model"),
+                        groups = groupedModels,
+                        itemLabel = { it.label + " (" + it.sizeDescription + ")" },
+                        isDownloaded = { model -> uiState.isModelDownloaded(model.id) },
+                        onDeviceLabel = languageManager.getString("on_device_label"),
+                        onItemSelected = { model, isDownloaded ->
+                            appStateManager.setWakeWordModelPath(model.id)
+                            showModelSheet = false
+                        },
+                        onDownloadRequest = onDownloadRequest,
+                        onDeleteRequest = onDeleteRequest,
+                        onCancelDownload = onCancelDownload,
+                        downloadProgress = downloadProgress,
+                        downloadingItem = downloadingItem as? AppModel,
+                        languageManager = languageManager
+                    )
+                }
             }
         }
 
@@ -420,8 +533,8 @@ fun ServiceSettingsTab(
             color = if (uiState.isWakeWordServiceListening) downloadedColor else MaterialTheme.colorScheme.secondary
         )
 
-        // Check if selected model is on device
-        val isModelOnDevice = remember(selectedWakeWordModel, uiState, refreshTrigger) {
+        // Check if selected model is on device (Vosk only — Porcupine doesn't need a Vosk model)
+        val isModelOnDevice = if (isPorcupine) true else remember(selectedWakeWordModel, uiState, refreshTrigger) {
             selectedWakeWordModel != null && uiState.isModelDownloaded(selectedWakeWordModel.id)
         }
 
@@ -437,8 +550,8 @@ fun ServiceSettingsTab(
             Text(if (uiState.isWakeWordServiceListening) languageManager.getString("stop_service") else languageManager.getString("start_service"))
         }
 
-        // Show warning if model not on device
-        if (!isModelOnDevice && !uiState.isWakeWordServiceListening) {
+        // Show warning if model not on device (Vosk only)
+        if (!isPorcupine && !isModelOnDevice && !uiState.isWakeWordServiceListening) {
             Text(
                 text = "Selected model not on device. Please download the model first.",
                 style = MaterialTheme.typography.bodySmall,

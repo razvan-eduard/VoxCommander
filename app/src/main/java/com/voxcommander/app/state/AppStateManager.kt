@@ -264,6 +264,14 @@ class AppStateManager private constructor(
         scope.launch { repo.setWakeWordModelPath(path) }
     }
 
+    fun setWakeWordEngineType(engineType: String) {
+        scope.launch { repo.setWakeWordEngineType(engineType) }
+    }
+
+    fun setPicovoiceAccessKey(key: String?) {
+        scope.launch { repo.setPicovoiceAccessKey(key) }
+    }
+
     fun setCloudIntelligenceEnabled(enabled: Boolean) {
         scope.launch { repo.setCloudIntelligenceEnabled(enabled) }
     }

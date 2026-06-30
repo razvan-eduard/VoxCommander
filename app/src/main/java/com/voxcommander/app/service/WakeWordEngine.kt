@@ -30,7 +30,7 @@ class WakeWordEngine(
     private val settingsRepo: SettingsRepository,
     private val appStateManager: AppStateManager,
     private val onWakeWordDetected: () -> Unit
-) {
+) : IWakeWordEngine {
     private val TAG = Strings.Tags.WAKE_WORD_ENGINE
     private var model: Model? = null
     private var recognizer: Recognizer? = null
@@ -67,7 +67,7 @@ class WakeWordEngine(
     private var isCollectingVoice = false
     private val SILENCE_FRAMES_TO_END_SEGMENT = 8
 
-    suspend fun initialize(modelPath: String, wakeWord: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun initialize(modelPath: String, wakeWord: String): Boolean = withContext(Dispatchers.IO) {
         try {
             Logger.log("Init model: $modelPath", TAG)
 
@@ -139,7 +139,7 @@ class WakeWordEngine(
         }
     }
 
-    fun startListening(): Boolean {
+    override fun startListening(): Boolean {
         // Load calibrated threshold if available
         val profileJson = settingsRepo.getWakeWordProfileJson()
         val profile = profileJson?.let { WakeWordProfile.fromJson(it) }
@@ -384,7 +384,7 @@ class WakeWordEngine(
         }
     }
 
-    fun stopListening() {
+    override fun stopListening() {
         if (!isListening) return
         Logger.log("Pausing WakeWordEngine listening", TAG)
 
@@ -415,13 +415,13 @@ class WakeWordEngine(
         }
     }
 
-    fun stopService() {
+    override fun stopService() {
         stopListening()
         appStateManager.setWakeWordServiceListening(false)
         appStateManager.setVoiceState(VoiceState.IDLE)
     }
 
-    fun release() {
+    override fun release() {
         stopService()
 
         CoroutineScope(Dispatchers.IO).launch {

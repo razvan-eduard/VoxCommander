@@ -95,6 +95,8 @@ dependencies {
     implementation(files("libs/spotify-app-remote.aar"))
     // Gemini Nano (Google AI Edge) - System LLM SDK
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+    // Porcupine Wake Word Engine (Picovoice)
+    implementation("ai.picovoice:porcupine-android:3.0.2")
     // STT Engines (Whisper.cpp integration)
 
     testImplementation(libs.junit)
