@@ -259,6 +259,13 @@ class ModelManagementViewModel(
 
     fun clearDefaultOfflineFallback() { viewModelScope.launch { settingsRepo.clearDefaultOfflineFallback() }; appStateManager.refreshAll() }
 
+    fun clearCustomModel(engineKey: String, langCode: String? = null) {
+        viewModelScope.launch {
+            settingsRepo.setCustomModelPath(engineKey, "", langCode)
+            appStateManager.refreshAll()
+        }
+    }
+
     fun deleteUnusedModels() {
         val snapshot = settingsRepo.getSettingsSnapshot()
         val activeVoiceModelId = snapshot.activeVoiceModelId

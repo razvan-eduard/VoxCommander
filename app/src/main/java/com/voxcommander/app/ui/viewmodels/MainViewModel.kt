@@ -8,6 +8,7 @@ import com.voxcommander.app.domain.intent.router.IntentRouter
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
 import com.voxcommander.app.state.AppStateManager
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.voxcommander.app.state.VoiceState
@@ -119,6 +120,28 @@ class MainViewModel(
                 _currentIntent.value = result
                 result?.let { withContext(Dispatchers.IO) { intentRouter.route(it) } }
             } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isProcessing.value = false
+                appStateManager.setVoiceState(VoiceState.IDLE)
+            }
+        }
+    }
+
+    fun routeManualIntent(json: String) {
+        viewModelScope.launch {
+            _isProcessing.value = true
+            appStateManager.setVoiceState(VoiceState.PROCESSING)
+            try {
+                val gson = Gson()
+                val intent = gson.fromJson(json, NluIntent::class.java)
+                if (intent != null) {
+                    _currentIntent.value = intent
+                    Logger.log("Manual intent routed: $json", TAG)
+                    withContext(Dispatchers.IO) { intentRouter.route(intent) }
+                }
+            } catch (e: Exception) {
+                Logger.log("Manual intent parse error: ${e.message}", TAG)
                 e.printStackTrace()
             } finally {
                 _isProcessing.value = false

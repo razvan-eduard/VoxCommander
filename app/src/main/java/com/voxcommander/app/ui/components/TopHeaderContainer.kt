@@ -41,7 +41,10 @@ fun TopHeaderContainer(
     updateVoiceEngine: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestMicrophonePermission: () -> Unit,
-    onRequestNotificationPermission: () -> Unit
+    onRequestNotificationPermission: () -> Unit,
+    onImportCustomModel: (String?) -> Unit = {},
+    onClearCustomModel: () -> Unit = {},
+    onImportOpenWakeWordModel: () -> Unit = {}
 ) {
     if (mode == TopHeaderMode.NONE) return
 
@@ -73,7 +76,10 @@ fun TopHeaderContainer(
                         updateVoiceEngine = updateVoiceEngine,
                         onRequestOverlayPermission = onRequestOverlayPermission,
                         onRequestMicrophonePermission = onRequestMicrophonePermission,
-                        onRequestNotificationPermission = onRequestNotificationPermission
+                        onRequestNotificationPermission = onRequestNotificationPermission,
+                        onImportCustomModel = onImportCustomModel,
+                        onClearCustomModel = onClearCustomModel,
+                        onImportOpenWakeWordModel = onImportOpenWakeWordModel
                     )
                 }
                 TopHeaderMode.RULES -> {

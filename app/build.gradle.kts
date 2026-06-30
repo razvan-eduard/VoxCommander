@@ -97,6 +97,8 @@ dependencies {
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
     // Porcupine Wake Word Engine (Picovoice)
     implementation("ai.picovoice:porcupine-android:3.0.2")
+    // OpenWakeWord (fully open-source, ONNX-based wake word detection)
+    implementation("xyz.rementia:openwakeword:0.1.5")
     // STT Engines (Whisper.cpp integration)
 
     testImplementation(libs.junit)

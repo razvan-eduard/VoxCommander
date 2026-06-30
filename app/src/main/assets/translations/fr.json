@@ -336,5 +336,15 @@
   "intent_view_search_location": "Afficher / Rechercher lieu (geo:0,0?q=)",
   "intent_launch_app": "Lancer l'application",
   "media_session_permission": "Contrôle de session multimédia",
-  "media_session_permission_desc": "Requis pour lire de la musique directement dans Spotify et autres applications multimédias (comme Google Assistant)"
+  "media_session_permission_desc": "Requis pour lire de la musique directement dans Spotify et autres applications multimédias (comme Google Assistant)",
+  "import_custom_model": "Importer un modèle personnalisé",
+  "import_custom_model_desc": "Sélectionnez un fichier modèle depuis le stockage de votre appareil au lieu de le télécharger.",
+  "custom_model_active": "Modèle personnalisé en cours d'utilisation",
+  "clear_custom_model": "Supprimer le modèle personnalisé",
+  "success_custom_vosk": "Dossier de modèle Vosk personnalisé défini avec succès",
+  "success_custom_whisper": "Modèle Whisper personnalisé importé avec succès",
+  "ww_openwakeword_custom_hint": "Sélectionnez un fichier modèle .onnx depuis votre appareil. Les modèles entraînés openWakeWord peuvent être importés ici.",
+  "ww_engine_switch_warning_title": "Service en Cours",
+  "ww_engine_switch_warning_msg": "Le service wake word est en cours d'exécution. Changer de moteur arrêtera le service. Continuer ?",
+  "ww_engine_switch_warning_confirm": "Arrêter & Changer"
 }

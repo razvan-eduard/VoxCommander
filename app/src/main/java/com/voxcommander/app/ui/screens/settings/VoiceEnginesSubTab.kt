@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.remote.RemoteModelItem
@@ -38,6 +39,8 @@ fun VoiceEnginesSubTab(
     onCancelDownload: () -> Unit,
     onDeleteRequest: (AppModel) -> Unit,
     onFallbackChanged: () -> Unit = {},
+    onImportCustomModel: (String?) -> Unit = {},
+    onClearCustomModel: () -> Unit = {},
     refreshTrigger: Int = 0
 ) {
     // REALTIME STATE from AppStateManager
@@ -192,6 +195,59 @@ fun VoiceEnginesSubTab(
         if (isCurrentProcessorMultilingual) models 
         else models.filter { it.langCode == uiState.voiceLanguage }
     }
+
+    // --- CUSTOM MODEL IMPORT ---
+    val isZipEngine = RemoteModelRegistry.isZipEngine(engineKey)
+    val customModelPath = if (isZipEngine) {
+        uiState.customVoskModelPaths[uiState.voiceLanguage]
+    } else {
+        uiState.customWhisperModelPath
+    }
+    val hasCustomModel = !customModelPath.isNullOrBlank() && java.io.File(customModelPath).exists()
+
+    if (hasCustomModel) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = languageManager.getString("custom_model_active"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = customModelPath,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onClearCustomModel,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(languageManager.getString("clear_custom_model"))
+                }
+            }
+        }
+    } else {
+        OutlinedButton(
+            onClick = { onImportCustomModel(if (isZipEngine) uiState.voiceLanguage else null) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(languageManager.getString("import_custom_model"))
+        }
+        Text(
+            text = languageManager.getString("import_custom_model_desc"),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
 
     if (filteredModels.isNotEmpty()) {
         EngineModelSection(

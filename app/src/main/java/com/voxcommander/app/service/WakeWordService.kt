@@ -164,7 +164,7 @@ class WakeWordService : Service() {
             wakeWordEngine?.release()
             wakeWordEngine = null
 
-            if (engineType == "porcupine") {
+            if (engineType == "wake_porcupine" || engineType == "porcupine") {
                 Logger.log("Using Porcupine wake word engine", TAG)
                 wakeWordEngine = PorcupineWakeWordEngine(this@WakeWordService, settingsRepo, appStateManager) {
                     onWakeWordDetected()
@@ -176,6 +176,21 @@ class WakeWordService : Service() {
                     updateNotification()
                 } else {
                     Logger.log("Failed to initialize Porcupine engine", TAG)
+                    stopSelf()
+                }
+            } else if (engineType == "wake_openwakeword" || engineType == "openwakeword") {
+                Logger.log("Using OpenWakeWord engine", TAG)
+                val modelFileName = snapshot.wakeWordModelPath ?: "alexa_v0.1.onnx"
+                wakeWordEngine = OpenWakeWordEngine(this@WakeWordService, appStateManager) {
+                    onWakeWordDetected()
+                }
+                val initialized = wakeWordEngine?.initialize(modelFileName, wakeWord) ?: false
+                if (initialized) {
+                    wakeWordEngine?.startListening()
+                    delay(100)
+                    updateNotification()
+                } else {
+                    Logger.log("Failed to initialize OpenWakeWord engine", TAG)
                     stopSelf()
                 }
             } else {

@@ -40,6 +40,8 @@ fun ModelsSettingsTab(
     downloadingItem: AppModel? = null,
     downloadedColor: Color,
     onFallbackChanged: () -> Unit = {},
+    onImportCustomModel: (String?) -> Unit = {},
+    onClearCustomModel: () -> Unit = {},
     refreshTrigger: Int = 0
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
@@ -218,6 +220,8 @@ fun ModelsSettingsTab(
                 onCancelDownload = onCancelDownload,
                 onDeleteRequest = onDeleteRequest,
                 onFallbackChanged = onFallbackChanged,
+                onImportCustomModel = onImportCustomModel,
+                onClearCustomModel = onClearCustomModel,
                 refreshTrigger = refreshTrigger
             )
         } else {

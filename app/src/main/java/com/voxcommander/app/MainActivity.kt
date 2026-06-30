@@ -61,8 +61,9 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         uri?.let {
+            val engineKey = appContainer.appStateManager.uiState.value.voiceProcessor
             pendingModelLanguage?.let { lang ->
-                appContainer.modelManagementViewModel.selectCustomModel(it, com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".zip") ?: "", lang)
+                appContainer.modelManagementViewModel.selectCustomModel(it, engineKey, lang)
             }
         }
     }
@@ -71,7 +72,29 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
-            appContainer.modelManagementViewModel.selectCustomModel(it, com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".bin") ?: "")
+            val engineKey = appContainer.appStateManager.uiState.value.voiceProcessor
+            appContainer.modelManagementViewModel.selectCustomModel(it, engineKey)
+        }
+    }
+
+    private val customOpenWakeWordModelLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            val destDir = java.io.File(filesDir, "openwakeword_models")
+            if (!destDir.exists()) destDir.mkdirs()
+            val fileName = it.lastPathSegment?.substringAfterLast('/') ?: "custom_model.onnx"
+            val destFile = java.io.File(destDir, fileName)
+            try {
+                contentResolver.openInputStream(it)?.use { input ->
+                    destFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                Logger.log("OpenWakeWord custom model imported: ${destFile.absolutePath}", "MainActivity")
+                com.voxcommander.app.data.remote.RemoteModelRegistry.refreshModelMap()
+                appContainer.appStateManager.refreshAll()
+            } catch (e: Exception) {
+                Logger.log("Failed to import OpenWakeWord model: ${e.message}", "MainActivity")
+            }
         }
     }
 
@@ -176,6 +199,26 @@ class MainActivity : ComponentActivity() {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                     requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                 }
+                            },
+                            onImportCustomModel = { langCode ->
+                                val isZipEngine = com.voxcommander.app.data.remote.RemoteModelRegistry.isZipEngine(
+                                    appContainer.appStateManager.uiState.value.voiceProcessor
+                                )
+                                if (isZipEngine) {
+                                    pendingModelLanguage = langCode
+                                    customVoskModelLauncher.launch(null)
+                                } else {
+                                    customWhisperModelLauncher.launch(arrayOf("*/*"))
+                                }
+                            },
+                            onClearCustomModel = {
+                                val engineKey = appContainer.appStateManager.uiState.value.voiceProcessor
+                                val isZipEngine = com.voxcommander.app.data.remote.RemoteModelRegistry.isZipEngine(engineKey)
+                                val lang = if (isZipEngine) appContainer.appStateManager.uiState.value.voiceLanguage else null
+                                appContainer.modelManagementViewModel.clearCustomModel(engineKey, lang)
+                            },
+                            onImportOpenWakeWordModel = {
+                                customOpenWakeWordModelLauncher.launch(arrayOf("*/*"))
                             }
                         )
                     }

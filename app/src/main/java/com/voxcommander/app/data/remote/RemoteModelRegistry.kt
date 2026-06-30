@@ -26,7 +26,7 @@ data class RemoteModelSchema(
 
 data class RemoteEngineConfig(
     val engine_label: String? = null,
-    val type: String? = null, // "voice" or "llm"
+    val type: List<String> = emptyList(), // e.g. ["voice", "wake_word"] or ["llm"]
     val is_multilingual: Boolean,
     val extension: String = "",
     val models: List<RemoteModelItem>
@@ -221,8 +221,27 @@ object RemoteModelRegistry {
         // Ingest from JSON and inject the key as engine_type
         schema.engines.forEach { (key, config) ->
             Logger.log("Ingesting engine: $key (type=${config.type}, models=${config.models.size})", TAG)
-            newMap[key] = config.models.map { it.copy(engine_type = key) }.toMutableList<AppModel>()
+            val models = config.models.map { it.copy(engine_type = key) }.toMutableList<AppModel>()
+
+            newMap[key] = models
         }
+
+        // Inject Porcupine built-in keywords as virtual models (not in models.json)
+        val porcupineKeywords = listOf(
+            "alexa", "americano", "blueberry", "bumblebee", "computer",
+            "grapefruit", "grasshopper", "hey google", "hey siri", "jarvis",
+            "picovoice", "porcupine", "terminator"
+        )
+        val porcupineModels = porcupineKeywords.map { kw ->
+            VirtualModelItem(
+                id = "porcupine_builtin_$kw",
+                label = kw.replaceFirstChar { it.uppercase() },
+                engineType = "wake_porcupine",
+                sizeDescription = "Built-in"
+            )
+        }
+        newMap["wake_porcupine"] = porcupineModels.toMutableList()
+        Logger.log("Injected ${porcupineModels.size} Porcupine built-in keyword models", TAG)
 
         Logger.log("Final modelMap keys: ${newMap.keys}", TAG)
         _modelMap.value = newMap
@@ -230,8 +249,21 @@ object RemoteModelRegistry {
 
     fun getEngineTypes(): List<String> = cachedSchema?.engines?.keys?.toList() ?: emptyList()
 
+    /**
+     * Triggers a rebuild of the model map (e.g. after custom model import).
+     * Re-scans filesDir for custom models and injects them into the map.
+     */
+    fun refreshModelMap() {
+        rebuildModelMap()
+        _registryUpdateSignal.value++
+    }
+
     fun getEngineKeysByType(type: String): List<String> {
-        val result = cachedSchema?.engines?.filter { it.value.type == type }?.keys?.toList() ?: emptyList()
+        val result = cachedSchema?.engines?.filter { type in it.value.type }?.keys?.toMutableList() ?: mutableListOf()
+        // Add virtual engines not in models.json
+        if (type == "wake_word" && !result.contains("wake_porcupine")) {
+            result.add("wake_porcupine")
+        }
         Logger.log("getEngineKeysByType(type=$type) -> $result", TAG)
         return result
     }
@@ -248,6 +280,7 @@ object RemoteModelRegistry {
             Strings.AiProcessors.OPENAI -> languageManager.getString("engine_label_openai_gpt")
             Strings.AiProcessors.GEMINI_NATIVE -> languageManager.getString("engine_label_gemini_nano")
             Strings.AiProcessors.GEMINI_CLOUD -> languageManager.getString("engine_label_gemini_cloud")
+            "wake_porcupine" -> "Porcupine"
             else -> engineKey.replace("_", " ").uppercase()
         }
     }
@@ -258,11 +291,17 @@ object RemoteModelRegistry {
 
     fun getExtension(engineKey: String): String = cachedSchema?.engines?.get(engineKey)?.extension ?: ""
 
-    fun getEngineType(engineKey: String): String? = cachedSchema?.engines?.get(engineKey)?.type
+    fun getEngineTypes(engineKey: String): List<String> = cachedSchema?.engines?.get(engineKey)?.type ?: emptyList()
+
+    fun getEngineType(engineKey: String): String? = getEngineTypes(engineKey).firstOrNull()
 
     fun isZipEngine(engineKey: String): Boolean = getExtension(engineKey).equals(".zip", ignoreCase = true)
 
-    fun isLlmEngine(engineKey: String): Boolean = getEngineType(engineKey) == "llm"
+    fun isLlmEngine(engineKey: String): Boolean = "llm" in getEngineTypes(engineKey)
+
+    fun isWakeWordEngine(engineKey: String): Boolean = "wake_word" in getEngineTypes(engineKey)
+
+    fun isVoiceEngine(engineKey: String): Boolean = "voice" in getEngineTypes(engineKey)
 
     fun getEngineKeyByExtension(ext: String): String? {
         return cachedSchema?.engines?.entries

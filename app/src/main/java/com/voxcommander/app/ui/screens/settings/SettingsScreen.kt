@@ -46,7 +46,10 @@ fun SettingsContent(
     updateVoiceEngine: () -> Unit = {},
     onRequestOverlayPermission: () -> Unit = {},
     onRequestMicrophonePermission: () -> Unit = {},
-    onRequestNotificationPermission: () -> Unit = {}
+    onRequestNotificationPermission: () -> Unit = {},
+    onImportCustomModel: (String?) -> Unit = {},
+    onClearCustomModel: () -> Unit = {},
+    onImportOpenWakeWordModel: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -178,6 +181,8 @@ fun SettingsContent(
                                         showDeleteConfirmDialog = true
                                     },
                                     onFallbackChanged = { appStateManager.refreshAll() },
+                                    onImportCustomModel = onImportCustomModel,
+                                    onClearCustomModel = onClearCustomModel,
                                     refreshTrigger = uiState.refreshTrigger
                                 )
                                 2 -> {
@@ -193,6 +198,7 @@ fun SettingsContent(
                                         onCancelDownload = onCancelDownload,
                                         downloadProgress = downloadProgress,
                                         downloadingItem = vmDownloadingItem,
+                                        onImportCustomModel = { onImportOpenWakeWordModel() },
                                         refreshTrigger = uiState.refreshTrigger
                                     )
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

@@ -538,7 +538,11 @@ class SettingsRepositoryImpl(
             val mapKey = if (langCode != null) "${engineKey}_$langCode" else engineKey
             val currentJson = prefs[Keys.CUSTOM_MODEL_PATHS_JSON] ?: "{}"
             val currentMap = parseCustomModelPaths(currentJson).toMutableMap()
-            currentMap[mapKey] = path
+            if (path.isBlank()) {
+                currentMap.remove(mapKey)
+            } else {
+                currentMap[mapKey] = path
+            }
             prefs[Keys.CUSTOM_MODEL_PATHS_JSON] = gson.toJson(currentMap)
         }
     }

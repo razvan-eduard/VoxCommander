@@ -350,5 +350,15 @@
   "intent_view_search_location": "Vizualizează / Caută locație (geo:0,0?q=)",
   "intent_launch_app": "Pornește aplicație",
   "media_session_permission": "Control sesiune media",
-  "media_session_permission_desc": "Necesar pentru a reda muzică direct în Spotify și alte aplicații media (ca Google Assistant)"
+  "media_session_permission_desc": "Necesar pentru a reda muzică direct în Spotify și alte aplicații media (ca Google Assistant)",
+  "import_custom_model": "Importă Model Personalizat",
+  "import_custom_model_desc": "Selectează un fișier model din stocarea dispozitivului pentru a-l folosi în loc de descărcare.",
+  "custom_model_active": "Model personalizat în folosință",
+  "clear_custom_model": "Șterge Model Personalizat",
+  "success_custom_vosk": "Dosar model Vosk personalizat setat cu succes",
+  "success_custom_whisper": "Model Whisper personalizat importat cu succes",
+  "ww_openwakeword_custom_hint": "Selectează un fișier model .onnx din dispozitiv. Modele antrenate openWakeWord pot fi importate aici.",
+  "ww_engine_switch_warning_title": "Serviciul Rulează",
+  "ww_engine_switch_warning_msg": "Serviciul de wake word rulează momentan. Schimbarea engine-ului va opri serviciul. Continui?",
+  "ww_engine_switch_warning_confirm": "Oprește & Schimbă"
 }

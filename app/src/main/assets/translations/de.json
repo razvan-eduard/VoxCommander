@@ -336,5 +336,15 @@
   "intent_view_search_location": "Anzeigen / Standort suchen (geo:0,0?q=)",
   "intent_launch_app": "App starten",
   "media_session_permission": "Mediensitzung-Steuerung",
-  "media_session_permission_desc": "Erforderlich für direkte Musikwiedergabe in Spotify und anderen Media-Apps (wie Google Assistant)"
+  "media_session_permission_desc": "Erforderlich für direkte Musikwiedergabe in Spotify und anderen Media-Apps (wie Google Assistant)",
+  "import_custom_model": "Eigenes Modell importieren",
+  "import_custom_model_desc": "Wählen Sie eine Modelldatei aus dem Gerätespeicher anstatt herunterzuladen.",
+  "custom_model_active": "Eigenes Modell in Verwendung",
+  "clear_custom_model": "Eigenes Modell entfernen",
+  "success_custom_vosk": "Benutzerdefinierter Vosk-Modellordner erfolgreich festgelegt",
+  "success_custom_whisper": "Benutzerdefiniertes Whisper-Modell erfolgreich importiert",
+  "ww_openwakeword_custom_hint": "Wählen Sie eine .onnx-Modelldatei von Ihrem Gerät. Trainierte openWakeWord-Modelle können hier importiert werden.",
+  "ww_engine_switch_warning_title": "Dienst Läuft",
+  "ww_engine_switch_warning_msg": "Der Wake-Word-Dienst läuft derzeit. Ein Wechsel des Engines stoppt den Dienst. Fortfahren?",
+  "ww_engine_switch_warning_confirm": "Stopp & Wechseln"
 }

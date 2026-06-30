@@ -353,5 +353,15 @@
   "intent_launch_app": "Launch app",
   "add_new_fast_trigger": "Add a new fast trigger",
   "media_session_permission": "Media Session Control",
-  "media_session_permission_desc": "Required to play music directly in Spotify and other media apps (like Google Assistant)"
+  "media_session_permission_desc": "Required to play music directly in Spotify and other media apps (like Google Assistant)",
+  "import_custom_model": "Import Custom Model",
+  "import_custom_model_desc": "Select a model file from your device storage to use instead of downloading.",
+  "custom_model_active": "Custom model in use",
+  "clear_custom_model": "Clear Custom Model",
+  "success_custom_vosk": "Custom Vosk model folder set successfully",
+  "success_custom_whisper": "Custom Whisper model imported successfully",
+  "ww_openwakeword_custom_hint": "Select a .onnx model file from your device. Trained models from openWakeWord can be imported here.",
+  "ww_engine_switch_warning_title": "Service Running",
+  "ww_engine_switch_warning_msg": "The wake word service is currently running. Switching engines will stop the service. Continue?",
+  "ww_engine_switch_warning_confirm": "Stop & Switch"
 }

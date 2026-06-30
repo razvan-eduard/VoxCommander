@@ -1,6 +1,7 @@
 package com.voxcommander.app.ui.screens.main
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Mic
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.voxcommander.app.data.local.dao.FastMapDao
 import com.voxcommander.app.data.preferences.SettingsRepository
@@ -53,7 +55,10 @@ fun MainScreen(
     updateVoiceEngine: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     onRequestMicrophonePermission: () -> Unit,
-    onRequestNotificationPermission: () -> Unit
+    onRequestNotificationPermission: () -> Unit,
+    onImportCustomModel: (String?) -> Unit = {},
+    onClearCustomModel: () -> Unit = {},
+    onImportOpenWakeWordModel: () -> Unit = {}
 ) {
     val lastIntent by viewModel.currentIntent.collectAsStateWithLifecycle()
     val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
@@ -160,8 +165,13 @@ fun MainScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                var showManualIntentDialog by remember { mutableStateOf(false) }
+
                 Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                        .clickable {
+                            if (lastIntent != null) showManualIntentDialog = true
+                        },
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -171,6 +181,17 @@ fun MainScreen(
                             modifier = Modifier.align(Alignment.TopStart)
                         )
                     }
+                }
+
+                if (showManualIntentDialog) {
+                    ManualIntentDialog(
+                        initialJson = lastIntent?.let { gson.toJson(it) } ?: "",
+                        onDismiss = { showManualIntentDialog = false },
+                        onSend = { json ->
+                            viewModel.routeManualIntent(json)
+                            showManualIntentDialog = false
+                        }
+                    )
                 }
             }
         }
@@ -195,7 +216,10 @@ fun MainScreen(
             updateVoiceEngine = updateVoiceEngine,
             onRequestOverlayPermission = onRequestOverlayPermission,
             onRequestMicrophonePermission = onRequestMicrophonePermission,
-            onRequestNotificationPermission = onRequestNotificationPermission
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onImportCustomModel = onImportCustomModel,
+            onClearCustomModel = onClearCustomModel,
+            onImportOpenWakeWordModel = onImportOpenWakeWordModel
         )
 
         // --- VULKAN TEST MODAL ---
@@ -213,4 +237,65 @@ fun MainScreen(
             languageManager = languageManager
         )
     }
+}
+
+@Composable
+private fun ManualIntentDialog(
+    initialJson: String,
+    onDismiss: () -> Unit,
+    onSend: (String) -> Unit
+) {
+    var jsonText by remember { mutableStateOf(initialJson) }
+    var parseError by remember { mutableStateOf<String?>(null) }
+    val parser = remember { Gson() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Manual Intent (JSON)") },
+        text = {
+            Column {
+                Text(
+                    text = "Edit the JSON and tap Send to route this intent directly.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = jsonText,
+                    onValueChange = {
+                        jsonText = it
+                        parseError = null
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp, max = 400.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp
+                    ),
+                    isError = parseError != null,
+                    supportingText = {
+                        parseError?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    try {
+                        parser.fromJson(jsonText, com.voxcommander.app.domain.intent.model.NluIntent::class.java)
+                        onSend(jsonText)
+                    } catch (e: Exception) {
+                        parseError = "Invalid JSON: ${e.message}"
+                    }
+                }
+            ) { Text("Send") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

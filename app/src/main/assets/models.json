@@ -8,7 +8,7 @@
       "is_multilingual": true,
       "engine_label": "Whisper",
       "extension": ".bin",
-      "type": "voice",
+      "type": ["voice"],
       "models": [
         {
           "id": "tiny",
@@ -37,7 +37,7 @@
       "is_multilingual": false,
       "engine_label": "Vosk",
       "extension": ".zip",
-      "type": "voice",
+      "type": ["voice", "wake_word"],
       "models": [
         {
           "id": "vosk-model-small-en-us-0.15",
@@ -761,11 +761,47 @@
         }
       ]
     },
+    "wake_openwakeword": {
+      "is_multilingual": true,
+      "engine_label": "openWakeWord",
+      "extension": ".onnx",
+      "type": ["wake_word"],
+      "models": [
+        {
+          "id": "alexa_v0.1.onnx",
+          "label": "Alexa",
+          "path": "openwakeword/alexa_v0.1.onnx",
+          "size_mb": 1,
+          "is_remote": false
+        },
+        {
+          "id": "hey_jarvis_v0.1.onnx",
+          "label": "Hey Jarvis",
+          "path": "openwakeword/hey_jarvis_v0.1.onnx",
+          "size_mb": 1,
+          "is_remote": false
+        },
+        {
+          "id": "hey_mycroft_v0.1.onnx",
+          "label": "Hey Mycroft",
+          "path": "openwakeword/hey_mycroft_v0.1.onnx",
+          "size_mb": 1,
+          "is_remote": false
+        },
+        {
+          "id": "hey_rhasspy_v0.1.onnx",
+          "label": "Hey Rhasspy",
+          "path": "openwakeword/hey_rhasspy_v0.1.onnx",
+          "size_mb": 1,
+          "is_remote": false
+        }
+      ]
+    },
     "nlu_llm": {
       "is_multilingual": false,
       "engine_label": "NLU (LLM)",
       "extension": ".task",
-      "type": "llm",
+      "type": ["llm"],
       "models": [
         {
           "id": "qwen2.5-1.5b-q8",
