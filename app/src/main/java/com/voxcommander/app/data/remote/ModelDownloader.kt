@@ -154,27 +154,36 @@ class ModelDownloader(private val context: Context) {
         settingsRepo: SettingsRepository,
         activeVoiceModelId: String?,
         activeIntentModelId: String?,
-        appStateManager: AppStateManager? = null
+        appStateManager: AppStateManager? = null,
+        activeWakeModelId: String? = null
     ) {
         val rootDir = context.getExternalFilesDir(null) ?: return
         val downloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
 
-        // 1. Build protected set: only active models
+        // 1. Build protected set: only active models, resolved against their actual engine
         val protectedNames = mutableSetOf<String>()
-        val engineKeys = RemoteModelRegistry.getEngineTypes()
 
         // Essential system items
         protectedNames.addAll(listOf("Download", "transcriptions", "logs"))
 
-        // Protect active models only
-        engineKeys.forEach { key ->
-            activeVoiceModelId?.let { id ->
-                resolveLocalFile(id, key)?.let { protectedNames.add(it.name) }
-            }
-            activeIntentModelId?.let { id ->
-                resolveLocalFile(id, key)?.let { protectedNames.add(it.name) }
-            }
+        val snapshot = settingsRepo.getSettingsSnapshot()
+
+        // Protect active voice model — resolve only against the active voice engine
+        activeVoiceModelId?.let { id ->
+            resolveLocalFile(id, snapshot.voiceProcessor)?.let { protectedNames.add(it.name) }
         }
+
+        // Protect active intent model — resolve only against the active intent engine
+        activeIntentModelId?.let { id ->
+            resolveLocalFile(id, snapshot.aiProcessor)?.let { protectedNames.add(it.name) }
+        }
+
+        // Protect wake word model — resolve only against the active wake word engine
+        activeWakeModelId?.let { id ->
+            resolveLocalFile(id, snapshot.wakeWordEngineType)?.let { protectedNames.add(it.name) }
+        }
+
+        val engineKeys = RemoteModelRegistry.getEngineTypes()
 
         Logger.log("Cleanup started. Protected items: $protectedNames", CLEANUP_TAG)
 

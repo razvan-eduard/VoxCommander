@@ -50,6 +50,7 @@ data class RemoteModelItem(
     override val sizeDescription: String get() = size_label ?: "$size_mb MB"
     override val engineType: String get() = engine_type ?: ""
     override val langCode: String? get() = lang_code
+    override val isBuiltIn: Boolean get() = !is_remote
 }
 
 /**
@@ -61,7 +62,8 @@ data class VirtualModelItem(
     override val engineType: String,
     override val sizeDescription: String = "Cloud API",
     override val url: String = "",
-    override val langCode: String? = null
+    override val langCode: String? = null,
+    override val isBuiltIn: Boolean = true
 ) : AppModel
 
 /**

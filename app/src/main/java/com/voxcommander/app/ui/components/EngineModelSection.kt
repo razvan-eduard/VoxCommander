@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Strings
 
@@ -84,6 +85,9 @@ fun <T> EngineModelSection(
         isDefault = { item ->
             item == selectedItem
         },
+        isBuiltIn = { item ->
+            (item as? AppModel)?.isBuiltIn == true
+        },
         onDeviceLabel = languageManager.getString("on_device_label"),
         onItemSelected = { item, isDownloaded ->
             onItemSelected(item, isDownloaded)
@@ -118,6 +122,9 @@ fun <T> EngineModelSection(
                 isDefault = { item ->
                     item == selectedItem
                 },
+                isBuiltIn = { item ->
+                    (item as? AppModel)?.isBuiltIn == true
+                },
                 onDeviceLabel = languageManager.getString("on_device_label"),
                 onItemSelected = { item, isDownloaded ->
                     // Full row click: select model and close sheet
@@ -143,7 +150,8 @@ fun <T> EngineModelSection(
     // 4. Categorized Fallback Logic
     if (selectedItem != null) {
         val modelId = modelIdProvider(selectedItem)
-        val isDownloaded = uiState.isModelDownloaded(modelId)
+        val isBuiltIn = (selectedItem as? AppModel)?.isBuiltIn == true
+        val isDownloaded = isBuiltIn || uiState.isModelDownloaded(modelId)
         
         val defaultProcessor = if (fallbackCategory == Strings.FallbackCategories.VOICE) uiState.defaultVoiceFallbackProcessor else uiState.defaultIntentFallbackProcessor
         val defaultModelId = if (fallbackCategory == Strings.FallbackCategories.VOICE) uiState.defaultVoiceFallbackModel else uiState.defaultIntentFallbackModel

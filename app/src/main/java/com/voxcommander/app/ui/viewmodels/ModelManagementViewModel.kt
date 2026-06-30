@@ -169,6 +169,11 @@ class ModelManagementViewModel(
     // --- DOWNLOAD METHODS ---
 
     fun downloadModel(modelId: String, engineType: String, lang: String? = null) {
+        // Prevent duplicate downloads — if already downloading, ignore
+        if (_downloadingItem.value != null) {
+            Logger.log("Download already in progress (${_downloadingItem.value?.id}), ignoring request for $modelId", TAG)
+            return
+        }
         Logger.log("downloadModel called: modelId=$modelId, engineType=$engineType, lang=$lang", TAG)
         lastDownloadedId = modelId; lastDownloadType = engineType
 
@@ -271,8 +276,10 @@ class ModelManagementViewModel(
         val activeVoiceModelId = snapshot.activeVoiceModelId
         val activeIntentModelId = snapshot.activeIntentModelId
 
+        val activeWakeModelId = snapshot.wakeWordModelPath?.let { java.io.File(it).name }
+
         viewModelScope.launch(Dispatchers.IO) {
-            modelDownloader.deleteUnusedModels(settingsRepo, activeVoiceModelId, activeIntentModelId, appStateManager)
+            modelDownloader.deleteUnusedModels(settingsRepo, activeVoiceModelId, activeIntentModelId, appStateManager, activeWakeModelId)
             appStateManager.refreshAll()
         }
     }

@@ -156,6 +156,9 @@ class WhisperEngineManager(
                 modelsDir.listFiles()?.filter { it.name.endsWith(".bin") }?.forEach { file ->
                     Logger.log("Deleting Whisper model: ${file.name}", TAG)
                     file.delete()
+                    // Clear downloaded flag so UI updates
+                    val modelId = file.name.removeSuffix(".bin")
+                    settingsRepo.setModelDownloaded(modelId, false)
                 }
             }
             // Clear custom model path and active model ID
@@ -164,6 +167,7 @@ class WhisperEngineManager(
                 settingsRepo.setCustomModelPath(it, "")
             }
             settingsRepo.setEngineModelSelection(whisperKey ?: "", "")
+            settingsRepo.setActiveVoiceModelId(null)
         }
         Logger.log("Whisper engine disabled (libs deleted=$deleteLibs, models deleted=$deleteModels)", TAG)
     }

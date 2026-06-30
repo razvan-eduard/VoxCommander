@@ -11,4 +11,5 @@ interface AppModel {
     val url: String
     val engineType: String // "stt_whisper", etc.
     val langCode: String?
+    val isBuiltIn: Boolean // true for bundled/asset models (no download/delete needed)
 }

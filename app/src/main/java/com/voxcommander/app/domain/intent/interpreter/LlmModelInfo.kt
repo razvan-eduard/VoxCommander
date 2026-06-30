@@ -15,4 +15,5 @@ data class LlmModelInfo(
 ) : AppModel {
     override val engineType: String get() = "nlu_llm"
     override val langCode: String? get() = null
+    override val isBuiltIn: Boolean get() = false
 }

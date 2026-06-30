@@ -35,6 +35,7 @@ fun <T> GroupedDropdownContent(
     itemLabel: (T) -> String,
     isDownloaded: @Composable (T) -> Boolean, // UPDATED TO @Composable
     isDefault: @Composable (T) -> Boolean = { false },
+    isBuiltIn: (T) -> Boolean = { false },
     onDeviceLabel: String,
     onItemSelected: (T, Boolean) -> Unit, // Include downloaded state
     onDownloadRequest: ((T) -> Unit)? = null,
@@ -73,7 +74,8 @@ fun <T> GroupedDropdownContent(
 
                 items(group.items) { item ->
                     val label = itemLabel(item)
-                    val downloaded = isDownloaded(item) // Now reactive @Composable
+                    val builtIn = isBuiltIn(item)
+                    val downloaded = builtIn || isDownloaded(item) // Now reactive @Composable
                     val isDefault = isDefault(item)
                     val isDownloading = downloadingItem == item
 
@@ -127,6 +129,8 @@ fun <T> GroupedDropdownContent(
                                                 tint = MaterialTheme.colorScheme.error
                                             )
                                         }
+                                    } else if (builtIn) {
+                                        // Built-in models: no download/delete buttons
                                     } else if (downloaded) {
                                         if (onDeleteRequest != null) {
                                             IconButton(onClick = { onDeleteRequest(item) }) {
@@ -190,6 +194,7 @@ fun <T> GroupedDropdownMenu(
     itemLabel: (T) -> String,
     isDownloaded: @Composable (T) -> Boolean, // UPDATED TO @Composable
     isDefault: @Composable (T) -> Boolean = { false },
+    isBuiltIn: (T) -> Boolean = { false },
     onDeviceLabel: String,
     onItemSelected: (T, Boolean) -> Unit, // Include downloaded state
     onDownloadRequest: ((T) -> Unit)? = null,
@@ -202,7 +207,8 @@ fun <T> GroupedDropdownMenu(
     onExpandedChange: ((Boolean) -> Unit)? = null,
     placeholder: String? = null
 ) {
-    val downloaded = selectedItem?.let { isDownloaded(it) } ?: false
+    val builtIn = selectedItem?.let { isBuiltIn(it) } ?: false
+    val downloaded = builtIn || (selectedItem?.let { isDownloaded(it) } ?: false)
     val isDefault = selectedItem?.let { isDefault(it) } ?: false
     val isDownloading = downloadingItem != null && downloadingItem == selectedItem
 
@@ -248,6 +254,8 @@ fun <T> GroupedDropdownMenu(
                         IconButton(onClick = { onCancelDownload?.invoke() }) {
                             Icon(Icons.Default.Close, contentDescription = "Cancel", tint = MaterialTheme.colorScheme.error)
                         }
+                    } else if (builtIn) {
+                        // Built-in models: no download/delete buttons
                     } else if (downloaded) {
                         if (onDeleteRequest != null) {
                             IconButton(onClick = { if (selectedItem != null) onDeleteRequest(selectedItem) }) {

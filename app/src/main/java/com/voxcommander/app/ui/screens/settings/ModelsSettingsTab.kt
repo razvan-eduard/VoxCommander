@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsRepository
+import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.model.AppModel
 import com.voxcommander.app.state.AppStateManager
@@ -153,9 +154,7 @@ fun ModelsSettingsTab(
         }
 
         if (uiState.defaultVoiceFallbackProcessor != null && uiState.defaultVoiceFallbackModel != null) {
-            val allVoiceModels = (uiState.availableModels["stt_whisper"] ?: emptyList()) +
-                                (uiState.availableModels["wake_vosk"] ?: emptyList()) +
-                                (uiState.availableModels["stt_google"] ?: emptyList())
+            val allVoiceModels = RemoteModelRegistry.getEngineKeysByType("voice").flatMap { uiState.availableModels[it] ?: emptyList() }
 
             val voiceModelLabel = allVoiceModels.find { it.id == uiState.defaultVoiceFallbackModel }?.label ?: uiState.defaultVoiceFallbackModel
             Text(
