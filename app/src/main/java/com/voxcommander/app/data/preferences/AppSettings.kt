@@ -86,6 +86,10 @@ data class AppSettings(
     val downloadedModelIds: Set<String> = emptySet(),
     val customModelPaths: Map<String, String> = emptyMap(),
 
+    // --- DOWNLOAD PREFERENCE ---
+    /** "wifi_only" or "wifi_and_metered" */
+    val downloadPreference: String = "wifi_and_metered",
+
     // --- MEDIA / EXTERNAL SERVICES ---
     val spotifyClientId: String? = null,
     val pipedApiUrl: String? = null,

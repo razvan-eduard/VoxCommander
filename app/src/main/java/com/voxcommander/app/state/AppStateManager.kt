@@ -288,6 +288,10 @@ class AppStateManager private constructor(
         scope.launch { repo.setWhisperSystemEnabled(enabled) }
     }
 
+    fun setDownloadPreference(preference: String) {
+        scope.launch { repo.setDownloadPreference(preference) }
+    }
+
     fun setAiProcessor(processor: String) {
         scope.launch {
             repo.setAiProcessor(processor)

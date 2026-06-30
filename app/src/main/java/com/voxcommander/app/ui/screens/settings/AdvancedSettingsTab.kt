@@ -62,6 +62,13 @@ fun AdvancedSettingsTab(
         )
     }
     val isRunning = uiState.voiceState == VoiceState.BENCHMARKING
+    var showRestartDialog by remember { mutableStateOf(false) }
+    var showDisableDialog by remember { mutableStateOf(false) }
+    var showMeteredWarning by remember { mutableStateOf(false) }
+    var showWifiOnlyBlocked by remember { mutableStateOf(false) }
+    var pendingDownloadSize by remember { mutableStateOf("") }
+    var isDownloadingWhisper by remember { mutableStateOf(false) }
+    var whisperDownloadProgress by remember { mutableStateOf(0f) }
 
     // Manage own state with logging flags
     var loggingFlags by remember {
@@ -341,6 +348,44 @@ fun AdvancedSettingsTab(
             items(benchmarkResults) { result -> BenchmarkResultItem(result, languageManager) }
         }
 
+        // --- DOWNLOAD PREFERENCE ---
+        item {
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = languageManager.getString("download_preference"), style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(languageManager.getString("download_preference_wifi_only"), style = MaterialTheme.typography.bodyMedium)
+                        RadioButton(
+                            selected = uiState.downloadPreference == "wifi_only",
+                            onClick = { appStateManager.setDownloadPreference("wifi_only") }
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(languageManager.getString("download_preference_wifi_and_metered"), style = MaterialTheme.typography.bodyMedium)
+                        RadioButton(
+                            selected = uiState.downloadPreference == "wifi_and_metered",
+                            onClick = { appStateManager.setDownloadPreference("wifi_and_metered") }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         // --- EXPERIMENTAL FEATURES ---
         item {
             HorizontalDivider()
@@ -353,8 +398,6 @@ fun AdvancedSettingsTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     // --- Whisper Engine (DLC) ---
-                    var isDownloadingWhisper by remember { mutableStateOf(false) }
-                    var whisperDownloadProgress by remember { mutableStateOf(0f) }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -374,26 +417,28 @@ fun AdvancedSettingsTab(
                             enabled = !isDownloadingWhisper,
                             onCheckedChange = { enabled ->
                                 if (enabled) {
-                                    scope.launch {
-                                        isDownloadingWhisper = true
-                                        whisperDownloadProgress = 0f
-                                        val success = appContainer.whisperEngineManager.enable { progress ->
-                                            whisperDownloadProgress = progress
-                                        }
-                                        isDownloadingWhisper = false
-                                        if (success) {
-                                            // Restart the app to load the new libs
-                                            val pm = context.packageManager
-                                            val intent = pm.getLaunchIntentForPackage(context.packageName)
-                                            intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            context.startActivity(intent)
-                                            android.os.Process.killProcess(android.os.Process.myPid())
+                                    val whisperSize = languageManager.getString("whisper_libs_size")
+                                    if (uiState.downloadPreference == "wifi_only" && com.voxcommander.app.utils.NetworkMonitor.isMetered) {
+                                        pendingDownloadSize = whisperSize
+                                        showWifiOnlyBlocked = true
+                                    } else if (com.voxcommander.app.utils.NetworkMonitor.isMetered) {
+                                        pendingDownloadSize = whisperSize
+                                        showMeteredWarning = true
+                                    } else {
+                                        scope.launch {
+                                            isDownloadingWhisper = true
+                                            whisperDownloadProgress = 0f
+                                            val success = appContainer.whisperEngineManager.enable { progress ->
+                                                whisperDownloadProgress = progress
+                                            }
+                                            isDownloadingWhisper = false
+                                            if (success) {
+                                                showRestartDialog = true
+                                            }
                                         }
                                     }
                                 } else {
-                                    scope.launch {
-                                        appContainer.whisperEngineManager.disable(deleteLibs = true)
-                                    }
+                                    showDisableDialog = true
                                 }
                             }
                         )
@@ -425,6 +470,7 @@ fun AdvancedSettingsTab(
                         }
                         Switch(
                             checked = uiState.isExperimentalVulkanEnabled,
+                            enabled = uiState.isWhisperSystemEnabled,
                             onCheckedChange = { appStateManager.setExperimentalVulkanEnabled(it) }
                         )
                     }
@@ -450,6 +496,98 @@ fun AdvancedSettingsTab(
             }
         }
     }
+
+    // --- RESTART DIALOG ---
+    if (showRestartDialog) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Whisper Engine Installed") },
+            text = { Text("Whisper STT engine has been downloaded successfully. The app needs to restart to load the new libraries.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestartDialog = false
+                    restartApp(context)
+                }) {
+                    Text("Restart Now")
+                }
+            }
+        )
+    }
+
+    // --- DISABLE DIALOG ---
+    if (showDisableDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisableDialog = false },
+            title = { Text("Disable Whisper Engine") },
+            text = { Text("All local Whisper features will be disabled. Downloaded Whisper models and native libraries (.so files) will be deleted to free space. The app will restart.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDisableDialog = false
+                    scope.launch {
+                        appContainer.whisperEngineManager.disable(deleteLibs = true, deleteModels = true)
+                        restartApp(context)
+                    }
+                }) {
+                    Text("Disable & Restart")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisableDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // --- METERED WARNING DIALOG ---
+    if (showMeteredWarning) {
+        AlertDialog(
+            onDismissRequest = { showMeteredWarning = false },
+            title = { Text(languageManager.getString("metered_warning_title")) },
+            text = { Text(languageManager.getString("metered_warning_msg").format(pendingDownloadSize)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showMeteredWarning = false
+                    scope.launch {
+                        isDownloadingWhisper = true
+                        whisperDownloadProgress = 0f
+                        val success = appContainer.whisperEngineManager.enable { progress ->
+                            whisperDownloadProgress = progress
+                        }
+                        isDownloadingWhisper = false
+                        if (success) {
+                            showRestartDialog = true
+                        }
+                    }
+                }) {
+                    Text(languageManager.getString("metered_warning_continue"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMeteredWarning = false }) {
+                    Text(languageManager.getString("cancel_button"))
+                }
+            }
+        )
+    }
+
+    // --- WIFI ONLY BLOCKED DIALOG ---
+    if (showWifiOnlyBlocked) {
+        AlertDialog(
+            onDismissRequest = { showWifiOnlyBlocked = false },
+            title = { Text(languageManager.getString("wifi_only_blocked_title")) },
+            text = { Text(languageManager.getString("wifi_only_blocked_msg").format(pendingDownloadSize)) },
+            confirmButton = {
+                TextButton(onClick = { showWifiOnlyBlocked = false }) {
+                    Text(languageManager.getString("ok_button"))
+                }
+            }
+        )
+    }
+}
+
+private fun restartApp(context: android.content.Context) {
+    com.jakewharton.processphoenix.ProcessPhoenix.triggerRebirth(context)
 }
 
 private fun buildBenchmarkReport(results: List<BenchmarkResult>, systemInfo: String): String {

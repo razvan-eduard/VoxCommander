@@ -364,5 +364,15 @@
   "ww_openwakeword_custom_hint": "Select a .onnx model file from your device. Trained models from openWakeWord can be imported here.",
   "ww_engine_switch_warning_title": "Service Running",
   "ww_engine_switch_warning_msg": "The wake word service is currently running. Switching engines will stop the service. Continue?",
-  "ww_engine_switch_warning_confirm": "Stop & Switch"
+  "ww_engine_switch_warning_confirm": "Stop & Switch",
+  "download_preference": "Download Preference",
+  "download_preference_wifi_only": "Wi-Fi only",
+  "download_preference_wifi_and_metered": "Wi-Fi & metered connections",
+  "metered_warning_title": "Metered Connection",
+  "metered_warning_msg": "You are on a metered connection. You are about to download %s. Continue?",
+  "metered_warning_continue": "Download anyway",
+  "wifi_only_blocked_title": "Wi-Fi Only",
+  "wifi_only_blocked_msg": "Downloads are restricted to Wi-Fi only. Connect to Wi-Fi to download %s.",
+  "whisper_libs_size": "~20 MB",
+  "whisper_engine_label": "Whisper engine libraries"
 }

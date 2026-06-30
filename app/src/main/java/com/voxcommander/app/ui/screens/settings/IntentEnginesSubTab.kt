@@ -34,6 +34,12 @@ fun IntentEnginesSubTab(
     refreshTrigger: Int = 0
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
+
+    // Download guard state
+    var showMeteredWarning by remember { mutableStateOf(false) }
+    var showWifiOnlyBlocked by remember { mutableStateOf(false) }
+    var pendingDownloadSize by remember { mutableStateOf("") }
+    var pendingDownloadAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     
     // 1. Engine key IS the processor — same value from models.json
     val engineKey = uiState.aiProcessor
@@ -162,9 +168,24 @@ fun IntentEnginesSubTab(
                     appStateManager.saveIntentModelSelection(engineKey, model.id)
                 },
                 onDownloadRequest = { model ->
-                    appStateManager.setActiveIntentModelId(model.id)
-                    appStateManager.saveIntentModelSelection(engineKey, model.id)
-                    onDownloadModel(model.id, engineKey, null)
+                    val downloadAction = {
+                        appStateManager.setActiveIntentModelId(model.id)
+                        appStateManager.saveIntentModelSelection(engineKey, model.id)
+                        onDownloadModel(model.id, engineKey, null)
+                    }
+                    val isMetered = com.voxcommander.app.utils.NetworkMonitor.isMetered
+                    when {
+                        uiState.downloadPreference == "wifi_only" && isMetered -> {
+                            pendingDownloadSize = model.sizeDescription
+                            showWifiOnlyBlocked = true
+                        }
+                        isMetered -> {
+                            pendingDownloadSize = model.sizeDescription
+                            pendingDownloadAction = downloadAction
+                            showMeteredWarning = true
+                        }
+                        else -> downloadAction()
+                    }
                 },
                 onDeleteRequest = { model -> onDeleteModel(model.id, engineKey) },
                 onCancelDownload = onCancelDownload,
@@ -185,5 +206,40 @@ fun IntentEnginesSubTab(
                 )
             }
         }
+    }
+
+    // --- DOWNLOAD GUARD DIALOGS ---
+    if (showMeteredWarning) {
+        AlertDialog(
+            onDismissRequest = { showMeteredWarning = false },
+            title = { Text(languageManager.getString("metered_warning_title")) },
+            text = { Text(languageManager.getString("metered_warning_msg").format(pendingDownloadSize)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showMeteredWarning = false
+                    pendingDownloadAction?.invoke()
+                    pendingDownloadAction = null
+                }) {
+                    Text(languageManager.getString("metered_warning_continue"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMeteredWarning = false; pendingDownloadAction = null }) {
+                    Text(languageManager.getString("cancel_button"))
+                }
+            }
+        )
+    }
+    if (showWifiOnlyBlocked) {
+        AlertDialog(
+            onDismissRequest = { showWifiOnlyBlocked = false },
+            title = { Text(languageManager.getString("wifi_only_blocked_title")) },
+            text = { Text(languageManager.getString("wifi_only_blocked_msg").format(pendingDownloadSize)) },
+            confirmButton = {
+                TextButton(onClick = { showWifiOnlyBlocked = false }) {
+                    Text(languageManager.getString("ok_button"))
+                }
+            }
+        )
     }
 }

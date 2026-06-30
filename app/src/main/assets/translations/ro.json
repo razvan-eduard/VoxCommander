@@ -361,5 +361,15 @@
   "ww_openwakeword_custom_hint": "Selectează un fișier model .onnx din dispozitiv. Modele antrenate openWakeWord pot fi importate aici.",
   "ww_engine_switch_warning_title": "Serviciul Rulează",
   "ww_engine_switch_warning_msg": "Serviciul de wake word rulează momentan. Schimbarea engine-ului va opri serviciul. Continui?",
-  "ww_engine_switch_warning_confirm": "Oprește & Schimbă"
+  "ww_engine_switch_warning_confirm": "Oprește & Schimbă",
+  "download_preference": "Preferință Descărcare",
+  "download_preference_wifi_only": "Doar Wi-Fi",
+  "download_preference_wifi_and_metered": "Wi-Fi & conexiuni contorizate",
+  "metered_warning_title": "Conexiune Contorizată",
+  "metered_warning_msg": "Ești pe o conexiune contorizată. Ești pe cale să descarci %s. Continui?",
+  "metered_warning_continue": "Descarcă oricum",
+  "wifi_only_blocked_title": "Doar Wi-Fi",
+  "wifi_only_blocked_msg": "Descărcările sunt restricționate doar la Wi-Fi. Conectează-te la Wi-Fi pentru a descărca %s.",
+  "whisper_libs_size": "~20 MB",
+  "whisper_engine_label": "Biblioteci motor Whisper"
 }

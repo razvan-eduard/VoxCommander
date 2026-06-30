@@ -113,6 +113,10 @@ dependencies {
     implementation("ai.picovoice:porcupine-android:3.0.2")
     // OpenWakeWord (fully open-source, ONNX-based wake word detection)
     implementation("xyz.rementia:openwakeword:0.1.5")
+    // Force ONNX Runtime 1.20.1+ for 16KB page size alignment (required for Android 15+)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
+    // ProcessPhoenix — reliable app restart (handles process kill + relaunch)
+    implementation("com.jakewharton:process-phoenix:2.1.2")
     // STT Engines (Whisper.cpp integration)
 
     testImplementation(libs.junit)

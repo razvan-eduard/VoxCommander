@@ -111,6 +111,9 @@ interface SettingsRepository {
     suspend fun setPipedApiUrl(url: String?)
     suspend fun setPipedRegion(region: String?)
 
+    // --- DOWNLOAD PREFERENCE ---
+    suspend fun setDownloadPreference(preference: String)
+
     // --- SPOTIFY PKCE TOKENS ---
     fun getSpotifyAccessTokenSync(): String?
     fun getSpotifyRefreshTokenSync(): String?

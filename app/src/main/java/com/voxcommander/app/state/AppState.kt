@@ -35,6 +35,7 @@ data class AppState(
     val isVerboseLoggingEnabled: Boolean,
     val isExperimentalVulkanEnabled: Boolean,
     val isWhisperSystemEnabled: Boolean,
+    val downloadPreference: String,
     
     // --- API SETTINGS ---
     val apiKey: String?,
@@ -160,6 +161,7 @@ data class AppState(
                 isVerboseLoggingEnabled = settings.verboseLoggingEnabled,
                 isExperimentalVulkanEnabled = settings.experimentalVulkanEnabled,
                 isWhisperSystemEnabled = settings.isWhisperSystemEnabled,
+                downloadPreference = settings.downloadPreference,
                 apiKey = settings.apiKey,
                 geminiApiKey = settings.geminiApiKey,
                 voiceState = voiceState,
@@ -199,6 +201,7 @@ data class AppState(
             isVerboseLoggingEnabled = false,
             isExperimentalVulkanEnabled = false,
             isWhisperSystemEnabled = false,
+            downloadPreference = "wifi_and_metered",
             apiKey = null,
             geminiApiKey = null,
             voiceState = VoiceState.IDLE,

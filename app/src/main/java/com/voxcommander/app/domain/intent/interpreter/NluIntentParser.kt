@@ -20,7 +20,8 @@ object NluIntentParser {
 
     fun parse(json: String): NluIntent? {
         return try {
-            val obj = JsonParser.parseString(json).asJsonObject
+            val cleaned = extractJsonBlock(json)
+            val obj = JsonParser.parseString(cleaned).asJsonObject
             if (obj.has("domain")) {
                 parseNewSchema(obj)
             } else if (obj.has("category")) {
@@ -33,6 +34,47 @@ object NluIntentParser {
             Logger.log("Failed to parse NluIntent JSON: ${e.message}", TAG)
             null
         }
+    }
+
+    /**
+     * Extracts the first valid JSON object from an LLM response.
+     * Handles markdown fences (```json ... ```) and multiple JSON blocks.
+     */
+    private fun extractJsonBlock(raw: String): String {
+        var text = raw.trim()
+
+        // Strip markdown code fences
+        if (text.startsWith("```")) {
+            // Remove opening fence (```json or ```)
+            text = text.replace(Regex("^```[a-zA-Z]*\\s*"), "")
+            // Remove all closing fences
+            text = text.replace(Regex("```"), "")
+        }
+
+        // Find the first { ... } block (handles multiple JSON objects)
+        val firstBrace = text.indexOf('{')
+        if (firstBrace < 0) return text
+
+        var depth = 0
+        var endIdx = -1
+        for (i in firstBrace until text.length) {
+            when (text[i]) {
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0) {
+                        endIdx = i
+                        break
+                    }
+                }
+            }
+        }
+
+        if (endIdx >= 0) {
+            return text.substring(firstBrace, endIdx + 1)
+        }
+
+        return text
     }
 
     private fun JsonObject.getSafeString(key: String): String {

@@ -28,6 +28,16 @@ object NetworkMonitor {
 
     val isOnline: Boolean get() = _online.value
 
+    val isMetered: Boolean get() = isOnline && !isUnmetered
+
+    val isUnmetered: Boolean
+        get() {
+            val cm = connectivityManager ?: return false
+            val network = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(network) ?: return false
+            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        }
+
     private var connectivityManager: ConnectivityManager? = null
     private var callback: ConnectivityManager.NetworkCallback? = null
     private var initialized = false

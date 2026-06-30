@@ -120,6 +120,9 @@ class SettingsRepositoryImpl(
         val SPOTIFY_CLIENT_ID = stringPreferencesKey("spotify_client_id")
         val PIPED_API_URL = stringPreferencesKey("piped_api_url")
         val PIPED_REGION = stringPreferencesKey("piped_region")
+
+        // Download preference
+        val DOWNLOAD_PREFERENCE = stringPreferencesKey("download_preference")
     }
 
     private val TAG = "SettingsRepository"
@@ -306,7 +309,9 @@ class SettingsRepositoryImpl(
 
             spotifyClientId = prefs[Keys.SPOTIFY_CLIENT_ID],
             pipedApiUrl = prefs[Keys.PIPED_API_URL],
-            pipedRegion = prefs[Keys.PIPED_REGION]
+            pipedRegion = prefs[Keys.PIPED_REGION],
+
+            downloadPreference = prefs[Keys.DOWNLOAD_PREFERENCE] ?: "wifi_and_metered"
         )
     }
 
@@ -650,6 +655,11 @@ class SettingsRepositoryImpl(
             if (region != null) prefs[Keys.PIPED_REGION] = region
             else prefs.remove(Keys.PIPED_REGION)
         }
+    }
+
+    // --- DOWNLOAD PREFERENCE ---
+    override suspend fun setDownloadPreference(preference: String) {
+        dataStore.edit { it[Keys.DOWNLOAD_PREFERENCE] = preference }
     }
 
     // --- SPOTIFY PKCE TOKENS (stored in encrypted prefs) ---

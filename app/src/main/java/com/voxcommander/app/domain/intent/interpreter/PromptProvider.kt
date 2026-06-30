@@ -64,7 +64,7 @@ object PromptProvider {
             4. parameters: A JSON object with relevant fields for the intent (e.g. artist, track, album, destination, contact, query, message_body).
             5. confidence: Your confidence level from 0.0 to 1.0.
             6. DEFAULT: If music platform is not specified, use the user's default audio app if set, otherwise use targetApp="youtube".
-            7. RETURN: Return EXCLUSIVELY a JSON object with these 5 keys: domain, action, targetApp, parameters, confidence.
+            7. RETURN: Return EXACTLY ONE JSON object with these 5 keys: domain, action, targetApp, parameters, confidence. Do NOT output multiple JSON objects. Do NOT repeat. Output the JSON and nothing else — no markdown, no explanation, no extra text.
             8. "play X on spotify" → domain="audio", action="play". Never domain="settings" for music.
             9. The user's input may be in any language. Always output domain/action/targetApp in English.${langHint}
             10. INFERENCE: If the user mentions any app listed above (especially [USER DEFAULT] apps) or a known artist/song, infer the most likely intent even if the sentence is imperfect. Never return null domain/action when a configured app or media entity is present. For example "scorpions are spotify" → domain="audio", action="play", targetApp="spotify", parameters={"artist":"Scorpions"}.

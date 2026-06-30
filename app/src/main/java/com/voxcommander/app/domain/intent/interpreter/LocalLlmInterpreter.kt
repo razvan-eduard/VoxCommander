@@ -150,13 +150,7 @@ class LocalLlmInterpreter(
     }
 
     private fun parseResponse(response: String): NluIntent? {
-        val jsonStart = response.indexOf("{")
-        val jsonEnd = response.lastIndexOf("}") + 1
-        if (jsonStart >= 0 && jsonEnd > jsonStart) {
-            val cleanJson = response.substring(jsonStart, jsonEnd)
-            return NluIntentParser.parse(cleanJson)
-        }
-        return null
+        return NluIntentParser.parse(response)
     }
 
     private fun sha256(text: String): String {

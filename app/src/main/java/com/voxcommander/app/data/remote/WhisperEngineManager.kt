@@ -137,10 +137,11 @@ class WhisperEngineManager(
     }
 
     /**
-     * Disables the Whisper engine and optionally deletes the downloaded libs.
+     * Disables the Whisper engine and optionally deletes the downloaded libs and models.
      * @param deleteLibs If true, removes the .so files from filesDir to free space.
+     * @param deleteModels If true, removes all Whisper (.bin) model files from external files dir.
      */
-    suspend fun disable(deleteLibs: Boolean = true) = withContext(Dispatchers.IO) {
+    suspend fun disable(deleteLibs: Boolean = true, deleteModels: Boolean = true) = withContext(Dispatchers.IO) {
         settingsRepo.setWhisperSystemEnabled(false)
         if (deleteLibs) {
             if (libDir.exists()) {
@@ -149,6 +150,21 @@ class WhisperEngineManager(
                 Logger.log("Deleted Whisper libs from ${libDir.absolutePath}", TAG)
             }
         }
-        Logger.log("Whisper engine disabled", TAG)
+        if (deleteModels) {
+            val modelsDir = context.getExternalFilesDir(null)
+            if (modelsDir != null && modelsDir.exists()) {
+                modelsDir.listFiles()?.filter { it.name.endsWith(".bin") }?.forEach { file ->
+                    Logger.log("Deleting Whisper model: ${file.name}", TAG)
+                    file.delete()
+                }
+            }
+            // Clear custom model path and active model ID
+            val whisperKey = com.voxcommander.app.data.remote.RemoteModelRegistry.getEngineKeyByExtension(".bin")
+            whisperKey?.let {
+                settingsRepo.setCustomModelPath(it, "")
+            }
+            settingsRepo.setEngineModelSelection(whisperKey ?: "", "")
+        }
+        Logger.log("Whisper engine disabled (libs deleted=$deleteLibs, models deleted=$deleteModels)", TAG)
     }
 }

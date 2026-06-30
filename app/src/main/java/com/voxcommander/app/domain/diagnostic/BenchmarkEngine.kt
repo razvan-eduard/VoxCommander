@@ -75,33 +75,38 @@ class BenchmarkEngine(
         diagInfo.append("\n")
 
         // --- 3. WHISPER STT BENCHMARKS (CPU + GPU per downloaded model) ---
-        val whisperKey = RemoteModelRegistry.getEngineKeyByExtension(".bin")
-        val downloadedWhisperModels = whisperKey?.let { RemoteModelRegistry.getModels(it) }?.filter {
-            snapshot.isModelDownloaded(it.id)
-        } ?: emptyList()
+        // Skip if Whisper engine is not enabled
+        if (snapshot.isWhisperSystemEnabled) {
+            val whisperKey = RemoteModelRegistry.getEngineKeyByExtension(".bin")
+            val downloadedWhisperModels = whisperKey?.let { RemoteModelRegistry.getModels(it) }?.filter {
+                snapshot.isModelDownloaded(it.id)
+            } ?: emptyList()
 
-        if (downloadedWhisperModels.isNotEmpty()) {
-            diagInfo.append("--- WHISPER MODELS DETECTED ---\n")
-            downloadedWhisperModels.forEach {
-                diagInfo.append("ID: ${it.id} | Size: ${it.sizeDescription} | Label: ${it.label}\n")
+            if (downloadedWhisperModels.isNotEmpty()) {
+                diagInfo.append("--- WHISPER MODELS DETECTED ---\n")
+                downloadedWhisperModels.forEach {
+                    diagInfo.append("ID: ${it.id} | Size: ${it.sizeDescription} | Label: ${it.label}\n")
+                }
+                diagInfo.append("\n")
             }
-            diagInfo.append("\n")
-        }
 
-        for (model in downloadedWhisperModels) {
-            runSingleWhisperBenchmark(model, forceGpu = false, dummyAudio)
-            if (settingsRepo.getSettingsSnapshot().vulkanIncompatible) {
-                appStateManager.updateBenchmarkResult(BenchmarkResult(
-                    engine = "Whisper Vulkan",
-                    model = model.label,
-                    inferenceTimeMs = 0,
-                    rtf = 0f,
-                    isSuccess = false,
-                    error = "Skipped (Hardware Incompatible)"
-                ))
-            } else {
-                runSingleWhisperBenchmark(model, forceGpu = true, dummyAudio)
+            for (model in downloadedWhisperModels) {
+                runSingleWhisperBenchmark(model, forceGpu = false, dummyAudio)
+                if (settingsRepo.getSettingsSnapshot().vulkanIncompatible) {
+                    appStateManager.updateBenchmarkResult(BenchmarkResult(
+                        engine = "Whisper Vulkan",
+                        model = model.label,
+                        inferenceTimeMs = 0,
+                        rtf = 0f,
+                        isSuccess = false,
+                        error = "Skipped (Hardware Incompatible)"
+                    ))
+                } else {
+                    runSingleWhisperBenchmark(model, forceGpu = true, dummyAudio)
+                }
             }
+        } else {
+            diagInfo.append("--- WHISPER STT: Skipped (engine disabled) ---\n\n")
         }
 
         // --- 4. VOSK STT BENCHMARKS (all downloaded Vosk models) ---

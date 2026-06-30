@@ -44,12 +44,7 @@ class GeminiCloudInterpreter(
             val responseText = response.text ?: return@withContext null
             Logger.log("Gemini Cloud response: $responseText", TAG)
 
-            val jsonStart = responseText.indexOf("{")
-            val jsonEnd = responseText.lastIndexOf("}") + 1
-            if (jsonStart >= 0 && jsonEnd > jsonStart) {
-                val cleanJson = responseText.substring(jsonStart, jsonEnd)
-                return@withContext NluIntentParser.parse(cleanJson)
-            }
+            return@withContext NluIntentParser.parse(responseText)
         } catch (e: Exception) {
             Logger.log("Gemini Cloud inference failed: ${e.message}", TAG)
         }

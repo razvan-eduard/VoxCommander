@@ -154,6 +154,18 @@ if [ -f "$LIB_WHISPER" ] && nm -D "$LIB_WHISPER" | grep -q "whisper_init"; then
         cp "$OMP_PATH" "$PROJECT_JNI_DIR/"
     fi
     log_info "🎉 build successful and deployed."
+
+    # --- 5. PUBLISH TO GITHUB RELEASES (DLC) ---
+    # Only publish when a rebuild actually happened (upgrade or force-rebuild)
+    if [ "$UPGRADE_TRIGGERED" = true ] || [ "$FORCE_REBUILD" = true ]; then
+        log_blue "📦 Publishing updated libs to GitHub releases (DLC)..."
+        if "$PROJECT_ROOT/scripts/publish_whisper_libs.sh"; then
+            log_info "✅ Libs published to GitHub releases."
+        else
+            log_warn "⚠️ Failed to publish libs to GitHub releases. DLC download may be outdated."
+            log_warn "   You can publish manually: ./scripts/publish_whisper_libs.sh"
+        fi
+    fi
 else
     log_error "❌ Integrity check FAILED!"
     perform_rollback

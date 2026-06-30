@@ -126,7 +126,28 @@ class AudioIntentHandler : IntentHandler {
      * Uses sendMediaKey which targets the active media session first.
      */
     private fun launchAppPlay(context: Context, intent: NluIntent, resolvedApp: AppRegistry.AppEntry?): Boolean {
-        return sendMediaKey(context, intent, "play")
+        val pkg = resolvedApp?.packageName
+
+        // Try sending media key to active session first
+        val sent = sendMediaKey(context, intent, "play")
+        if (sent) {
+            // Check if there was actually an active session — if sendMediaKey fell through to
+            // broadcast/AudioManager, we should also launch the app
+            val hasActiveSession = MediaSessionListenerService.getActiveMediaController(context) != null
+            if (hasActiveSession) return true
+        }
+
+        // No active session — launch the app directly
+        if (pkg != null) {
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
+            if (launchIntent != null) {
+                launchIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                Logger.log("No active session — launching $pkg directly", TAG)
+                return tryLaunch(context, launchIntent)
+            }
+        }
+
+        return sent
     }
 
     /**
