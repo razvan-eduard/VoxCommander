@@ -7,83 +7,40 @@ import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
 
 /**
  * Provides hydrated prompt templates for AI agents.
- * Centralizes instructions to ensure consistency between Cloud and Local engines.
+ * Loads the static template from models.json and injects dynamic placeholders:
+ * - ${installedApps}: list of installed apps per domain (with user default markers)
+ * - ${spokenText}: user's voice/text command (stripped for system prompt)
  */
 object PromptProvider {
 
     private const val ID_STANDARD_NLU = "standard_nlu"
     private const val PLACEHOLDER_TEXT = "\${spokenText}"
-
-    /**
-     * Returns the full NLU prompt with the user's command injected.
-     * Used by local LLM engines (MediaPipe) that take a single combined prompt.
-     * @param spokenText The user's voice/text command.
-     * @param settings Current app settings (for injecting installed apps + defaults into prompt).
-     */
-    fun getNluPrompt(spokenText: String, settings: AppSettings? = null, voiceLanguage: String? = null): String {
-        val template = RemoteModelRegistry.getPrompt(ID_STANDARD_NLU) ?: getDefaultNluTemplate(settings, voiceLanguage)
-        return template.replace(PLACEHOLDER_TEXT, spokenText)
-    }
+    private const val PLACEHOLDER_APPS = "\${installedApps}"
 
     /**
      * Returns only the system instructions (without the input line).
-     * Used by cloud engines (OpenAI, Gemini Cloud) that separate system/user messages.
-     * @param settings Current app settings (for injecting installed apps + defaults into prompt).
+     * Used by all engines (OpenAI, Gemini Cloud, Local LLM) — they add user input separately.
      */
     fun getNluSystemPrompt(settings: AppSettings? = null, voiceLanguage: String? = null): String {
-        val template = RemoteModelRegistry.getPrompt(ID_STANDARD_NLU) ?: getDefaultNluTemplate(settings, voiceLanguage)
-        // Strip the Input/JSON suffix — cloud engines add their own user message
+        val template = RemoteModelRegistry.getPrompt(ID_STANDARD_NLU) ?: return ""
+        val langHint = voiceLanguage?.let { "\nInput language: $it." } ?: ""
+        // Strip the Input/JSON suffix — engines add their own user message
         val inputIndex = template.indexOf("Input:")
-        return if (inputIndex > 0) {
+        val systemPart = if (inputIndex > 0) {
             template.substring(0, inputIndex).trim()
         } else {
             template.replace(PLACEHOLDER_TEXT, "")
         }
+        return systemPart
+            .replace(PLACEHOLDER_APPS, buildAppsSection(settings))
+            .plus(langHint)
     }
 
     /**
-     * Formats the user command as an input line for cloud engines.
+     * Formats the user command as an input line.
      */
     fun formatUserInput(spokenText: String): String {
         return "Input: \"$spokenText\"\nJSON:"
-    }
-
-    /**
-     * Fallback template if models.json is not loaded or key is missing.
-     * Uses the new flexible NluIntent schema (domain, action, targetApp, parameters, confidence).
-     * Dynamically injects installed apps and user default app preferences.
-     */
-    private fun getDefaultNluTemplate(settings: AppSettings? = null, voiceLanguage: String? = null): String {
-        val appsSection = buildAppsSection(settings)
-        val langHint = voiceLanguage?.let { "\n            Input language: ${it}." } ?: ""
-        return """
-            System intent mapping for Vox Commander. Rules:
-            1. domain: Choose STRICTLY from ["audio", "settings", "maps", "messaging", "system", "home"].
-            2. action: Choose STRICTLY from ["play", "pause", "next", "prev", "volume_up", "volume_down", "wifi_toggle", "bluetooth_toggle", "navigate", "send"].
-            3. targetApp: The app the user explicitly mentioned (e.g. "spotify", "youtube", "waze", "google maps"). Use null if not specified.
-            4. parameters: A JSON object with relevant fields for the intent (e.g. artist, track, album, destination, contact, query, message_body).
-            5. confidence: Your confidence level from 0.0 to 1.0.
-            6. DEFAULT: If music platform is not specified, use the user's default audio app if set, otherwise use targetApp="youtube".
-            7. RETURN: Return EXACTLY ONE JSON object with these 5 keys: domain, action, targetApp, parameters, confidence. Do NOT output multiple JSON objects. Do NOT repeat. Output the JSON and nothing else — no markdown, no explanation, no extra text.
-            8. "play X on spotify" → domain="audio", action="play". Never domain="settings" for music.
-            9. The user's input may be in any language. Always output domain/action/targetApp in English.${langHint}
-            10. INFERENCE: If the user mentions any app listed above (especially [USER DEFAULT] apps) or a known artist/song, infer the most likely intent even if the sentence is imperfect. Never return null domain/action when a configured app or media entity is present. For example "scorpions are spotify" → domain="audio", action="play", targetApp="spotify", parameters={"artist":"Scorpions"}.
-
-            Examples:
-            Input: "play scorpions on spotify"
-            Output: {"domain":"audio","action":"play","targetApp":"spotify","parameters":{"artist":"Scorpions"},"confidence":0.95}
-
-            Input: "play scorpions"
-            Output: {"domain":"audio","action":"play","targetApp":null,"parameters":{"artist":"Scorpions"},"confidence":0.9}
-
-            Input: "volume up"
-            Output: {"domain":"settings","action":"volume_up","targetApp":null,"parameters":{},"confidence":1.0}
-
-            $appsSection
-
-            Input: "$PLACEHOLDER_TEXT"
-            JSON:
-        """.trimIndent()
     }
 
     /**
