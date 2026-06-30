@@ -197,13 +197,14 @@ fun AdvancedSettingsTab(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Button(
                                 onClick = { Logger.clearVerboseLogs() },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Text(languageManager.getString("clear_logs"))
+                                Text(languageManager.getString("clear_logs"), style = MaterialTheme.typography.labelSmall)
                             }
                             Button(
                                 onClick = {
@@ -216,11 +217,12 @@ fun AdvancedSettingsTab(
                                     clipboard.setPrimaryClip(clip)
                                 },
                                 modifier = Modifier.weight(1f),
-                                enabled = logs.isNotEmpty()
+                                enabled = logs.isNotEmpty(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = languageManager.getString("copy_button"))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(languageManager.getString("copy_button"))
+                                Icon(Icons.Default.ContentCopy, contentDescription = languageManager.getString("copy_button"), modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(languageManager.getString("copy_button"), style = MaterialTheme.typography.labelSmall)
                             }
                             Button(
                                 onClick = {
@@ -236,11 +238,12 @@ fun AdvancedSettingsTab(
                                     context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Logs"))
                                 },
                                 modifier = Modifier.weight(1f),
-                                enabled = logs.isNotEmpty()
+                                enabled = logs.isNotEmpty(),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Icon(Icons.Default.Share, contentDescription = languageManager.getString("share_button"))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(languageManager.getString("share_button"))
+                                Icon(Icons.Default.Share, contentDescription = languageManager.getString("share_button"), modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(languageManager.getString("share_button"), style = MaterialTheme.typography.labelSmall)
                             }
                         }
 

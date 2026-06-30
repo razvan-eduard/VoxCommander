@@ -11,6 +11,7 @@ import com.voxcommander.app.R
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.preferences.SettingsRepositoryImpl
 import com.voxcommander.app.domain.voice.VoiceManager
+import com.voxcommander.app.domain.voice.WakeWordProfile
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.state.VoiceState
 import com.voxcommander.app.utils.Logger
@@ -56,6 +57,13 @@ class WakeWordService : Service() {
         serviceScope.launch {
             appStateManager.uiState.collectLatest { uiState ->
                 handleVoiceStateChange(uiState.voiceState)
+            }
+        }
+
+        // --- PROFILE CHANGE OBSERVER: update notification when profile is created/deleted ---
+        serviceScope.launch {
+            appStateManager.uiState.map { it.wakeWordProfileJson }.distinctUntilChanged().collect {
+                if (wakeWordEngine != null) updateNotification()
             }
         }
 
@@ -184,6 +192,8 @@ class WakeWordService : Service() {
             val initialized = wakeWordEngine?.initialize(modelPath, wakeWord) ?: false
             if (initialized) {
                 wakeWordEngine?.startListening()
+ // Delayed update: let StateFlow propagate isWakeWordServiceListening + voiceState
+                delay(100)
                 updateNotification()
             } else {
                 Logger.log("Failed to initialize engine")
@@ -239,7 +249,7 @@ class WakeWordService : Service() {
                 }
             }
             VoiceState.LISTENING_WAKEWORD -> {
-                if (currentUiState.isWakeWordServiceListening) updateNotification()
+                updateNotification()
             }
             VoiceState.LISTENING_COMMAND -> {
                 wakeWordEngine?.stopListening()
@@ -293,10 +303,13 @@ class WakeWordService : Service() {
         val isListening = uiState.isWakeWordServiceListening
 
         val voiceState = uiState.voiceState
-        val hasVoiceProfile = settingsRepo.getWakeWordProfileJson() != null
+        val profileJson = settingsRepo.getWakeWordProfileJson()
+        val hasVoiceProfile = profileJson != null
+        val profileName = profileJson?.let { WakeWordProfile.fromJson(it)?.profileName }
         val finalContentText = contentText ?: when {
             voiceState == VoiceState.LISTENING_COMMAND -> languageManager.getString("vox_listening")
             voiceState == VoiceState.PROCESSING -> languageManager.getString("ww_paused_ai_thinking")
+            isListening && hasVoiceProfile && profileName != null -> "${languageManager.getString("vox_listening")} $profileName"
             isListening && hasVoiceProfile -> languageManager.getString("vox_listening")
             isListening -> languageManager.getString("ww_listening_for").format(settingsRepo.getSettingsSnapshot().wakeWord)
             else -> languageManager.getString("ww_paused")

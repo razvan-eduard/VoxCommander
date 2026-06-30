@@ -185,12 +185,16 @@ fun ServiceSettingsTab(
             )
         }
 
+        var showProfileNameDialog by remember { mutableStateOf(false) }
+        var pendingProfile by remember { mutableStateOf<WakeWordProfile?>(null) }
+
         // Auto-save profile on completion
         LaunchedEffect(calibrationState) {
             if (calibrationState is WakeWordCalibrator.CalibrationState.Complete) {
                 VoiceManager.setCalibrationListening(false)
                 val profile = (calibrationState as WakeWordCalibrator.CalibrationState.Complete).profile
-                appStateManager.setWakeWordProfile(WakeWordProfile.toJson(profile))
+                pendingProfile = profile
+                showProfileNameDialog = true
                 delay(1500)
                 showCalibrationDialog = false
                 calibrator.stop()
@@ -256,6 +260,58 @@ fun ServiceSettingsTab(
                     VoiceManager.setCalibrationListening(false)
                     calibrator.stop()
                     showCalibrationDialog = false
+                }
+            )
+        }
+
+        // Profile Name Dialog — shown after calibration completes
+        if (showProfileNameDialog && pendingProfile != null) {
+            var profileName by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = {
+                    // Save without name if dismissed
+                    appStateManager.setWakeWordProfile(WakeWordProfile.toJson(pendingProfile!!))
+                    showProfileNameDialog = false
+                    pendingProfile = null
+                },
+                title = { Text(languageManager.getString("profile_name_title")) },
+                text = {
+                    Column {
+                        Text(
+                            text = languageManager.getString("profile_name_desc"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = profileName,
+                            onValueChange = { profileName = it },
+                            label = { Text(languageManager.getString("profile_name_label")) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val namedProfile = pendingProfile!!.copy(
+                                profileName = profileName.trim().ifBlank { null }
+                            )
+                            appStateManager.setWakeWordProfile(WakeWordProfile.toJson(namedProfile))
+                            showProfileNameDialog = false
+                            pendingProfile = null
+                        }
+                    ) { Text(languageManager.getString("profile_name_save")) }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            appStateManager.setWakeWordProfile(WakeWordProfile.toJson(pendingProfile!!))
+                            showProfileNameDialog = false
+                            pendingProfile = null
+                        }
+                    ) { Text(languageManager.getString("profile_name_skip")) }
                 }
             )
         }
