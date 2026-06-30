@@ -76,6 +76,9 @@ interface SettingsRepository {
     suspend fun setVulkanRuntimeVerified(verified: Boolean)
     suspend fun setExperimentalVulkanEnabled(enabled: Boolean)
 
+    // --- WHISPER ENGINE (DLC) ---
+    suspend fun setWhisperSystemEnabled(enabled: Boolean)
+
     // --- GEMINI ---
     suspend fun setGeminiIncompatible(incompatible: Boolean)
 

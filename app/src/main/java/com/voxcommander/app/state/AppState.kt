@@ -34,6 +34,7 @@ data class AppState(
     val isWakeWordServiceListening: Boolean,
     val isVerboseLoggingEnabled: Boolean,
     val isExperimentalVulkanEnabled: Boolean,
+    val isWhisperSystemEnabled: Boolean,
     
     // --- API SETTINGS ---
     val apiKey: String?,
@@ -158,6 +159,7 @@ data class AppState(
                 isWakeWordServiceListening = isWakeWordServiceListening,
                 isVerboseLoggingEnabled = settings.verboseLoggingEnabled,
                 isExperimentalVulkanEnabled = settings.experimentalVulkanEnabled,
+                isWhisperSystemEnabled = settings.isWhisperSystemEnabled,
                 apiKey = settings.apiKey,
                 geminiApiKey = settings.geminiApiKey,
                 voiceState = voiceState,
@@ -196,6 +198,7 @@ data class AppState(
             isWakeWordServiceListening = false,
             isVerboseLoggingEnabled = false,
             isExperimentalVulkanEnabled = false,
+            isWhisperSystemEnabled = false,
             apiKey = null,
             geminiApiKey = null,
             voiceState = VoiceState.IDLE,

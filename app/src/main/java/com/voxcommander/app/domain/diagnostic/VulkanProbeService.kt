@@ -58,7 +58,8 @@ class VulkanProbeService : Service() {
 
         try {
             Logger.log("Loading native libraries...", TAG)
-            WhisperLib.load()
+            val libDir = File(filesDir, "whisper_libs").absolutePath
+            WhisperLib.load(libDir)
 
             Logger.log("Loading Whisper model with GPU for inference test...", TAG)
             val ctx = WhisperContext.createContextFromFile(path, useGpu = true)

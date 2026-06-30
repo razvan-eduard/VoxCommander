@@ -61,15 +61,20 @@ fun VoiceEnginesSubTab(
         var processorExpanded by remember { mutableStateOf(false) }
         
         // Build list of processors: JSON engines (type=voice) + Local/Virtual injections
-        val processors = remember(uiState.availableModels, uiState.isExperimentalVulkanEnabled) {
+        val processors = remember(uiState.availableModels, uiState.isExperimentalVulkanEnabled, uiState.isWhisperSystemEnabled) {
             val list = RemoteModelRegistry.getEngineKeysByType("voice").toMutableList()
+
+            // Filter out Whisper (.bin) engines if Whisper system is not enabled
+            if (!uiState.isWhisperSystemEnabled) {
+                list.removeAll { RemoteModelRegistry.getExtension(it) == ".bin" }
+            }
             
             // Add virtual models
             if (!list.contains(Strings.Processors.GOOGLE)) list.add(Strings.Processors.GOOGLE)
             if (!list.contains(Strings.Processors.WHISPER_API)) list.add(Strings.Processors.WHISPER_API)
             
-            // Experimental Vulkan
-            if (uiState.isExperimentalVulkanEnabled && !list.contains(Strings.Processors.WHISPER_VULKAN)) {
+            // Experimental Vulkan (only if Whisper system is enabled)
+            if (uiState.isWhisperSystemEnabled && uiState.isExperimentalVulkanEnabled && !list.contains(Strings.Processors.WHISPER_VULKAN)) {
                 list.add(0, Strings.Processors.WHISPER_VULKAN)
             }
             list
@@ -84,7 +89,7 @@ fun VoiceEnginesSubTab(
                 val enabled = when (proc) {
                     Strings.Processors.WHISPER_API -> hasApiKey
                     Strings.Processors.GOOGLE -> googleSttAvailable
-                    Strings.Processors.WHISPER_VULKAN -> !settingsRepo.getSettingsSnapshot().vulkanIncompatible
+                    Strings.Processors.WHISPER_VULKAN -> uiState.isWhisperSystemEnabled && !settingsRepo.getSettingsSnapshot().vulkanIncompatible
                     else -> true
                 }
                 

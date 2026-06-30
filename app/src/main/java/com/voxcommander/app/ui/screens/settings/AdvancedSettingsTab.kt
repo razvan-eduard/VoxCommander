@@ -352,6 +352,68 @@ fun AdvancedSettingsTab(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f))
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // --- Whisper Engine (DLC) ---
+                    var isDownloadingWhisper by remember { mutableStateOf(false) }
+                    var whisperDownloadProgress by remember { mutableStateOf(0f) }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Whisper STT Engine", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (uiState.isWhisperSystemEnabled) "On-device Whisper engine is enabled. Disable to remove and free space."
+                                else "Download the Whisper engine (~147MB) for offline speech recognition.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = uiState.isWhisperSystemEnabled,
+                            enabled = !isDownloadingWhisper,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    scope.launch {
+                                        isDownloadingWhisper = true
+                                        whisperDownloadProgress = 0f
+                                        val success = appContainer.whisperEngineManager.enable { progress ->
+                                            whisperDownloadProgress = progress
+                                        }
+                                        isDownloadingWhisper = false
+                                        if (success) {
+                                            // Restart the app to load the new libs
+                                            val pm = context.packageManager
+                                            val intent = pm.getLaunchIntentForPackage(context.packageName)
+                                            intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            context.startActivity(intent)
+                                            android.os.Process.killProcess(android.os.Process.myPid())
+                                        }
+                                    }
+                                } else {
+                                    scope.launch {
+                                        appContainer.whisperEngineManager.disable(deleteLibs = true)
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    if (isDownloadingWhisper) {
+                        LinearProgressIndicator(
+                            progress = { whisperDownloadProgress },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = "Downloading Whisper engine... ${(whisperDownloadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    HorizontalDivider()
+
+                    // --- Whisper Vulkan (Experimental) ---
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,

@@ -308,6 +308,7 @@
   "splash_loading_assets": "Se încarcă resursele...",
   "splash_loaded_remote": "Resurse încărcate cu succes",
   "splash_no_network": "Fără rețea. Se folosesc resursele salvate local.",
+  "splash_loaded_cache": "Se folosesc resursele salvate local.",
   "voice_input_label": "Intrare vocală",
   "trigger_section_title": "Declanșator (când se activează)",
   "lazy_processing_label": "Procesare leneșă (folosește cuvintele vorbite ca interogare)",

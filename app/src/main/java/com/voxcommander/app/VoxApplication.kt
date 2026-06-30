@@ -48,10 +48,6 @@ class VoxApplication : Application() {
 
         // Initial fetch of the remote model registry - Force update on start to bypass CDN caching
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            if (!NetworkMonitor.isOnline) {
-                Logger.log("No internet connection — skipping remote model registry fetch", "VoxApplication")
-                return@launch
-            }
             val success = RemoteModelRegistry.fetchJson(container.settingsRepository, force = true)
             if (success) {
                 // Force AppStateManager to rebuild its UI state with the fresh models

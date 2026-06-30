@@ -82,6 +82,9 @@ class SettingsRepositoryImpl(
         val VULKAN_RUNTIME_VERIFIED = booleanPreferencesKey("vulkan_runtime_verified")
         val EXPERIMENTAL_VULKAN_ENABLED = booleanPreferencesKey("experimental_vulkan_enabled")
 
+        // Whisper Engine (DLC)
+        val WHISPER_SYSTEM_ENABLED = booleanPreferencesKey("whisper_system_enabled")
+
         // Gemini
         val GEMINI_INCOMPATIBLE = booleanPreferencesKey("gemini_incompatible")
 
@@ -193,6 +196,9 @@ class SettingsRepositoryImpl(
                 all[Strings.Preferences.KEY_VULKAN_RUNTIME_VERIFIED]?.let { prefs[Keys.VULKAN_RUNTIME_VERIFIED] = it as Boolean }
                 all["experimental_vulkan_enabled"]?.let { prefs[Keys.EXPERIMENTAL_VULKAN_ENABLED] = it as Boolean }
 
+                // Whisper Engine (DLC)
+                all["whisper_system_enabled"]?.let { prefs[Keys.WHISPER_SYSTEM_ENABLED] = it as Boolean }
+
                 // Gemini
                 all["gemini_incompatible"]?.let { prefs[Keys.GEMINI_INCOMPATIBLE] = it as Boolean }
 
@@ -277,6 +283,8 @@ class SettingsRepositoryImpl(
             vulkanRuntimeAttempt = prefs[Keys.VULKAN_RUNTIME_ATTEMPT] ?: false,
             vulkanRuntimeVerified = prefs[Keys.VULKAN_RUNTIME_VERIFIED] ?: false,
             experimentalVulkanEnabled = prefs[Keys.EXPERIMENTAL_VULKAN_ENABLED] ?: false,
+
+            isWhisperSystemEnabled = prefs[Keys.WHISPER_SYSTEM_ENABLED] ?: false,
 
             geminiIncompatible = prefs[Keys.GEMINI_INCOMPATIBLE] ?: false,
 
@@ -496,6 +504,11 @@ class SettingsRepositoryImpl(
 
     override suspend fun setExperimentalVulkanEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.EXPERIMENTAL_VULKAN_ENABLED] = enabled }
+    }
+
+    // --- WHISPER ENGINE (DLC) ---
+    override suspend fun setWhisperSystemEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.WHISPER_SYSTEM_ENABLED] = enabled }
     }
 
     // --- GEMINI ---

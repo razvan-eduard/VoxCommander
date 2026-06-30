@@ -155,7 +155,7 @@ fun SplashLoadingScreen(
                 enter = fadeIn()
             ) {
                 Text(
-                    text = languageManager.getString("splash_no_network"),
+                    text = languageManager.getString("splash_loaded_cache"),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     textAlign = TextAlign.Center

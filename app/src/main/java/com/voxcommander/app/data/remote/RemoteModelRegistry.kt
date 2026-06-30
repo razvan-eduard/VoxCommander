@@ -99,12 +99,6 @@ object RemoteModelRegistry {
 
     suspend fun fetchJson(repo: SettingsRepository, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
         Logger.log("fetchJson called (force=$force)", TAG)
-        if (!NetworkMonitor.isOnline) {
-            Logger.log("No internet — skipping remote registry fetch", TAG)
-            _loadStatus.value = LoadStatus.NO_NETWORK
-            return@withContext false
-        }
-        _loadStatus.value = LoadStatus.LOADING
 
         // 1. Ensure local file exists (copy from assets on first run)
         ensureLocalFile()
@@ -113,6 +107,8 @@ object RemoteModelRegistry {
         if (cachedSchema == null) {
             loadFromFilesDir()
         }
+
+        _loadStatus.value = LoadStatus.LOADING
 
         // 3. If not force and we have data, return early
         if (!force && cachedSchema != null) {
@@ -192,7 +188,20 @@ object RemoteModelRegistry {
                 rebuildModelMap()
             }
         } catch (e: Exception) {
-            Logger.log("Failed to parse local models.json: ${e.message}", TAG)
+            Logger.log("Failed to parse local models.json: ${e.message}. Overwriting from assets.", TAG)
+            try {
+                ctx.assets.open(LOCAL_FILE_NAME).use { input ->
+                    localFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                val freshText = localFile.readText()
+                cachedSchema = gson.fromJson(freshText, RemoteModelSchema::class.java)
+                if (cachedSchema != null) {
+                    Logger.log("Recovered models.json from assets. Engines: ${cachedSchema?.engines?.keys}", TAG)
+                    rebuildModelMap()
+                }
+            } catch (e2: Exception) {
+                Logger.log("Failed to recover models.json from assets: ${e2.message}", TAG)
+            }
         }
     }
 

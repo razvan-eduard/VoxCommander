@@ -310,6 +310,7 @@
   "splash_loading_assets": "Loading assets...",
   "splash_loaded_remote": "Assets loaded successfully",
   "splash_no_network": "No network available. Using cached assets.",
+  "splash_loaded_cache": "Using cached assets.",
   "voice_input_label": "Voice input",
   "trigger_section_title": "Trigger (when to activate)",
   "lazy_processing_label": "Lazy processing (use spoken words as query)",

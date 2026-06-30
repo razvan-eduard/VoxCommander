@@ -31,7 +31,8 @@ class WhisperCppSttEngine(
     private val loadMutex = Mutex()
 
     init {
-        WhisperLib.load()
+        val libDir = File(context.filesDir, "whisper_libs").absolutePath
+        WhisperLib.load(libDir)
     }
 
     /**

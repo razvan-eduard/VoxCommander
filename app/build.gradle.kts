@@ -31,6 +31,20 @@ android {
             optimization {
                 enable = false
             }
+            // Exclude Whisper native libs from release APK — they're downloaded on demand as DLC.
+            // This reduces the APK from ~166MB to ~19MB. Debug builds keep them for normal dev workflow.
+            packaging {
+                jniLibs {
+                    excludes += setOf(
+                        "lib/arm64-v8a/libwhisper.so",
+                        "lib/arm64-v8a/libggml-vulkan.so",
+                        "lib/arm64-v8a/libggml.so",
+                        "lib/arm64-v8a/libggml-base.so",
+                        "lib/arm64-v8a/libggml-cpu.so",
+                        "lib/arm64-v8a/libomp.so"
+                    )
+                }
+            }
         }
     }
     compileOptions {
@@ -130,9 +144,18 @@ val autoCheckVosk = tasks.register<Exec>("autoCheckVosk") {
     commandLine("sh", "${project.rootDir}/scripts/check_vosk_version.sh")
 }
 
+// Copy models.json from repo root into assets (single source of truth in root)
+val copyModelsJson = tasks.register<Copy>("copyModelsJson") {
+    group = "build"
+    description = "Copies models.json from repo root into app/src/main/assets/"
+    from("${project.rootDir}/models.json")
+    into("${projectDir}/src/main/assets")
+}
+
 // Forțează procesul de build al aplicației să ruleze aceste scripturi chiar la început
 tasks.named("preBuild") {
     dependsOn(autoCompileWhisper)
     dependsOn(autoCheckVosk)
+    dependsOn(copyModelsJson)
 }
 

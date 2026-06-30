@@ -6,6 +6,7 @@ import com.voxcommander.app.data.local.db.VoxDatabase
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.data.preferences.SettingsRepositoryImpl
 import com.voxcommander.app.data.remote.ModelDownloader
+import com.voxcommander.app.data.remote.WhisperEngineManager
 import com.voxcommander.app.domain.intent.IntentDecisionMap
 import com.voxcommander.app.domain.intent.interpreter.FastMapEngine
 import com.voxcommander.app.domain.intent.interpreter.LocalLlmInterpreter
@@ -37,6 +38,7 @@ class AppContainer(context: Context) {
     // --- SINGLETON MANAGERS ---
     val appStateManager = AppStateManager.getInstance(settingsRepository, appContext)
     val modelDownloader = ModelDownloader(appContext)
+    val whisperEngineManager = WhisperEngineManager(appContext, settingsRepository)
     val languageManager = LanguageManager(appContext)
     val voiceOverlayManager = com.voxcommander.app.ui.components.VoiceOverlayManager(appContext, languageManager, appStateManager)
 

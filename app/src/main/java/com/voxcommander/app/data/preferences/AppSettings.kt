@@ -56,6 +56,9 @@ data class AppSettings(
     val vulkanRuntimeVerified: Boolean = false,
     val experimentalVulkanEnabled: Boolean = false,
 
+    // --- WHISPER ENGINE (DLC) ---
+    val isWhisperSystemEnabled: Boolean = false,
+
     // --- GEMINI ---
     val geminiIncompatible: Boolean = false,
 

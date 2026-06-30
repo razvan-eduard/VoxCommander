@@ -67,23 +67,51 @@ class WhisperLib {
     companion object {
         private var isLoaded = false
 
-        fun load(): Boolean {
+        /**
+         * Attempts to load Whisper native libraries.
+         * First tries system-installed libs (System.loadLibrary).
+         * If that fails (e.g. libs excluded from APK), tries loading from [libDir] via System.load().
+         * @param libDir Absolute path to directory containing .so files (e.g. filesDir/whisper_libs)
+         * @return true if libraries loaded successfully
+         */
+        fun load(libDir: String? = null): Boolean {
             if (isLoaded) return true
             return try {
                 Logger.log("Loading native libraries (libwhisper.so containing JNI)...", LOG_TAG)
-                
-                // Load dependencies first
-                System.loadLibrary("omp")
-                System.loadLibrary("ggml")
-                System.loadLibrary("ggml-base")
-                System.loadLibrary("ggml-cpu")
-                System.loadLibrary("ggml-vulkan")
-                
-                // Load the main library which now contains our JNI symbols
-                System.loadLibrary("whisper")
-                
+
+                // Try system-installed libraries first
+                try {
+                    System.loadLibrary("omp")
+                    System.loadLibrary("ggml")
+                    System.loadLibrary("ggml-base")
+                    System.loadLibrary("ggml-cpu")
+                    System.loadLibrary("ggml-vulkan")
+                    System.loadLibrary("whisper")
+                    isLoaded = true
+                    Logger.log("Libraries loaded from system", LOG_TAG)
+                    return true
+                } catch (e: UnsatisfiedLinkError) {
+                    Logger.log("System libs not found, trying libDir: $libDir", LOG_TAG)
+                }
+
+                // Fallback: load from filesDir (downloaded DLC libs)
+                if (libDir == null) {
+                    Logger.log("No libDir provided, cannot load Whisper libs", LOG_TAG)
+                    return false
+                }
+
+                val libs = listOf("libomp.so", "libggml.so", "libggml-base.so", "libggml-cpu.so", "libggml-vulkan.so", "libwhisper.so")
+                for (lib in libs) {
+                    val path = java.io.File(libDir, lib)
+                    if (!path.exists()) {
+                        Logger.log("Missing lib: $path", LOG_TAG)
+                        return false
+                    }
+                    Logger.log("Loading $path", LOG_TAG)
+                    System.load(path.absolutePath)
+                }
                 isLoaded = true
-                Logger.log("Libraries loaded successfully", LOG_TAG)
+                Logger.log("Libraries loaded from libDir: $libDir", LOG_TAG)
                 true
             } catch (e: UnsatisfiedLinkError) {
                 Logger.log("Native load failed: ${e.message}", LOG_TAG)

@@ -284,6 +284,10 @@ class AppStateManager private constructor(
         scope.launch { repo.setExperimentalVulkanEnabled(enabled) }
     }
 
+    fun setWhisperSystemEnabled(enabled: Boolean) {
+        scope.launch { repo.setWhisperSystemEnabled(enabled) }
+    }
+
     fun setAiProcessor(processor: String) {
         scope.launch {
             repo.setAiProcessor(processor)
@@ -337,8 +341,10 @@ class AppStateManager private constructor(
                 isIncompatible = s.geminiIncompatible
                 exists = !isIncompatible
             } else {
-                val file = java.io.File(context.applicationInfo.nativeLibraryDir, name)
-                exists = file.exists()
+                // Check system nativeLibraryDir first, then downloaded whisper_libs
+                val systemFile = java.io.File(context.applicationInfo.nativeLibraryDir, name)
+                val downloadedFile = java.io.File(context.filesDir, "whisper_libs/$name")
+                exists = systemFile.exists() || downloadedFile.exists()
                 isIncompatible = name.contains("ggml-vulkan") && s.vulkanIncompatible
             }
 
