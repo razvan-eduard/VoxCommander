@@ -20,6 +20,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.ui.screens.main.ListeningScreen
+import com.voxcommander.app.ui.screens.main.SpeakingOverlay
 import com.voxcommander.app.ui.theme.VoxCommanderTheme
 import com.voxcommander.app.utils.Logger
 
@@ -70,9 +71,14 @@ class VoiceOverlayManager(
         val view = ComposeView(context).apply {
             setContent {
                 VoxCommanderTheme {
+                    // Listening overlay (shown when VoiceManager is listening)
                     ListeningScreen(
                         languageManager = languageManager,
                         appStateManager = appStateManager
+                    )
+                    // Speaking overlay (shown when TtsManager is speaking)
+                    SpeakingOverlay(
+                        languageManager = languageManager
                     )
                 }
             }

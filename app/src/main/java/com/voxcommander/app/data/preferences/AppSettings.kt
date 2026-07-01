@@ -99,6 +99,11 @@ data class AppSettings(
     /** Map of provider name -> API key (stored encrypted) */
     val searchProviderApiKeys: Map<String, String> = emptyMap(),
 
+    // --- TTS ---
+    val ttsEnabled: Boolean = true,
+    val ttsSpeechRate: Float = 1.0f,
+    val ttsPitch: Float = 1.0f,
+
 ) {
     /**
      * Key for custom model path: "engineKey" or "engineKey_langCode"

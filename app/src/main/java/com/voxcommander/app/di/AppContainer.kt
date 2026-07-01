@@ -17,6 +17,8 @@ import com.voxcommander.app.domain.intent.registry.AppRegistry
 import com.voxcommander.app.domain.intent.router.IntentRouter
 import com.voxcommander.app.domain.localization.LanguageManager
 import com.voxcommander.app.domain.voice.VoiceManager
+import com.voxcommander.app.domain.voice.TtsManager
+import com.voxcommander.app.domain.conversation.ConversationHandler
 import com.voxcommander.app.state.AppStateManager
 import com.voxcommander.app.utils.Logger
 import com.voxcommander.app.ui.viewmodels.MainViewModel
@@ -144,6 +146,12 @@ class AppContainer(context: Context) {
             snapshot.offlineFallbackTimeout,
             snapshot.defaultOfflineModel
         )
+
+        // Initialize TTS manager
+        TtsManager.init(context, settingsRepository, appStateManager)
+
+        // Initialize conversation handler
+        ConversationHandler.init(appStateManager)
     }
 
     companion object {

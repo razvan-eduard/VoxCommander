@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -123,6 +124,11 @@ class SettingsRepositoryImpl(
 
         // Download preference
         val DOWNLOAD_PREFERENCE = stringPreferencesKey("download_preference")
+
+        // TTS
+        val TTS_ENABLED = booleanPreferencesKey("tts_enabled")
+        val TTS_SPEECH_RATE = floatPreferencesKey("tts_speech_rate")
+        val TTS_PITCH = floatPreferencesKey("tts_pitch")
     }
 
     private val TAG = "SettingsRepository"
@@ -311,7 +317,11 @@ class SettingsRepositoryImpl(
             pipedApiUrl = prefs[Keys.PIPED_API_URL],
             pipedRegion = prefs[Keys.PIPED_REGION],
 
-            downloadPreference = prefs[Keys.DOWNLOAD_PREFERENCE] ?: "wifi_and_metered"
+            downloadPreference = prefs[Keys.DOWNLOAD_PREFERENCE] ?: "wifi_and_metered",
+
+            ttsEnabled = prefs[Keys.TTS_ENABLED] ?: true,
+            ttsSpeechRate = prefs[Keys.TTS_SPEECH_RATE] ?: 1.0f,
+            ttsPitch = prefs[Keys.TTS_PITCH] ?: 1.0f
         )
     }
 
@@ -703,6 +713,19 @@ class SettingsRepositoryImpl(
         encryptedPrefs.edit().apply {
             if (deviceId != null) putString("spotify_device_id", deviceId) else remove("spotify_device_id")
         }.apply()
+    }
+
+    // --- TTS ---
+    override suspend fun setTtsEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.TTS_ENABLED] = enabled }
+    }
+
+    override suspend fun setTtsSpeechRate(rate: Float) {
+        dataStore.edit { it[Keys.TTS_SPEECH_RATE] = rate }
+    }
+
+    override suspend fun setTtsPitch(pitch: Float) {
+        dataStore.edit { it[Keys.TTS_PITCH] = pitch }
     }
 
     // --- HELPERS ---

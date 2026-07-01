@@ -69,17 +69,21 @@ class WakeWordService : Service() {
 
         // --- VISIBILITY CONTROLLER ---
         serviceScope.launch {
-            VoiceManager.isListeningFlow.collectLatest { isListening ->
-                val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    android.provider.Settings.canDrawOverlays(this@WakeWordService)
-                } else true
-                
-                if (isListening && canDraw) {
-                    voiceOverlayManager.show()
-                } else {
-                    voiceOverlayManager.hide()
+            kotlinx.coroutines.flow.combine(
+                VoiceManager.isListeningFlow,
+                com.voxcommander.app.domain.voice.TtsManager.isSpeakingFlow
+            ) { isListening, isSpeaking -> isListening || isSpeaking }
+                .collectLatest { showOverlay ->
+                    val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        android.provider.Settings.canDrawOverlays(this@WakeWordService)
+                    } else true
+
+                    if (showOverlay && canDraw) {
+                        voiceOverlayManager.show()
+                    } else {
+                        voiceOverlayManager.hide()
+                    }
                 }
-            }
         }
 
         // --- BACKGROUND TRIGGER (MOVED FROM MAINACTIVITY) ---
@@ -259,6 +263,13 @@ class WakeWordService : Service() {
 
     private fun onWakeWordDetected() {
         Logger.log("Wake word detected!", TAG)
+
+        // Barge-in: if TTS is speaking, stop it and let the normal flow
+        // proceed to listen for the next command
+        if (com.voxcommander.app.domain.conversation.ConversationHandler.handleBargeIn()) {
+            Logger.log("Barge-in handled — TTS stopped, transitioning to listen", TAG)
+        }
+
         // Stop AudioRecord and release audio focus IMMEDIATELY before anything else
         // so other apps (Spotify etc.) can reclaim audio and VoiceManager can grab the mic
         wakeWordEngine?.stopListening()
@@ -291,9 +302,10 @@ class WakeWordService : Service() {
                 updateNotification(languageManager.getString("vox_listening"))
             }
             VoiceState.PROCESSING -> {
-                if (currentUiState.commandQueueEnabled) {
+                if (currentUiState.commandQueueEnabled || com.voxcommander.app.domain.voice.TtsManager.isSpeaking()) {
                     // Keep WW running during PROCESSING so user can queue next command
-                    Logger.log("WW staying active during PROCESSING (queue mode)", TAG)
+                    // or barge-in during TTS playback
+                    Logger.log("WW staying active during PROCESSING (queue/barge-in mode)", TAG)
                 } else {
                     wakeWordEngine?.stopListening()
                     updateNotification(languageManager.getString("ww_paused_ai_thinking"))

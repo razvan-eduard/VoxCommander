@@ -36,6 +36,11 @@ data class AppState(
     val isExperimentalVulkanEnabled: Boolean,
     val isWhisperSystemEnabled: Boolean,
     val downloadPreference: String,
+
+    // --- TTS SETTINGS ---
+    val ttsEnabled: Boolean,
+    val ttsSpeechRate: Float,
+    val ttsPitch: Float,
     
     // --- API SETTINGS ---
     val apiKey: String?,
@@ -163,6 +168,9 @@ data class AppState(
                 isExperimentalVulkanEnabled = settings.experimentalVulkanEnabled,
                 isWhisperSystemEnabled = settings.isWhisperSystemEnabled,
                 downloadPreference = settings.downloadPreference,
+                ttsEnabled = settings.ttsEnabled,
+                ttsSpeechRate = settings.ttsSpeechRate,
+                ttsPitch = settings.ttsPitch,
                 apiKey = settings.apiKey,
                 geminiApiKey = settings.geminiApiKey,
                 voiceState = voiceState,
@@ -204,6 +212,9 @@ data class AppState(
             isExperimentalVulkanEnabled = false,
             isWhisperSystemEnabled = false,
             downloadPreference = "wifi_and_metered",
+            ttsEnabled = true,
+            ttsSpeechRate = 1.0f,
+            ttsPitch = 1.0f,
             apiKey = null,
             geminiApiKey = null,
             voiceState = VoiceState.IDLE,

@@ -296,6 +296,19 @@ class AppStateManager private constructor(
         scope.launch { repo.setDownloadPreference(preference) }
     }
 
+    // --- TTS ---
+    fun setTtsEnabled(enabled: Boolean) {
+        scope.launch { repo.setTtsEnabled(enabled) }
+    }
+
+    fun setTtsSpeechRate(rate: Float) {
+        scope.launch { repo.setTtsSpeechRate(rate) }
+    }
+
+    fun setTtsPitch(pitch: Float) {
+        scope.launch { repo.setTtsPitch(pitch) }
+    }
+
     fun setAiProcessor(processor: String) {
         scope.launch {
             repo.setAiProcessor(processor)

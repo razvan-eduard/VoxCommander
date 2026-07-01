@@ -6,6 +6,8 @@ import com.voxcommander.app.domain.intent.registry.AppRegistry
 import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
 import com.voxcommander.app.domain.search.LocationHelper
 import com.voxcommander.app.domain.search.SearchProviderRouter
+import com.voxcommander.app.domain.conversation.ConversationHandler
+import com.voxcommander.app.domain.voice.TtsManager
 import com.voxcommander.app.utils.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,8 +18,8 @@ import kotlinx.coroutines.launch
  * Handles search-domain intents by routing to the appropriate search provider
  * based on the "category" parameter in the NluIntent.
  *
- * Executes the search asynchronously and logs formatted results.
- * Later: results → local LLM summarization → TTS.
+ * Executes the search asynchronously, stores results, and speaks them via TTS
+ * with barge-in support (user can interrupt with wake word).
  */
 class SearchIntentHandler : IntentHandler {
 
@@ -55,9 +57,13 @@ class SearchIntentHandler : IntentHandler {
 
             val results = SearchProviderRouter.search(query, category, lat, lon)
             val summary = SearchProviderRouter.formatResultsForSummary(query, results)
+            val ttsText = SearchProviderRouter.formatResultsForTTS(query, results)
 
             Logger.log("Search results:\n$summary", TAG)
             com.voxcommander.app.domain.search.SearchResultsHolder.setResults(summary)
+
+            // Speak the search results via TTS with barge-in support
+            ConversationHandler.speakResponse(ttsText)
         }
 
         return true

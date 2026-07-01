@@ -60,6 +60,23 @@ object SearchProviderRouter {
         return sb.toString().trim()
     }
 
+    /**
+     * Formats search results as clean text suitable for TTS playback.
+     * Strips the "Search results for:" header and number prefixes.
+     */
+    fun formatResultsForTTS(query: String, results: List<SearchResult>): String {
+        if (results.isEmpty()) return "No results found for $query"
+
+        val sb = StringBuilder()
+        results.forEachIndexed { index, result ->
+            sb.appendLine("${index + 1}. ${result.title}.")
+            if (result.content.isNotBlank()) {
+                sb.appendLine(result.content.trim())
+            }
+        }
+        return sb.toString().trim()
+    }
+
     /** All available category names from the registry */
     val categories: List<String>
         get() = SearchProviderRegistry.categories

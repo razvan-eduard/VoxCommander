@@ -560,6 +560,57 @@ fun ServiceSettingsTab(
             )
         }
 
+        // --- TTS SETTINGS ---
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Text(
+            text = languageManager.getString("tts_settings_title") ?: "Text-to-Speech",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        // TTS Enable Toggle
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = languageManager.getString("tts_enabled_label") ?: "Enable TTS responses",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Switch(
+                checked = uiState.ttsEnabled,
+                onCheckedChange = { appStateManager.setTtsEnabled(it) }
+            )
+        }
+
+        if (uiState.ttsEnabled) {
+            // Speech Rate Slider
+            Text(
+                text = (languageManager.getString("tts_speech_rate_label") ?: "Speech rate") + ": ${"%.1f".format(uiState.ttsSpeechRate)}x",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Slider(
+                value = uiState.ttsSpeechRate,
+                onValueChange = { appStateManager.setTtsSpeechRate(it) },
+                valueRange = 0.5f..2.0f,
+                steps = 14
+            )
+
+            // Pitch Slider
+            Text(
+                text = (languageManager.getString("tts_pitch_label") ?: "Pitch") + ": ${"%.1f".format(uiState.ttsPitch)}x",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Slider(
+                value = uiState.ttsPitch,
+                onValueChange = { appStateManager.setTtsPitch(it) },
+                valueRange = 0.5f..2.0f,
+                steps = 14
+            )
+        }
+
         // --- COMMON: Service Status + Start/Stop ---
         Text(text = languageManager.getString("service_status"), style = MaterialTheme.typography.labelLarge)
         Text(

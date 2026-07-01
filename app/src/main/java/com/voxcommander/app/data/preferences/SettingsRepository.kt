@@ -128,4 +128,9 @@ interface SettingsRepository {
     // --- SPOTIFY DEVICE ID ---
     fun getSpotifyDeviceIdSync(): String?
     suspend fun setSpotifyDeviceId(deviceId: String?)
+
+    // --- TTS ---
+    suspend fun setTtsEnabled(enabled: Boolean)
+    suspend fun setTtsSpeechRate(rate: Float)
+    suspend fun setTtsPitch(pitch: Float)
 }
