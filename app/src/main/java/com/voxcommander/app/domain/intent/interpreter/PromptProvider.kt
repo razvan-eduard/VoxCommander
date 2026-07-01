@@ -4,6 +4,8 @@ import com.voxcommander.app.data.preferences.AppSettings
 import com.voxcommander.app.data.remote.RemoteModelRegistry
 import com.voxcommander.app.domain.intent.registry.AppRegistry
 import com.voxcommander.app.domain.intent.taxonomy.IntentTaxonomy
+import com.voxcommander.app.domain.search.SearchProviderRegistry
+import com.voxcommander.app.data.preferences.SettingsRepository
 
 /**
  * Provides hydrated prompt templates for AI agents.
@@ -16,12 +18,13 @@ object PromptProvider {
     private const val ID_STANDARD_NLU = "standard_nlu"
     private const val PLACEHOLDER_TEXT = "\${spokenText}"
     private const val PLACEHOLDER_APPS = "\${installedApps}"
+    private const val PLACEHOLDER_SEARCH = "\${searchProviders}"
 
     /**
      * Returns only the system instructions (without the input line).
      * Used by all engines (OpenAI, Gemini Cloud, Local LLM) — they add user input separately.
      */
-    fun getNluSystemPrompt(settings: AppSettings? = null, voiceLanguage: String? = null): String {
+    fun getNluSystemPrompt(settings: AppSettings? = null, voiceLanguage: String? = null, settingsRepo: SettingsRepository? = null): String {
         val template = RemoteModelRegistry.getPrompt(ID_STANDARD_NLU) ?: return ""
         val langHint = voiceLanguage?.let { "\nInput language: $it." } ?: ""
         // Strip the Input/JSON suffix — engines add their own user message
@@ -33,6 +36,7 @@ object PromptProvider {
         }
         return systemPart
             .replace(PLACEHOLDER_APPS, buildAppsSection(settings))
+            .replace(PLACEHOLDER_SEARCH, buildSearchSection(settingsRepo))
             .plus(langHint)
     }
 
@@ -64,6 +68,34 @@ object PromptProvider {
                 val marker = if (isDefault) " [USER DEFAULT]" else ""
                 sb.appendLine("    - ${app.displayName} (package: ${app.packageName})$marker")
             }
+        }
+
+        return sb.toString().trim()
+    }
+
+    /**
+     * Builds a section listing available search categories and their providers.
+     * Only includes providers that don't require an API key, or have one configured.
+     * This helps the LLM choose the right category for search intents.
+     */
+    private fun buildSearchSection(settingsRepo: SettingsRepository?): String {
+        val sb = StringBuilder()
+        sb.appendLine("Available search categories and providers:")
+
+        for (category in SearchProviderRegistry.categories) {
+            val allNames = SearchProviderRegistry.getProviderNames(category)
+            // Filter out API-key providers that don't have a key configured
+            val availableNames = allNames.filter { name ->
+                val provider = SearchProviderRegistry.getProvider(category, name)
+                if (provider?.requiresApiKey == true) {
+                    settingsRepo?.getSearchProviderApiKeySync(name)?.isNotBlank() == true
+                } else {
+                    true
+                }
+            }
+            if (availableNames.isEmpty()) continue
+
+            sb.appendLine("  $category: ${availableNames.joinToString(", ")}")
         }
 
         return sb.toString().trim()

@@ -1,0 +1,200 @@
+package com.voxcommander.app.domain.search
+
+import android.content.Context
+import com.google.gson.Gson
+import com.voxcommander.app.data.preferences.SettingsRepository
+import com.voxcommander.app.utils.Logger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.URL
+
+object SearchProviderRegistry {
+
+    private const val TAG = "SearchProviderRegistry"
+    private const val LOCAL_FILE_NAME = "search_definitions.json"
+
+    private val gson = Gson()
+
+    private var appContext: Context? = null
+    private var cachedSchema: SearchDefinitionsSchema? = null
+    private var providersByCategory: Map<String, Map<String, DynamicSearchProvider>> = emptyMap()
+    private var defaultProviderNames: Map<String, String> = emptyMap()
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+        ensureLocalFile()
+        loadFromFilesDir()
+    }
+
+    suspend fun fetchRemote(repo: SettingsRepository, force: Boolean = false): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!force && cachedSchema != null) return@withContext true
+
+            val baseUrl = repo.getSettingsSnapshot().modelRepoBaseUrl
+            val rawUrlBase = if (baseUrl.contains("github.com") && !baseUrl.contains("raw.githubusercontent.com")) {
+                baseUrl.replace("github.com", "raw.githubusercontent.com").removeSuffix("/") + "/main/search_definitions.json"
+            } else {
+                if (baseUrl.endsWith("/")) "${baseUrl}search_definitions.json" else "$baseUrl/search_definitions.json"
+            }
+
+            val rawUrl = "$rawUrlBase?t=${System.currentTimeMillis()}"
+            Logger.log("Fetching remote search definitions from: $rawUrl", TAG)
+
+            return@withContext try {
+                val jsonText = URL(rawUrl).readText()
+                val schema = gson.fromJson(jsonText, SearchDefinitionsSchema::class.java)
+                if (schema != null && schema.categories.isNotEmpty()) {
+                    saveLocalFile(jsonText)
+                    cachedSchema = schema
+                    rebuildProviders()
+                    Logger.log("Remote search definitions parsed. Categories: ${schema.categories.map { "${it.category}(${it.providers.size})" }}", TAG)
+                    true
+                } else {
+                    Logger.log("Failed to parse remote search definitions", TAG)
+                    false
+                }
+            } catch (e: Exception) {
+                Logger.log("Remote search definitions fetch failed: ${e.message}. Using cached.", TAG)
+                cachedSchema != null
+            }
+        }
+
+    private fun ensureLocalFile() {
+        val ctx = appContext ?: return
+        val localFile = java.io.File(ctx.filesDir, LOCAL_FILE_NAME)
+        if (!localFile.exists()) {
+            try {
+                ctx.assets.open(LOCAL_FILE_NAME).use { input ->
+                    localFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                Logger.log("Copied search_definitions.json from assets to filesDir", TAG)
+            } catch (e: Exception) {
+                Logger.log("Failed to copy search_definitions.json from assets: ${e.message}", TAG)
+            }
+        }
+    }
+
+    private fun loadFromFilesDir() {
+        val ctx = appContext ?: return
+        val localFile = java.io.File(ctx.filesDir, LOCAL_FILE_NAME)
+        if (!localFile.exists()) return
+
+        try {
+            val jsonText = localFile.readText()
+            val schema = gson.fromJson(jsonText, SearchDefinitionsSchema::class.java)
+            if (schema != null && schema.categories.isNotEmpty()) {
+                cachedSchema = schema
+                Logger.log("Loaded search_definitions.json from filesDir. Categories: ${schema.categories.map { it.category }}", TAG)
+                rebuildProviders()
+            } else {
+                Logger.log("Local search_definitions.json has empty categories. Overwriting from assets.", TAG)
+                throw com.google.gson.JsonParseException("Empty categories — likely outdated schema")
+            }
+        } catch (e: Exception) {
+            Logger.log("Failed to parse local search_definitions.json: ${e.message}. Recovering from assets.", TAG)
+            try {
+                ctx.assets.open(LOCAL_FILE_NAME).use { input ->
+                    localFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                val freshText = localFile.readText()
+                Logger.log("Assets content preview: ${freshText.take(200)}", TAG)
+                val freshSchema = gson.fromJson(freshText, SearchDefinitionsSchema::class.java)
+                if (freshSchema != null && freshSchema.categories.isNotEmpty()) {
+                    cachedSchema = freshSchema
+                    rebuildProviders()
+                    Logger.log("Recovered search_definitions.json from assets. Categories: ${freshSchema.categories.map { it.category }}", TAG)
+                } else {
+                    Logger.log("Assets file also has empty categories!", TAG)
+                }
+            } catch (e2: Exception) {
+                Logger.log("Failed to recover search_definitions.json from assets: ${e2.message}", TAG)
+            }
+        }
+    }
+
+    private fun saveLocalFile(jsonText: String) {
+        val ctx = appContext ?: return
+        try {
+            java.io.File(ctx.filesDir, LOCAL_FILE_NAME).writeText(jsonText)
+            Logger.log("Saved updated search_definitions.json to filesDir", TAG)
+        } catch (e: Exception) {
+            Logger.log("Failed to save search_definitions.json: ${e.message}", TAG)
+        }
+    }
+
+    private fun rebuildProviders() {
+        val schema = cachedSchema ?: return
+        val newProviders = mutableMapOf<String, Map<String, DynamicSearchProvider>>()
+        val newDefaults = mutableMapOf<String, String>()
+
+        for (catDef in schema.categories) {
+            val providerMap = mutableMapOf<String, DynamicSearchProvider>()
+            for (provDef in catDef.providers) {
+                providerMap[provDef.name] = DynamicSearchProvider(provDef, catDef.category)
+            }
+            newProviders[catDef.category] = providerMap
+            newDefaults[catDef.category] = catDef.defaultProvider.ifBlank {
+                catDef.providers.firstOrNull()?.name ?: ""
+            }
+        }
+
+        providersByCategory = newProviders
+        defaultProviderNames = newDefaults
+        Logger.log("Rebuilt search providers: ${newProviders.map { "${it.key}=[${it.value.keys}]" }}", TAG)
+    }
+
+    fun applyApiKeys(apiKeys: Map<String, String>) {
+        for ((_, providerMap) in providersByCategory) {
+            for ((name, provider) in providerMap) {
+                provider.setApiKey(apiKeys[name])
+            }
+        }
+        Logger.log("Applied API keys to search providers: ${apiKeys.keys}", TAG)
+    }
+
+    fun getProvider(category: String): DynamicSearchProvider? {
+        val providers = providersByCategory[category]
+        if (providers != null) {
+            val defaultName = defaultProviderNames[category]
+            if (defaultName != null && providers.containsKey(defaultName)) {
+                return providers[defaultName]
+            }
+            return providers.values.firstOrNull()
+        }
+        val generalProviders = providersByCategory["general"] ?: return null
+        val generalDefault = defaultProviderNames["general"]
+        if (generalDefault != null && generalProviders.containsKey(generalDefault)) {
+            return generalProviders[generalDefault]
+        }
+        return generalProviders.values.firstOrNull()
+    }
+
+    fun getProvider(category: String, providerName: String): DynamicSearchProvider? {
+        return providersByCategory[category]?.get(providerName)
+    }
+
+    fun getProviderNames(category: String): List<String> {
+        return providersByCategory[category]?.keys?.toList() ?: emptyList()
+    }
+
+    /**
+     * Returns provider names for a category, excluding API-key providers that don't have a key configured.
+     */
+    fun getAvailableProviderNames(category: String, settingsRepo: com.voxcommander.app.data.preferences.SettingsRepository?): List<String> {
+        val allNames = getProviderNames(category)
+        return allNames.filter { name ->
+            val provider = getProvider(category, name)
+            if (provider?.requiresApiKey == true) {
+                settingsRepo?.getSearchProviderApiKeySync(name)?.isNotBlank() == true
+            } else {
+                true
+            }
+        }
+    }
+
+    val categories: List<String>
+        get() = cachedSchema?.categories?.map { it.category } ?: listOf("general")
+
+    val isInitialized: Boolean
+        get() = cachedSchema != null && providersByCategory.isNotEmpty()
+}

@@ -13,14 +13,8 @@ import androidx.compose.ui.unit.dp
 import com.voxcommander.app.data.preferences.SettingsRepository
 import com.voxcommander.app.domain.intent.handler.PipedSearchHelper
 import com.voxcommander.app.domain.localization.LanguageManager
+import com.voxcommander.app.ui.components.ConnectionTestAuto
 import kotlinx.coroutines.launch
-
-sealed class PipedTestStatus {
-    object Idle : PipedTestStatus()
-    object Testing : PipedTestStatus()
-    data class Online(val url: String) : PipedTestStatus()
-    data class Offline(val url: String) : PipedTestStatus()
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,7 +26,6 @@ fun PipedSettingsSection(
 
     var pipedApiUrl by remember { mutableStateOf(settingsRepo.getPipedApiUrlSync() ?: "") }
     var pipedRegion by remember { mutableStateOf(settingsRepo.getPipedRegionSync() ?: "") }
-    var pipedTestStatus by remember { mutableStateOf<PipedTestStatus>(PipedTestStatus.Idle) }
 
     Text(text = languageManager.getString("media_services_section"), style = MaterialTheme.typography.titleMedium)
 
@@ -44,16 +37,6 @@ fun PipedSettingsSection(
         pipedApiUrl
     } else {
         "$pipedApiUrl (${languageManager.getString("piped_instance_custom")})"
-    }
-
-    LaunchedEffect(pipedApiUrl) {
-        if (pipedApiUrl.isBlank()) {
-            pipedTestStatus = PipedTestStatus.Idle
-        } else {
-            pipedTestStatus = PipedTestStatus.Testing
-            val ok = PipedSearchHelper.testInstance(pipedApiUrl)
-            pipedTestStatus = if (ok) PipedTestStatus.Online(pipedApiUrl) else PipedTestStatus.Offline(pipedApiUrl)
-        }
     }
 
     ExposedDropdownMenuBox(
@@ -114,45 +97,13 @@ fun PipedSettingsSection(
         )
     }
 
-    when (val status = pipedTestStatus) {
-        is PipedTestStatus.Testing -> Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(vertical = 2.dp)
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-            Text(
-                text = languageManager.getString("piped_testing"),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        is PipedTestStatus.Online -> Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(vertical = 2.dp)
-        ) {
-            Text(text = "\u2705", style = MaterialTheme.typography.labelSmall)
-            Text(
-                text = languageManager.getString("piped_online"),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        is PipedTestStatus.Offline -> Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(vertical = 2.dp)
-        ) {
-            Text(text = "\u274C", style = MaterialTheme.typography.labelSmall)
-            Text(
-                text = languageManager.getString("piped_offline"),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-        else -> {}
-    }
+    ConnectionTestAuto(
+        testKey = pipedApiUrl,
+        testFn = { PipedSearchHelper.testInstance(pipedApiUrl) },
+        testingLabel = languageManager.getString("piped_testing"),
+        onlineLabel = languageManager.getString("piped_online"),
+        offlineLabel = languageManager.getString("piped_offline")
+    )
 
     val pipedRegions = PipedSearchHelper.PIPED_REGIONS
     var pipedRegionExpanded by remember { mutableStateOf(false) }

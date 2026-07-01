@@ -4,6 +4,8 @@
   "settings": "Setări",
   "last_intent": "Ultima Intenție:",
   "no_intent": "Nicio intenție detectată",
+  "search_results": "Rezultate Căutare:",
+  "no_search_results": "Nicio căutare efectuată încă",
   "manual_command": "Comandă Manuală (Text Direct)",
   "test_button": "Test",
   "rules": "Reguli",
@@ -371,5 +373,9 @@
   "wifi_only_blocked_title": "Doar Wi-Fi",
   "wifi_only_blocked_msg": "Descărcările sunt restricționate doar la Wi-Fi. Conectează-te la Wi-Fi pentru a descărca %s.",
   "whisper_libs_size": "~20 MB",
-  "whisper_engine_label": "Biblioteci motor Whisper"
+  "whisper_engine_label": "Biblioteci motor Whisper",
+  "search_section": "Furnizori Căutare",
+  "search_category": "Categoria de Căutare",
+  "search_test_query": "Testare Căutare",
+  "search_test_placeholder": "Introduceți o căutare..."
 }

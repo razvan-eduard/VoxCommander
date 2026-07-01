@@ -31,7 +31,7 @@ class OpenAiInterpreter(
             return@withContext null
         }
 
-        val systemPrompt = PromptProvider.getNluSystemPrompt(settingsRepo.getSettingsSnapshot(), voiceLanguage)
+        val systemPrompt = PromptProvider.getNluSystemPrompt(settingsRepo.getSettingsSnapshot(), voiceLanguage, settingsRepo)
         val userPrompt = PromptProvider.formatUserInput(spokenText)
 
         val jsonBody = JSONObject().apply {

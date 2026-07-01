@@ -200,6 +200,9 @@ class MainActivity : ComponentActivity() {
                                     requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                 }
                             },
+                            onRequestLocationPermission = {
+                                requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            },
                             onImportCustomModel = { langCode ->
                                 val isZipEngine = com.voxcommander.app.data.remote.RemoteModelRegistry.isZipEngine(
                                     appContainer.appStateManager.uiState.value.voiceProcessor

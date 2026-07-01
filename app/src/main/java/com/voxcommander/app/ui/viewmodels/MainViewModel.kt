@@ -11,6 +11,7 @@ import com.voxcommander.app.state.AppStateManager
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.voxcommander.app.domain.search.SearchResultsHolder
 import com.voxcommander.app.state.VoiceState
 import com.voxcommander.app.utils.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,8 @@ class MainViewModel(
 
     private val _transcription = MutableStateFlow("")
     val transcription = _transcription.asStateFlow()
+
+    val searchResults = SearchResultsHolder.searchResults
 
     private val commandQueue = mutableListOf<Pair<String, String>>()
     private val queueLock = Any()

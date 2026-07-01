@@ -13,8 +13,9 @@ object IntentTaxonomy {
         const val MESSAGING = "messaging"
         const val SYSTEM = "system"
         const val HOME = "home"
+        const val SEARCH = "search"
 
-        val ALL = listOf(AUDIO, SETTINGS, MAPS, MESSAGING, SYSTEM, HOME)
+        val ALL = listOf(AUDIO, SETTINGS, MAPS, MESSAGING, SYSTEM, HOME, SEARCH)
     }
 
     object Actions {
@@ -37,8 +38,11 @@ object IntentTaxonomy {
         // Messaging
         const val SEND = "send"
 
+        // Search
+        const val QUERY = "query"
+
         val ALL = listOf(PLAY, PAUSE, NEXT, PREV, VOLUME_UP, VOLUME_DOWN,
-            WIFI_TOGGLE, BLUETOOTH_TOGGLE, GPS_TOGGLE, NAVIGATE, SEND)
+            WIFI_TOGGLE, BLUETOOTH_TOGGLE, GPS_TOGGLE, NAVIGATE, SEND, QUERY)
     }
 
     /**
@@ -50,6 +54,7 @@ object IntentTaxonomy {
         Domains.SETTINGS -> listOf(Actions.VOLUME_UP, Actions.VOLUME_DOWN, Actions.WIFI_TOGGLE, Actions.BLUETOOTH_TOGGLE, Actions.GPS_TOGGLE)
         Domains.MAPS -> listOf(Actions.NAVIGATE)
         Domains.MESSAGING -> listOf(Actions.SEND)
+        Domains.SEARCH -> listOf(Actions.QUERY)
         Domains.SYSTEM, Domains.HOME -> listOf("toggle", "status")
         else -> listOf("launch")
     }

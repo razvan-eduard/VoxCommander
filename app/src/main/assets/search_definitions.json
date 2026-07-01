@@ -1,0 +1,185 @@
+{
+  "schema_version": 2,
+  "categories": [
+    {
+      "category": "weather",
+      "defaultProvider": "Open-Meteo",
+      "providers": [
+        {
+          "name": "Open-Meteo",
+          "endpoint": "https://api.open-meteo.com/v1/forecast",
+          "method": "GET",
+          "requiresLocation": true,
+          "queryTemplate": "?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=2",
+          "responseType": "json",
+          "resultPath": "current",
+          "fieldMappings": [
+            {
+              "title": "Current Weather",
+              "content": "Currently: {weather_code_text}, {temperature_2m}C (feels like {apparent_temperature}C). Humidity: {relative_humidity_2m}%. Wind: {wind_speed_10m} km/h.",
+              "source": "current"
+            },
+            {
+              "title": "Today Forecast",
+              "content": "Today: {weather_code_text}. High: {temperature_2m_max}C, Low: {temperature_2m_min}C. Rain chance: {precipitation_probability_max}%.",
+              "source": "daily",
+              "index": 0
+            },
+            {
+              "title": "Tomorrow Forecast",
+              "content": "Tomorrow: {weather_code_text}. High: {temperature_2m_max}C, Low: {temperature_2m_min}C. Rain chance: {precipitation_probability_max}%.",
+              "source": "daily",
+              "index": 1
+            }
+          ],
+          "valueTransforms": {
+            "weather_code": "weather_code_text"
+          }
+        }
+      ]
+    },
+    {
+      "category": "general",
+      "defaultProvider": "DuckDuckGo",
+      "providers": [
+        {
+          "name": "DuckDuckGo",
+          "endpoint": "https://api.duckduckgo.com/",
+          "method": "GET",
+          "requiresLocation": false,
+          "queryTemplate": "?q={query}&format=json&no_html=1&skip_disambig=1",
+          "responseType": "json",
+          "resultPath": "RelatedTopics",
+          "jsonFields": {
+            "title": "Text",
+            "content": "Text",
+            "url": "FirstURL"
+          },
+          "maxResults": 5,
+          "stripHtml": true
+        },
+        {
+          "name": "Wikipedia",
+          "endpoint": "https://en.wikipedia.org/w/api.php",
+          "method": "GET",
+          "requiresLocation": false,
+          "userAgent": "VoxCommander/1.0 (Android; contact@voxcommander.app)",
+          "queryTemplate": "?action=query&list=search&srsearch={query}&srprop=snippet&srlimit=3&format=json",
+          "responseType": "json",
+          "resultPath": "query.search",
+          "jsonFields": {
+            "title": "title",
+            "content": "snippet",
+            "url": "pageid"
+          },
+          "urlTemplate": "https://en.wikipedia.org/?curid={url}",
+          "stripHtml": true,
+          "followUpExtract": true,
+          "extractEndpoint": "https://en.wikipedia.org/w/api.php?action=query&titles={title}&prop=extracts&exintro=true&explaintext=true&format=json",
+          "extractPath": "query.pages",
+          "extractField": "extract",
+          "extractMaxChars": 500
+        }
+      ]
+    },
+    {
+      "category": "news",
+      "defaultProvider": "Google News",
+      "providers": [
+        {
+          "name": "Google News",
+          "endpoint": "https://news.google.com/rss/search",
+          "method": "GET",
+          "requiresLocation": false,
+          "queryTemplate": "?q={query}&hl=en-US&gl=US&ceid=US:en",
+          "responseType": "xml",
+          "resultPattern": "<item>.*?<title>(.*?)</title>.*?<link>(.*?)</link>.*?<description>(.*?)</description>",
+          "titleGroup": 1,
+          "urlGroup": 2,
+          "contentGroup": 3,
+          "maxResults": 5,
+          "stripHtml": true
+        },
+        {
+          "name": "GNews",
+          "endpoint": "https://gnews.io/api/v4/search",
+          "method": "GET",
+          "requiresLocation": false,
+          "requiresApiKey": true,
+          "queryTemplate": "?q={query}&lang=en&max=5&apikey={apiKey}",
+          "responseType": "json",
+          "resultPath": "articles",
+          "jsonFields": {
+            "title": "title",
+            "content": "description",
+            "url": "url"
+          },
+          "maxResults": 5,
+          "stripHtml": true
+        },
+        {
+          "name": "Currents API",
+          "endpoint": "https://api.currentsapi.services/v1/search",
+          "method": "GET",
+          "requiresLocation": false,
+          "requiresApiKey": true,
+          "queryTemplate": "?keywords={query}&language=en&apiKey={apiKey}",
+          "responseType": "json",
+          "resultPath": "news",
+          "jsonFields": {
+            "title": "title",
+            "content": "description",
+            "url": "url"
+          },
+          "maxResults": 5,
+          "stripHtml": true
+        },
+        {
+          "name": "NewsAPI",
+          "endpoint": "https://newsapi.org/v2/everything",
+          "method": "GET",
+          "requiresLocation": false,
+          "requiresApiKey": true,
+          "queryTemplate": "?q={query}&language=en&pageSize=5&sortBy=publishedAt&apiKey={apiKey}",
+          "responseType": "json",
+          "resultPath": "articles",
+          "jsonFields": {
+            "title": "title",
+            "content": "description",
+            "url": "url"
+          },
+          "maxResults": 5,
+          "stripHtml": true
+        }
+      ]
+    },
+    {
+      "category": "knowledge",
+      "defaultProvider": "Wikipedia",
+      "providers": [
+        {
+          "name": "Wikipedia",
+          "endpoint": "https://en.wikipedia.org/w/api.php",
+          "method": "GET",
+          "requiresLocation": false,
+          "userAgent": "VoxCommander/1.0 (Android; contact@voxcommander.app)",
+          "queryTemplate": "?action=query&list=search&srsearch={query}&srprop=snippet&srlimit=3&format=json",
+          "responseType": "json",
+          "resultPath": "query.search",
+          "jsonFields": {
+            "title": "title",
+            "content": "snippet",
+            "url": "pageid"
+          },
+          "urlTemplate": "https://en.wikipedia.org/?curid={url}",
+          "stripHtml": true,
+          "followUpExtract": true,
+          "extractEndpoint": "https://en.wikipedia.org/w/api.php?action=query&titles={title}&prop=extracts&exintro=true&explaintext=true&format=json",
+          "extractPath": "query.pages",
+          "extractField": "extract",
+          "extractMaxChars": 500
+        }
+      ]
+    }
+  ]
+}

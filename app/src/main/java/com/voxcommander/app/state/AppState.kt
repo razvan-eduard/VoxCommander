@@ -60,6 +60,7 @@ data class AppState(
     val canDrawOverlays: Boolean = false,
     val hasMicrophonePermission: Boolean = false,
     val hasNotificationPermission: Boolean = false,
+    val hasLocationPermission: Boolean = false,
     
     // --- DERIVED PROPERTIES (Calculated from base state) ---
     val voiceModelReady: Boolean,
@@ -176,6 +177,7 @@ data class AppState(
                 canDrawOverlays = com.voxcommander.app.utils.PermissionUtils.canDrawOverlays(context),
                 hasMicrophonePermission = com.voxcommander.app.utils.PermissionUtils.hasMicrophonePermission(context),
                 hasNotificationPermission = com.voxcommander.app.utils.PermissionUtils.hasNotificationPermission(context),
+                hasLocationPermission = com.voxcommander.app.domain.search.LocationHelper.hasLocationPermission(context),
                 voiceModelReady = voiceModelReady,
                 intentModelReady = intentModelReady
             )

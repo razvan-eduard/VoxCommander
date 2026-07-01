@@ -2,6 +2,8 @@ package com.voxcommander.app.ui.screens.main
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Mic
@@ -56,6 +58,7 @@ fun MainScreen(
     onRequestOverlayPermission: () -> Unit,
     onRequestMicrophonePermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onRequestLocationPermission: () -> Unit = {},
     onImportCustomModel: (String?) -> Unit = {},
     onClearCustomModel: () -> Unit = {},
     onImportOpenWakeWordModel: () -> Unit = {}
@@ -63,6 +66,7 @@ fun MainScreen(
     val lastIntent by viewModel.currentIntent.collectAsStateWithLifecycle()
     val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
     val transcription by viewModel.transcription.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     val isListening by VoiceManager.isListeningFlow.collectAsStateWithLifecycle()
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
     val isOnline by NetworkMonitor.onlineFlow.collectAsStateWithLifecycle()
@@ -167,6 +171,7 @@ fun MainScreen(
 
                 var showManualIntentDialog by remember { mutableStateOf(false) }
 
+                // Last Intent (half height)
                 Card(
                     modifier = Modifier.fillMaxWidth().weight(1f)
                         .clickable {
@@ -193,6 +198,42 @@ fun MainScreen(
                         }
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Search Results (half height)
+                Text(
+                    text = languageManager.getString("search_results"),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                        if (searchResults != null) {
+                            Text(
+                                text = searchResults!!,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .verticalScroll(rememberScrollState())
+                            )
+                        } else {
+                            Text(
+                                text = languageManager.getString("no_search_results"),
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -217,6 +258,7 @@ fun MainScreen(
             onRequestOverlayPermission = onRequestOverlayPermission,
             onRequestMicrophonePermission = onRequestMicrophonePermission,
             onRequestNotificationPermission = onRequestNotificationPermission,
+            onRequestLocationPermission = onRequestLocationPermission,
             onImportCustomModel = onImportCustomModel,
             onClearCustomModel = onClearCustomModel,
             onImportOpenWakeWordModel = onImportOpenWakeWordModel

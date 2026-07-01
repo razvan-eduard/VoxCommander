@@ -662,6 +662,27 @@ class SettingsRepositoryImpl(
         dataStore.edit { it[Keys.DOWNLOAD_PREFERENCE] = preference }
     }
 
+    // --- SEARCH PROVIDER API KEYS (stored in encrypted prefs) ---
+    override fun getSearchProviderApiKeySync(providerName: String): String? =
+        encryptedPrefs.getString("search_apikey_$providerName", null)
+
+    override suspend fun setSearchProviderApiKey(providerName: String, key: String?) {
+        encryptedPrefs.edit().apply {
+            if (key != null) putString("search_apikey_$providerName", key)
+            else remove("search_apikey_$providerName")
+        }.apply()
+    }
+
+    override fun getAllSearchProviderApiKeys(): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        for ((k, v) in encryptedPrefs.all) {
+            if (k.startsWith("search_apikey_") && v is String) {
+                result[k.removePrefix("search_apikey_")] = v
+            }
+        }
+        return result
+    }
+
     // --- SPOTIFY PKCE TOKENS (stored in encrypted prefs) ---
     override fun getSpotifyAccessTokenSync(): String? = encryptedPrefs.getString("spotify_access_token", null)
     override fun getSpotifyRefreshTokenSync(): String? = encryptedPrefs.getString("spotify_refresh_token", null)

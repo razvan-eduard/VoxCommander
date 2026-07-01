@@ -64,6 +64,7 @@ fun GeneralSettingsTab(
                         if (success) {
                             appStateManager.refreshAll()
                         }
+                        com.voxcommander.app.domain.search.SearchProviderRegistry.fetchRemote(settingsRepo, force = true)
                     }
                 }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Sync JSON")

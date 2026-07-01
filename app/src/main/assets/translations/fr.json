@@ -346,5 +346,9 @@
   "ww_openwakeword_custom_hint": "Sélectionnez un fichier modèle .onnx depuis votre appareil. Les modèles entraînés openWakeWord peuvent être importés ici.",
   "ww_engine_switch_warning_title": "Service en Cours",
   "ww_engine_switch_warning_msg": "Le service wake word est en cours d'exécution. Changer de moteur arrêtera le service. Continuer ?",
-  "ww_engine_switch_warning_confirm": "Arrêter & Changer"
+  "ww_engine_switch_warning_confirm": "Arrêter & Changer",
+  "search_section": "Fournisseurs de Recherche",
+  "search_category": "Catégorie de Recherche",
+  "search_test_query": "Recherche de test",
+  "search_test_placeholder": "Saisir une recherche..."
 }

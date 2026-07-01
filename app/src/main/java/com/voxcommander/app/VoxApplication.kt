@@ -40,6 +40,12 @@ class VoxApplication : Application() {
         // Initialize RemoteModelRegistry with app context (for assets/filesDir access)
         RemoteModelRegistry.init(this)
 
+        // Initialize SearchProviderRegistry with app context
+        com.voxcommander.app.domain.search.SearchProviderRegistry.init(this)
+        com.voxcommander.app.domain.search.SearchProviderRegistry.applyApiKeys(
+            container.settingsRepository.getAllSearchProviderApiKeys()
+        )
+
         // Initialize network monitor for realtime connectivity tracking
         NetworkMonitor.init(this)
 
@@ -53,6 +59,11 @@ class VoxApplication : Application() {
                 // Force AppStateManager to rebuild its UI state with the fresh models
                 container.appStateManager.refreshAll()
             }
+            // Also fetch search definitions from remote repo
+            com.voxcommander.app.domain.search.SearchProviderRegistry.fetchRemote(container.settingsRepository, force = true)
+            com.voxcommander.app.domain.search.SearchProviderRegistry.applyApiKeys(
+                container.settingsRepository.getAllSearchProviderApiKeys()
+            )
         }
     }
 }

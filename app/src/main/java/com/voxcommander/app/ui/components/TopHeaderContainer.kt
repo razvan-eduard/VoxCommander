@@ -42,6 +42,7 @@ fun TopHeaderContainer(
     onRequestOverlayPermission: () -> Unit,
     onRequestMicrophonePermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onRequestLocationPermission: () -> Unit = {},
     onImportCustomModel: (String?) -> Unit = {},
     onClearCustomModel: () -> Unit = {},
     onImportOpenWakeWordModel: () -> Unit = {}
@@ -77,6 +78,7 @@ fun TopHeaderContainer(
                         onRequestOverlayPermission = onRequestOverlayPermission,
                         onRequestMicrophonePermission = onRequestMicrophonePermission,
                         onRequestNotificationPermission = onRequestNotificationPermission,
+                        onRequestLocationPermission = onRequestLocationPermission,
                         onImportCustomModel = onImportCustomModel,
                         onClearCustomModel = onClearCustomModel,
                         onImportOpenWakeWordModel = onImportOpenWakeWordModel

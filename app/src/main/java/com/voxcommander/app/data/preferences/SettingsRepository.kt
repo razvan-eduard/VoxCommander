@@ -111,6 +111,11 @@ interface SettingsRepository {
     suspend fun setPipedApiUrl(url: String?)
     suspend fun setPipedRegion(region: String?)
 
+    // --- SEARCH PROVIDER API KEYS ---
+    fun getSearchProviderApiKeySync(providerName: String): String?
+    suspend fun setSearchProviderApiKey(providerName: String, key: String?)
+    fun getAllSearchProviderApiKeys(): Map<String, String>
+
     // --- DOWNLOAD PREFERENCE ---
     suspend fun setDownloadPreference(preference: String)
 

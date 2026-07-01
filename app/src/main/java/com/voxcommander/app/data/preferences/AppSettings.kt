@@ -93,7 +93,12 @@ data class AppSettings(
     // --- MEDIA / EXTERNAL SERVICES ---
     val spotifyClientId: String? = null,
     val pipedApiUrl: String? = null,
-    val pipedRegion: String? = null
+    val pipedRegion: String? = null,
+
+    // --- SEARCH PROVIDER API KEYS ---
+    /** Map of provider name -> API key (stored encrypted) */
+    val searchProviderApiKeys: Map<String, String> = emptyMap(),
+
 ) {
     /**
      * Key for custom model path: "engineKey" or "engineKey_langCode"

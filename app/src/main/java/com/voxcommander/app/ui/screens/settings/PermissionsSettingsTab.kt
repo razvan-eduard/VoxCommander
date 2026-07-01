@@ -18,7 +18,8 @@ fun PermissionsSettingsTab(
     appStateManager: AppStateManager,
     onRequestMicrophone: () -> Unit,
     onRequestNotification: () -> Unit,
-    onRequestOverlay: () -> Unit
+    onRequestOverlay: () -> Unit,
+    onRequestLocation: () -> Unit
 ) {
     val uiState by appStateManager.uiState.collectAsStateWithLifecycle()
 
@@ -55,7 +56,16 @@ fun PermissionsSettingsTab(
             onClick = onRequestOverlay
         )
 
-        // 4. Query All Packages (normal permission, granted at install)
+        // 4. Location Permission (for weather search)
+        PermissionItem(
+            title = "Location",
+            desc = "Required for weather search provider to get local forecast.",
+            isGranted = uiState.hasLocationPermission,
+            languageManager = languageManager,
+            onClick = onRequestLocation
+        )
+
+        // 5. Query All Packages (normal permission, granted at install)
         PermissionItem(
             title = languageManager.getString("permission_query_packages_title") ?: "Query All Packages",
             desc = languageManager.getString("permission_query_packages_desc") ?: "Required to list installed apps for the Default Apps picker. Granted automatically at install.",

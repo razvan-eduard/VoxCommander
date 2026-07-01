@@ -49,6 +49,7 @@ fun SettingsContent(
     onRequestOverlayPermission: () -> Unit = {},
     onRequestMicrophonePermission: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
+    onRequestLocationPermission: () -> Unit = {},
     onImportCustomModel: (String?) -> Unit = {},
     onClearCustomModel: () -> Unit = {},
     onImportOpenWakeWordModel: () -> Unit = {}
@@ -221,13 +222,19 @@ fun SettingsContent(
                                         languageManager = languageManager,
                                         settingsRepo = settingsRepo
                                     )
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                    SearchSettingsSection(
+                                        languageManager = languageManager,
+                                        settingsRepo = settingsRepo
+                                    )
                                 }
                                 4 -> PermissionsSettingsTab(
                                     languageManager = languageManager,
                                     appStateManager = appStateManager,
                                     onRequestMicrophone = onRequestMicrophonePermission,
                                     onRequestNotification = onRequestNotificationPermission,
-                                    onRequestOverlay = onRequestOverlayPermission
+                                    onRequestOverlay = onRequestOverlayPermission,
+                                    onRequestLocation = onRequestLocationPermission
                                 )
                             }
                         }

@@ -346,5 +346,9 @@
   "ww_openwakeword_custom_hint": "Wählen Sie eine .onnx-Modelldatei von Ihrem Gerät. Trainierte openWakeWord-Modelle können hier importiert werden.",
   "ww_engine_switch_warning_title": "Dienst Läuft",
   "ww_engine_switch_warning_msg": "Der Wake-Word-Dienst läuft derzeit. Ein Wechsel des Engines stoppt den Dienst. Fortfahren?",
-  "ww_engine_switch_warning_confirm": "Stopp & Wechseln"
+  "ww_engine_switch_warning_confirm": "Stopp & Wechseln",
+  "search_section": "Suchanbieter",
+  "search_category": "Suchkategorie",
+  "search_test_query": "Suche testen",
+  "search_test_placeholder": "Suchanfrage eingeben..."
 }

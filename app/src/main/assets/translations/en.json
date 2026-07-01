@@ -4,6 +4,8 @@
   "settings": "Settings",
   "last_intent": "Last Intent:",
   "no_intent": "No intent detected",
+  "search_results": "Search Results:",
+  "no_search_results": "No search performed yet",
   "manual_command": "Manual Command (Text Direct)",
   "test_button": "Test",
   "rules": "Rules",
@@ -374,5 +376,9 @@
   "wifi_only_blocked_title": "Wi-Fi Only",
   "wifi_only_blocked_msg": "Downloads are restricted to Wi-Fi only. Connect to Wi-Fi to download %s.",
   "whisper_libs_size": "~20 MB",
-  "whisper_engine_label": "Whisper engine libraries"
+  "whisper_engine_label": "Whisper engine libraries",
+  "search_section": "Search Providers",
+  "search_category": "Search Category",
+  "search_test_query": "Test Search",
+  "search_test_placeholder": "Enter a search query..."
 }

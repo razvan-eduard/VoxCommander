@@ -68,12 +68,14 @@ class AppStateManager private constructor(
         val refreshTrigger: Int = 0,
         val canDrawOverlays: Boolean = false,
         val hasMicrophonePermission: Boolean = false,
-        val hasNotificationPermission: Boolean = false
+        val hasNotificationPermission: Boolean = false,
+        val hasLocationPermission: Boolean = false
     )
     private val _runtimeState = MutableStateFlow(RuntimeState(
         canDrawOverlays = com.voxcommander.app.utils.PermissionUtils.canDrawOverlays(context),
         hasMicrophonePermission = com.voxcommander.app.utils.PermissionUtils.hasMicrophonePermission(context),
-        hasNotificationPermission = com.voxcommander.app.utils.PermissionUtils.hasNotificationPermission(context)
+        hasNotificationPermission = com.voxcommander.app.utils.PermissionUtils.hasNotificationPermission(context),
+        hasLocationPermission = com.voxcommander.app.domain.search.LocationHelper.hasLocationPermission(context)
     ))
 
     // --- CENTRALIZED UI STATE (reactive combination of settings + runtime) ---
@@ -122,7 +124,8 @@ class AppStateManager private constructor(
             ).copy(
                 canDrawOverlays = runtime.canDrawOverlays,
                 hasMicrophonePermission = runtime.hasMicrophonePermission,
-                hasNotificationPermission = runtime.hasNotificationPermission
+                hasNotificationPermission = runtime.hasNotificationPermission,
+                hasLocationPermission = runtime.hasLocationPermission
             )
         }.onEach { newState ->
             _uiState.value = newState
@@ -141,7 +144,8 @@ class AppStateManager private constructor(
             it.copy(
                 canDrawOverlays = com.voxcommander.app.utils.PermissionUtils.canDrawOverlays(context),
                 hasMicrophonePermission = com.voxcommander.app.utils.PermissionUtils.hasMicrophonePermission(context),
-                hasNotificationPermission = com.voxcommander.app.utils.PermissionUtils.hasNotificationPermission(context)
+                hasNotificationPermission = com.voxcommander.app.utils.PermissionUtils.hasNotificationPermission(context),
+                hasLocationPermission = com.voxcommander.app.domain.search.LocationHelper.hasLocationPermission(context)
             )
         }
     }
