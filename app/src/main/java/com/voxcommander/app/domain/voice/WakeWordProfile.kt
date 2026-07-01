@@ -15,7 +15,8 @@ data class WakeWordProfile(
     val similarityThreshold: Float = 0.65f,
     val wakeWordTemplate: String? = null,
     val templateThreshold: Float = 0.55f,
-    val profileName: String? = null
+    val profileName: String? = null,
+    val noiseFloorRms: Float = 0f
 ) {
     companion object {
         fun fromJson(jsonString: String): WakeWordProfile? {
@@ -34,7 +35,8 @@ data class WakeWordProfile(
                     similarityThreshold = if (json.has("similarityThreshold")) json.getDouble("similarityThreshold").toFloat() else 0.65f,
                     wakeWordTemplate = if (json.has("wakeWordTemplate")) json.getString("wakeWordTemplate") else null,
                     templateThreshold = if (json.has("templateThreshold")) json.getDouble("templateThreshold").toFloat() else 0.55f,
-                    profileName = if (json.has("profileName")) json.getString("profileName") else null
+                    profileName = if (json.has("profileName")) json.getString("profileName") else null,
+                    noiseFloorRms = if (json.has("noiseFloorRms")) json.getDouble("noiseFloorRms").toFloat() else 0f
                 )
             } catch (e: Exception) {
                 null
@@ -56,6 +58,7 @@ data class WakeWordProfile(
                 profile.wakeWordTemplate?.let { put("wakeWordTemplate", it) }
                 put("templateThreshold", profile.templateThreshold.toDouble())
                 profile.profileName?.let { put("profileName", it) }
+                put("noiseFloorRms", profile.noiseFloorRms.toDouble())
             }.toString()
         }
     }

@@ -67,45 +67,57 @@ fun ModelsSettingsTab(
         // --- API KEYS SECTION ---
         Text(text = languageManager.getString("api_keys_section"), style = MaterialTheme.typography.titleMedium)
 
-        var isApiFocused by remember { mutableStateOf(false) }
-        TextField(
-            value = apiKey,
-            onValueChange = {
-                apiKey = it
-                appStateManager.setApiKey(it)
-            },
-            label = { Text(languageManager.getString("api_key")) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { isApiFocused = it.isFocused },
-            visualTransformation = if (isApiFocused) VisualTransformation.None else PasswordVisualTransformation(),
-            singleLine = !isApiFocused,
-            maxLines = if (isApiFocused) 5 else 1,
-            colors = if (!isApiFocused) TextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                unfocusedIndicatorColor = Color.Transparent
-            ) else TextFieldDefaults.colors()
-        )
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            ),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                var isApiFocused by remember { mutableStateOf(false) }
+                TextField(
+                    value = apiKey,
+                    onValueChange = {
+                        apiKey = it
+                        appStateManager.setApiKey(it)
+                    },
+                    label = { Text(languageManager.getString("api_key")) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { isApiFocused = it.isFocused },
+                    visualTransformation = if (isApiFocused) VisualTransformation.None else PasswordVisualTransformation(),
+                    singleLine = !isApiFocused,
+                    maxLines = if (isApiFocused) 5 else 1,
+                    colors = if (!isApiFocused) TextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        unfocusedIndicatorColor = Color.Transparent
+                    ) else TextFieldDefaults.colors()
+                )
 
-        var isGeminiKeyFocused by remember { mutableStateOf(false) }
-        TextField(
-            value = geminiApiKey,
-            onValueChange = {
-                geminiApiKey = it
-                appStateManager.setGeminiApiKey(it)
-            },
-            label = { Text(languageManager.getString("gemini_api_key")) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { isGeminiKeyFocused = it.isFocused },
-            visualTransformation = if (isGeminiKeyFocused) VisualTransformation.None else PasswordVisualTransformation(),
-            singleLine = !isGeminiKeyFocused,
-            maxLines = if (isGeminiKeyFocused) 5 else 1,
-            colors = if (!isGeminiKeyFocused) TextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                unfocusedIndicatorColor = Color.Transparent
-            ) else TextFieldDefaults.colors()
-        )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                var isGeminiKeyFocused by remember { mutableStateOf(false) }
+                TextField(
+                    value = geminiApiKey,
+                    onValueChange = {
+                        geminiApiKey = it
+                        appStateManager.setGeminiApiKey(it)
+                    },
+                    label = { Text(languageManager.getString("gemini_api_key")) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { isGeminiKeyFocused = it.isFocused },
+                    visualTransformation = if (isGeminiKeyFocused) VisualTransformation.None else PasswordVisualTransformation(),
+                    singleLine = !isGeminiKeyFocused,
+                    maxLines = if (isGeminiKeyFocused) 5 else 1,
+                    colors = if (!isGeminiKeyFocused) TextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        unfocusedIndicatorColor = Color.Transparent
+                    ) else TextFieldDefaults.colors()
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 

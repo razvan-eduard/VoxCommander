@@ -37,6 +37,7 @@ class WakeWordCalibrator(
 
     sealed class CalibrationState {
         object Idle : CalibrationState()
+        data class MeasuringNoise(val instruction: String) : CalibrationState()
         data class Waiting(val round: Int, val total: Int, val instruction: String) : CalibrationState()
         data class Listening(val round: Int, val total: Int) : CalibrationState()
         data class Analyzing(val round: Int) : CalibrationState()
@@ -72,6 +73,13 @@ class WakeWordCalibrator(
                 val allRmsValues = mutableListOf<Float>()
                 val allVoicePrints = mutableListOf<FloatArray>()
                 val allTemplates = mutableListOf<Array<FloatArray>>()
+
+                // --- Phase 0: Measure background noise (2 seconds of silence) ---
+                _state.value = CalibrationState.MeasuringNoise("Please stay quiet — measuring background noise...")
+                onProgress(_state.value)
+                val measuredNoiseRms = measureBackgroundNoise()
+                Logger.log("Measured background noise RMS: $measuredNoiseRms", TAG)
+
                 val instructions = listOf(
                     "Say your wake word at normal volume",
                     "Say your wake word louder",
@@ -147,9 +155,10 @@ class WakeWordCalibrator(
                 val maxRms = allRmsValues.max()
                 val avgRms = allRmsValues.average().toFloat()
 
-                // Set threshold below the quietest successful detection
-                // but above the default silence threshold
-                val threshold = (minRms * 0.5f).coerceAtLeast(SILENCE_RMS_DEFAULT * 0.5f)
+                // Set threshold between measured background noise and the quietest wake word
+                // Use the midpoint between noise floor and quietest speech, but at least 1.5x the noise
+                val noiseFloor = measuredNoiseRms.coerceAtLeast(SILENCE_RMS_DEFAULT)
+                val threshold = (noiseFloor * 1.5f).coerceAtMost(minRms * 0.7f).coerceAtLeast(noiseFloor)
 
                 val voicePrintVector = if (allVoicePrints.isNotEmpty()) {
                     VoiceFeatureExtractor.average(allVoicePrints)
@@ -174,7 +183,8 @@ class WakeWordCalibrator(
                     voicePrint = voicePrintStr,
                     similarityThreshold = 0.65f,
                     wakeWordTemplate = templateStr,
-                    templateThreshold = 0.55f
+                    templateThreshold = 0.55f,
+                    noiseFloorRms = measuredNoiseRms
                 )
 
                 Logger.log("Calibration complete: threshold=${profile.rmsThreshold}, min=${profile.minRms}, max=${profile.maxRms}, avg=${profile.avgRms}", TAG)
@@ -208,6 +218,53 @@ class WakeWordCalibrator(
         readySignals[round] = deferred
         deferred.await()
         readySignals.remove(round)
+    }
+
+    /**
+     * Records 2 seconds of "silence" to measure the actual background noise floor.
+     * Returns the average filtered RMS of the voice band during this period.
+     */
+    private suspend fun measureBackgroundNoise(): Float = withContext(Dispatchers.IO) {
+        val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2
+
+        @Suppress("MissingPermission")
+        val audioRecord = AudioRecord(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            bufferSize
+        )
+
+        if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+            return@withContext SILENCE_RMS_DEFAULT
+        }
+
+        val vadFilter = BandpassFilterHelper(SAMPLE_RATE.toFloat(), VOICE_BAND.first, VOICE_BAND.second)
+        val buffer = ShortArray(bufferSize / 2)
+        val filtered = FloatArray(bufferSize / 2)
+        val rmsValues = mutableListOf<Float>()
+
+        audioRecord.startRecording()
+
+        val noiseStart = System.currentTimeMillis()
+        val NOISE_DURATION_MS = 2000L
+
+        while (System.currentTimeMillis() - noiseStart < NOISE_DURATION_MS && isRunning && !isCancelled) {
+            val read = audioRecord.read(buffer, 0, buffer.size)
+            if (read > 0) {
+                vadFilter.process(buffer, filtered, read)
+                val rms = calculateFilteredRms(filtered, read)
+                _volumeFlow.value = rms
+                rmsValues.add(rms)
+            }
+        }
+
+        audioRecord.stop()
+        audioRecord.release()
+
+        if (rmsValues.isEmpty()) SILENCE_RMS_DEFAULT
+        else rmsValues.average().toFloat()
     }
 
     private suspend fun recordAndAnalyze(): RoundResult? = withContext(Dispatchers.IO) {

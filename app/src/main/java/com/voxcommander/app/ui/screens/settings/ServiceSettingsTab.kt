@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -299,12 +300,34 @@ fun ServiceSettingsTab(
         val calibrationState by calibrator.state.collectAsStateWithLifecycle()
         var showCalibrationDialog by remember { mutableStateOf(false) }
 
-        // Show current profile status
+        // Editable profile name field (shown when profile exists)
         if (hasProfile) {
-            Text(
-                text = languageManager.getString("ww_calibrate_profile"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
+            val currentProfile = remember(uiState.wakeWordProfileJson) {
+                uiState.wakeWordProfileJson?.let { WakeWordProfile.fromJson(it) }
+            }
+            var profileNameText by remember(currentProfile?.profileName) {
+                mutableStateOf(currentProfile?.profileName ?: "")
+            }
+            var wasFocused by remember { mutableStateOf(false) }
+            OutlinedTextField(
+                value = profileNameText,
+                onValueChange = { profileNameText = it },
+                label = { Text(languageManager.getString("profile_name_label")) },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+                    .onFocusChanged { focusState ->
+                        if (wasFocused && !focusState.isFocused) {
+                            val namedProfile = currentProfile?.copy(
+                                profileName = profileNameText.trim().ifBlank { null }
+                            )
+                            if (namedProfile != null) {
+                                appStateManager.setWakeWordProfile(WakeWordProfile.toJson(namedProfile))
+                            }
+                        }
+                        wasFocused = focusState.isFocused
+                    }
             )
         } else {
             Text(
@@ -337,6 +360,8 @@ fun ServiceSettingsTab(
                 VoiceManager.setCalibrationListening(false)
             } else if (calibrationState is WakeWordCalibrator.CalibrationState.Waiting) {
                 VoiceManager.setCalibrationListening(false)
+            } else if (calibrationState is WakeWordCalibrator.CalibrationState.MeasuringNoise) {
+                VoiceManager.setCalibrationListening(false)
             }
         }
 
@@ -354,7 +379,8 @@ fun ServiceSettingsTab(
         ) {
             val isCalibrating = calibrationState is WakeWordCalibrator.CalibrationState.Waiting ||
                 calibrationState is WakeWordCalibrator.CalibrationState.Listening ||
-                calibrationState is WakeWordCalibrator.CalibrationState.Analyzing
+                calibrationState is WakeWordCalibrator.CalibrationState.Analyzing ||
+                calibrationState is WakeWordCalibrator.CalibrationState.MeasuringNoise
 
             Button(
                 onClick = {
@@ -493,6 +519,7 @@ fun ServiceSettingsTab(
 
         // --- COMMON: Wake Word Text Field ---
         val hasProfile = uiState.wakeWordProfileJson != null
+
         val isWakeWordModelOnDevice = if (isPorcupine || isOpenWakeWord) true
             else remember(selectedModel, refreshTrigger) {
                 selectedModel != null && uiState.isModelDownloaded(selectedModel.id)
@@ -519,18 +546,9 @@ fun ServiceSettingsTab(
             voiceLanguage = uiState.voiceLanguage,
             voiceProcessor = uiState.voiceProcessor,
             isModelOnDevice = isWakeWordModelOnDevice,
-            readOnly = hasProfile
+            readOnly = hasProfile,
+            enabled = !hasProfile
         )
-
-        // Calibration status indicator (Vosk only)
-        if (isVosk && hasProfile) {
-            Text(
-                text = languageManager.getString("ww_calibrate_profile"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-            )
-        }
 
         // Porcupine built-in keywords hint
         if (isPorcupine) {
@@ -592,6 +610,19 @@ private fun CalibrationDialog(
         },
         text = {
             when (state) {
+                is WakeWordCalibrator.CalibrationState.MeasuringNoise -> {
+                    Column {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        )
+                        Text(
+                            text = state.instruction,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
                 is WakeWordCalibrator.CalibrationState.Waiting -> {
                     val roundText = languageManager.getString("ww_calibrate_round")
                         .replace("{0}", state.round.toString())

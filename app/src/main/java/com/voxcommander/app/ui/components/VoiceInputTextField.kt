@@ -31,7 +31,8 @@ fun VoiceInputTextField(
     isModelOnDevice: Boolean = true,
     modifier: Modifier = Modifier,
     readOnly: Boolean = false,
-    onVoiceResult: ((String) -> Unit)? = null // Add this callback
+    enabled: Boolean = true,
+    onVoiceResult: ((String) -> Unit)? = null
 ) {
     // Collect the global listening state to keep UI in sync
     val isGloballyListening by VoiceManager.isListeningFlow.collectAsStateWithLifecycle()
@@ -60,7 +61,7 @@ fun VoiceInputTextField(
         label = label,
         placeholder = placeholder,
         readOnly = readOnly,
-        enabled = true,
+        enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { isFocused = it.isFocused },
@@ -91,7 +92,7 @@ fun VoiceInputTextField(
                         }
                     }
                 },
-                enabled = isModelOnDevice && !readOnly
+                enabled = isModelOnDevice && !readOnly && enabled
             ) {
                 Icon(
                     Icons.Default.Mic,

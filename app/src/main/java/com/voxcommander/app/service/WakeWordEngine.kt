@@ -144,7 +144,8 @@ class WakeWordEngine(
         val profileJson = settingsRepo.getWakeWordProfileJson()
         val profile = profileJson?.let { WakeWordProfile.fromJson(it) }
         if (profile != null) {
-            voiceRmsThreshold = profile.rmsThreshold
+            val noiseFloor = if (profile.noiseFloorRms > 0f) profile.noiseFloorRms else DEFAULT_VOICE_RMS_THRESHOLD
+            voiceRmsThreshold = profile.rmsThreshold.coerceAtLeast(noiseFloor)
             storedVoicePrint = VoiceFeatureExtractor.decodeVector(profile.voicePrint)
             similarityThreshold = profile.similarityThreshold
             storedTemplate = VoiceFeatureExtractor.decodeSequence(profile.wakeWordTemplate)
